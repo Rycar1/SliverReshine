@@ -1,6 +1,6 @@
 # SliverReshine
 
-![[Pasted image 20260930223627.png]]
+![SliverReshine 控制台总览](./images/Pasted%20image%2020260930223627.png)
 
 
 一个基于Sliver以及Sliver-UI二次开发的C2工具
@@ -13,16 +13,16 @@
 
 ## 特性
 ### 获取进程列表并识别杀毒软件
-![[./images/Pasted image 20260930223738.png]]
+![获取进程列表并识别杀毒软件](./images/Pasted%20image%2020260930223738.png)
 
 ### 多种一键权限维持方式
-![[./images/Pasted image 20260930223825.png]]
+![多种一键权限维持方式](./images/Pasted%20image%2020260930223825.png)
 
 ### 显示网络拓扑图
-![[./images/Pasted image 20260930224554.png]]
+![显示网络拓扑图](./images/Pasted%20image%2020260930224554.png)
 
 ### 正向监听shell（原版无）
-![[./images/Pasted image 20260930224643.png]]
+![正向监听 shell（原版无）](./images/Pasted%20image%2020260930224643.png)
 
 
 

@@ -21,7 +21,7 @@
 ### 显示网络拓扑图
 ![显示网络拓扑图](./images/Pasted%20image%2020260930224554.png)
 
-### 正向监听shell（原版无）
+### 正向监听 shell（原版无）
 ![正向监听 shell（原版无）](./images/Pasted%20image%2020260930224643.png)
 
 

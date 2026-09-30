@@ -54,6 +54,7 @@
   PersistenceModule,
   PersistenceList,
   PersistenceResult,
+  MimikatzMode,
   MimikatzResult,
   AuthSettings,
 } from './types'
@@ -927,13 +928,15 @@ export const api = {
 		autoAdd: boolean,
 		elevate?: boolean,
 		hostingProcess?: string,
+		mode?: MimikatzMode,
+		process?: string,
 	) =>
 		request<MimikatzResult>(`/sessions/${encodeURIComponent(sessionId)}/mimikatz`, {
 			method: 'POST',
-			// No path: the console writes its embedded mimikatz into the target's own
-			// temp directory. Asking for one made a one-click harvest into a manual
-			// find-upload-run sequence.
-			body: JSON.stringify({ command, autoAdd, elevate, hostingProcess }),
+			// No path: the console carries its own mimikatz. `mode` decides whether it
+			// is written to the target's temp directory or injected into a host
+			// process, and `process` names that host when the operator picked one.
+			body: JSON.stringify({ command, autoAdd, elevate, hostingProcess, mode, process }),
 		}),
 
 	/** Parse output captured elsewhere; autoAdd stores what it recovers. */

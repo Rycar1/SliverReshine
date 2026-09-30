@@ -220,6 +220,10 @@ describe('HarvestTab', () => {
         // an access-denied that looks like a broken tool.
         true,
         undefined,
+        // The execution mode and injection host are sent on every run: auto is
+        // the default, and an empty host means "use the console default".
+        'auto',
+        undefined,
       ),
     )
     await waitFor(() => expect(screen.getByText('admin')).toBeInTheDocument())

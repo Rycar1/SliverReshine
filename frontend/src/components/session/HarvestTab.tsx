@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
-import type { MimikatzResult } from '../../lib/types'
+import type { MimikatzMode, MimikatzResult } from '../../lib/types'
 import { useToast } from '../common/Toast'
 
 /** The sekurlsa/lsadump/vault commands an operator reaches for, in the order
@@ -64,6 +64,12 @@ export default function HarvestTab({ sessionId }: { sessionId: string }) {
 	// all on an unelevated session, so it defaults on.
 	const [elevate, setElevate] = useState(true)
 	const [hostingProcess, setHostingProcess] = useState('')
+	// Auto is the default because it is the only mode that cannot fail for a
+	// reason the operator has to understand: it uses the in-memory route when the
+	// payload allows it and writes to disk when it does not. The two explicit
+	// modes exist for the runs where that trade-off is the operator's to make.
+	const [mode, setMode] = useState<MimikatzMode>('auto')
+	const [injectionHost, setInjectionHost] = useState('')
   const [running, setRunning] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [result, setResult] = useState<MimikatzResult | null>(null)
@@ -98,6 +104,8 @@ export default function HarvestTab({ sessionId }: { sessionId: string }) {
 				autoAdd,
 				elevate,
 				hostingProcess.trim() || undefined,
+				mode,
+				injectionHost.trim() || undefined,
 			)
       setResult(res)
       if (res.message) toast.push(res.ok ? 'success' : 'error', res.message)
@@ -107,7 +115,7 @@ export default function HarvestTab({ sessionId }: { sessionId: string }) {
     } finally {
       setRunning(false)
     }
-  }, [sessionId, command, autoAdd, elevate, hostingProcess, t, toast])
+  }, [sessionId, command, autoAdd, elevate, hostingProcess, mode, injectionHost, t, toast])
 
   const parsePasted = async () => {
     if (!pasteText.trim()) {
@@ -173,17 +181,45 @@ export default function HarvestTab({ sessionId }: { sessionId: string }) {
               {t('harvest.elevate')}
             </label>
           </div>
-          {elevate && (
-            <div className="field">
-              <label htmlFor="harvest-hosting">{t('harvest.hostingProcess')}</label>
-              <input
-                id="harvest-hosting"
-                value={hostingProcess}
-                onChange={(e) => setHostingProcess(e.target.value)}
-                placeholder={t('harvest.hostingProcessHint')}
-              />
-            </div>
-          )}
+			{/* The escalation host is a different thing from the injection host: one
+				 is the SYSTEM process the token is stolen from, the other is where the
+				 payload runs. Both are optional and both fall back to a server default. */}
+			{elevate && (
+				<div className="field">
+					<label htmlFor="harvest-hosting">{t('harvest.hostingProcess')}</label>
+					<input
+						id="harvest-hosting"
+						value={hostingProcess}
+						onChange={(e) => setHostingProcess(e.target.value)}
+						placeholder={t('harvest.hostingProcessHint')}
+					/>
+				</div>
+			)}
+          <div className="field">
+            <label htmlFor="harvest-mode">{t('harvest.mode')}</label>
+            <select
+              id="harvest-mode"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as MimikatzMode)}
+            >
+              <option value="auto" title={t('harvest.modeAutoHint')}>{t('harvest.modeAuto')}</option>
+              <option value="memory" title={t('harvest.modeMemoryHint')}>{t('harvest.modeMemory')}</option>
+              <option value="upload" title={t('harvest.modeUploadHint')}>{t('harvest.modeUpload')}</option>
+            </select>
+          </div>
+			{/* Only an in-memory run needs a host process; the upload path starts
+				 the payload itself and names a binary, not a process. */}
+			{mode !== 'upload' && (
+				<div className="field">
+					<label htmlFor="harvest-host">{t('harvest.process')}</label>
+					<input
+						id="harvest-host"
+						value={injectionHost}
+						onChange={(e) => setInjectionHost(e.target.value)}
+						placeholder={t('harvest.processHint')}
+					/>
+				</div>
+			)}
           <div className="field" style={{ justifyContent: 'flex-end' }}>
             <button type="button" className="btn primary" onClick={run} disabled={running || !command}>
               {running ? (
@@ -225,21 +261,36 @@ export default function HarvestTab({ sessionId }: { sessionId: string }) {
               </div>
             )}
 
-            {(result.elevated || result.integrity) && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                {result.integrity && (
-                  <span
-                    className={`badge ${result.elevated ? 'green' : 'yellow'}`}
-                    title={t('harvest.integrityHint')}
-                  >
-                    {t('harvest.integrity', { level: result.integrity })}
-                  </span>
-                )}
-                {result.elevated && (
-                  <span className="badge green">{t('harvest.escalated')}</span>
-                )}
-              </div>
-            )}
+			{/* What the run did to the host, not just what it found. Whether a file
+				 was written is the difference between a run an operator can walk away
+				 from and one that needs cleaning up, so it is stated rather than left to
+				 be inferred from the raw output. */}
+			{(result.elevated || result.integrity || result.mode) && (
+				<div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+					{result.mode && (
+						<span
+							className={`badge ${result.mode === 'memory' ? 'green' : 'gray'}`}
+							title={result.execution || undefined}
+						>
+							{t('harvest.mode')}: {t(`harvest.mode${result.mode === 'memory' ? 'Memory' : 'Upload'}`)}
+						</span>
+					)}
+					{result.integrity && (
+						<span
+							className={`badge ${result.elevated ? 'green' : 'yellow'}`}
+							title={t('harvest.integrityHint')}
+						>
+							{t('harvest.integrity', { level: result.integrity })}
+						</span>
+					)}
+					{result.elevated && (
+						<span className="badge green">{t('harvest.escalated')}</span>
+					)}
+					{result.execution && (
+						<span className="page-sub" style={{ margin: 0 }}>{result.execution}</span>
+					)}
+				</div>
+			)}
 
             <table className="data">
               <thead>

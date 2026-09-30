@@ -38,6 +38,7 @@ func (s *Server) handleMimikatzModules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"commands": defaultMimikatzCommands(),
 		"command":  sliver.DefaultMimikatzCommand,
+		"modes":    sliver.MimikatzModes(),
 	})
 }
 
@@ -75,6 +76,12 @@ func (s *Server) handleMimikatzRun(w http.ResponseWriter, r *http.Request) {
 		// interpret is a worse default than one extra step that reports itself.
 		Elevate        *bool  `json:"elevate"`
 		HostingProcess string `json:"hostingProcess"`
+		// Mode selects how the payload reaches the target. Empty means auto,
+		// which is what a client that predates this field sends.
+		Mode string `json:"mode"`
+		// Process is the sacrificial process an in-memory run is injected into.
+		// Empty uses the console's default.
+		Process string `json:"process"`
 	}
 	if !decodeBody(w, r, &req) {
 		return
@@ -90,6 +97,8 @@ func (s *Server) handleMimikatzRun(w http.ResponseWriter, r *http.Request) {
 		Elevate: req.Elevate,
 
 		HostingProcess: req.HostingProcess,
+		Mode:           req.Mode,
+		Process:        req.Process,
 	}
 
 	if req.Binary != "" {

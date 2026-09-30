@@ -16,7 +16,7 @@ const DEFAULT_PAYLOAD = 'C:\\Windows\\Temp\\agent.exe'
  * flight.
  */
 export default function PersistenceTab({ sessionId, os }: { sessionId: string; os: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const toast = useToast()
 
   const [modules, setModules] = useState<PersistenceModule[]>([])
@@ -101,6 +101,13 @@ export default function PersistenceTab({ sessionId, os }: { sessionId: string; o
 
   // Mechanisms already present on the host, so the catalog can mark a module
   // as installed without a second lookup.
+  //
+  // The catalog is server-owned data, so its two languages arrive with it rather
+  // than from the bundles. Picking here keeps the fallback honest: a module the
+  // backend has no translation for renders its English text, never a blank card.
+  const zh = i18n.language !== 'en'
+  const moduleName = (m: PersistenceModule) => (zh && m.nameZh ? m.nameZh : m.name)
+  const moduleDesc = (m: PersistenceModule) => (zh && m.descriptionZh ? m.descriptionZh : m.description)
   const installedModules = useMemo(() => {
     const s = new Set<string>()
     for (const it of items) {
@@ -201,7 +208,7 @@ export default function PersistenceTab({ sessionId, os }: { sessionId: string; o
                 onClick={() => pick(m)}
               >
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <strong>{m.name}</strong>
+                  <strong>{moduleName(m)}</strong>
                   <span className="badge gray mono" style={{ fontSize: 11 }} title={t('persistence.technique')}>
                     {m.technique}
                   </span>
@@ -221,7 +228,7 @@ export default function PersistenceTab({ sessionId, os }: { sessionId: string; o
                 </div>
 
                 <p className="page-sub" style={{ margin: '6px 0 0' }}>
-                  {m.description}
+                  {moduleDesc(m)}
                 </p>
 
                 {m.platforms.length > 0 && (

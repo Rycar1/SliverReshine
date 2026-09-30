@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import i18n, { LANG_KEY } from '../index'
+import i18n, { LANG_KEY, DEFAULT_LANG } from '../index'
 import { currentLang, setLang, LANGS } from '../../lib/lang'
 
 describe('language preference', () => {
@@ -29,10 +29,15 @@ describe('language preference', () => {
     expect(currentLang()).toBe('en')
   })
 
-  it('falls back to en for an unsupported language tag', async () => {
-    // currentLang 必须把任何非 zh 的值收敛成 'en'，否则设置页会两个按钮都不高亮。
+  it('falls back to zh for an unsupported language tag', async () => {
+    // currentLang 必须把任何非 en 的值收敛成 'zh'，否则设置页会两个按钮都不高亮。
     await i18n.changeLanguage('fr')
-    expect(currentLang()).toBe('en')
+    expect(currentLang()).toBe('zh')
+  })
+  it('defaults to Chinese when nothing has been saved yet', () => {
+    // 回归测试：新装的控制台必须直接是中文，而不是先英文再让用户去设置页切换。
+    // 这里读的是 i18n/index.ts 里那份初始化逻辑的默认值，避免它被改回 'en'。
+    expect(DEFAULT_LANG).toBe('zh')
   })
 
   it('every offered language has a translation bundle', () => {

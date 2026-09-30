@@ -10,6 +10,16 @@
 # Generated server payloads (produced by build/embed-payload.ps1)
 /internal/embed/serverbin/*.gz
 
+# Generated mimikatz shellcode (produced by build/build-mimikatz-shellcode.ps1)
+#
+# A build artifact, not source. Committing it would bake one donut version and
+# one set of parameters into the repository, and a fixed shellcode blob is a
+# signature every deployment would then share.
+/internal/embed/mimikatz/*.bin
+
+# donut, if an operator vendors it beside the build scripts
+tools/donut/
+
 # Frontend
 /frontend/node_modules/
 /frontend/dist/

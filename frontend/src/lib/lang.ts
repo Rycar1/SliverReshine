@@ -7,9 +7,15 @@ export const LANGS: { value: Lang; label: string; native: string }[] = [
   { value: 'zh', label: 'Chinese', native: '中文' },
 ]
 
-/** The active language, normalised to a value this app actually ships. */
+/**
+ * The active language, normalised to a value this app actually ships.
+ *
+ * The comparison is against 'en' rather than against 'zh' so that anything
+ * unrecognised -- a stale tag, a regional variant, a typo -- lands on Chinese,
+ * the bundle the console is built in, instead of on the translation.
+ */
 export function currentLang(): Lang {
-  return i18n.language === 'zh' ? 'zh' : 'en'
+  return i18n.language === 'en' ? 'en' : 'zh'
 }
 
 /**

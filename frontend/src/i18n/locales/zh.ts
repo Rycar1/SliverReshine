@@ -1160,7 +1160,19 @@ export default {
     hostingProcessHint: '留空则由服务端自动选择',
     escalated: '已提升到 SYSTEM',
     integrity: '令牌: {{level}}',
-    integrityHint: '令牌完整性级别。sekurlsa 与 lsadump 需要 High；Medium 令牌无法打开 LSASS。'
+    integrityHint: '令牌完整性级别。sekurlsa 与 lsadump 需要 High；Medium 令牌无法打开 LSASS。',
+    // 执行方式。内存加载不往目标磁盘写任何东西，上传执行则写临时目录并在运行后删除。
+    mode: '执行方式',
+    modeAuto: '自动',
+    modeAutoHint: '优先内存加载，无法注入时回退到上传执行',
+    modeMemory: '内存加载',
+    modeMemoryHint: '不写磁盘；无法注入时直接报错',
+    modeUpload: '上传执行',
+    modeUploadHint: '写入目标临时目录执行，运行后删除',
+    process: '注入宿主进程',
+    processHint: '留空则使用控制台默认值',
+    executionMemory: '本次未向目标写入任何文件',
+    executionUpload: '本次已在目标上写入并删除载荷'
   },
   auth: {
     title: '控制台认证',

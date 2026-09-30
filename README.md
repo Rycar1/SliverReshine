@@ -33,7 +33,7 @@
 | **Web 控制台**     | React 前端，中英双语，浏览器操作，不用记命令行           |
 | **正向连接（Bind）**  | 上游只有反向连接；本项目加了 implant 监听、C2 拨入的完整链路 |
 | **多级代理生成**      | 生成页可直接产出 `tcp-pivot` 中转载荷，链路成树       |
-| **内嵌 mimikatz** | 一键凭据提取，自动上传到目标临时目录，权限够时自动提权          |
+| **内嵌 mimikatz** | 一键凭据提取，内存加载或上传执行可选，权限够时自动提权          |
 | **权限维持清单**      | 18 个模块的安装/检查/移除，**手动触发**探测           |
 | **原始 RPC 控制台**  | 前端直接调 SliverRPC，上游能力没有遗漏             |
 
@@ -168,10 +168,37 @@ Release 里每个平台提供两个包：
 **会话详情 → 凭据提取** 标签页：
 
 - 二进制**已内嵌**，不需要提供路径
-- 自动写入目标的 `%TEMP%`（回退 `%TMP%`、`C:\Windows\Temp`）
-- 落盘名为 `mimi.x64.exe`，不用工具本名
-- **权限不足时自动提权到 SYSTEM** 再运行
 - 输出自动解析并存入凭据库
+- **权限不足时自动提权到 SYSTEM** 再运行
+
+执行方式有两种，在面板上直接选：
+
+| 方式 | 说明 | 落盘 |
+|---|---|---|
+| **自动**（默认） | 优先内存加载，无法注入时自动回退到上传执行 | 看情况 |
+| **内存加载** | 注入宿主进程执行，**不向目标写任何文件**；无法注入时直接报错，不会默默落盘 | 无 |
+| **上传执行** | 写入目标的 `%TEMP%`（回退 `%TMP%`、`C:\Windows\Temp`），运行后自动删除 | 有，运行后清理 |
+
+内存加载的具体路径：
+
+1. 目标载荷是 **.NET 程序集** → 交给 Sliver 的程序集宿主加载
+2. 目标载荷是 **DLL** → 在服务端用 sRDI 转成位置无关 shellcode，再注入新建的宿主进程
+3. **内嵌 mimikatz（原生 EXE）** → 用构建时由 donut 预生成的 shellcode 注入。原生 EXE 没有导出表，入口点也假定自己拥有进程，Sliver 自身无法反射加载，所以必须先离线转成 shellcode（见下）
+
+宿主进程默认 `C:\Windows\System32\notepad.exe`，可以在面板上改。
+
+#### 启用内嵌 mimikatz 的内存加载
+
+仓库里**不带** shellcode blob（它是构建产物，也是固定特征）。要启用：
+
+```powershell
+# 需要 donut：https://github.com/TheWover/donut
+build\build-mimikatz-shellcode.ps1 -DonutPath .\tools\donut\donut.exe
+```
+
+脚本会把 `mimikatz.x64.exe` 转成 `internal/embed/mimikatz/mimikatz.x64.bin`；`build-release.ps1` 检测到该文件后会自动加上 `mimikatzshellcode` 构建标签。
+
+**没有这个 blob 也能正常构建和使用**，只是内嵌 mimikatz 的内存加载会报错并提示改用上传执行（自动模式则自动回退）。
 
 ### 权限维持
 
@@ -224,6 +251,17 @@ cd frontend
 npx tsc --noEmit -p tsconfig.json
 npx vitest run
 ```
+
+### 生成 mimikatz shellcode（可选）
+
+想让内嵌 mimikatz 走内存加载（不写目标磁盘）就需要这一步：
+
+```powershell
+# 需要 donut，先放到 tools\donut\ 或 -DonutPath 指定
+build\build-mimikatz-shellcode.ps1
+```
+
+产物 `internal/embed/mimikatz/mimikatz.x64.bin` 不入库。没生成时构建照常，只是内嵌 mimikatz 的内存加载会提示改用上传执行。
 
 ### 修改 protobuf 后
 

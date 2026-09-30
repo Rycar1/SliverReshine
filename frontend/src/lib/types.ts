@@ -596,6 +596,13 @@ export interface PersistenceModule {
    */
   payloadLabel?: string
   nameLabel?: string
+  /**
+   * Chinese catalog text. Absent for a module the backend has no translation
+   * for, in which case `name` and `description` are used unchanged — so the
+   * fallback is the identity, never a blank card.
+   */
+  nameZh?: string
+  descriptionZh?: string
 }
 
 /** One persistence mechanism as it exists on the target right now. */
@@ -653,8 +660,31 @@ export interface MimikatzResult {
   sessionId?: string
   /** Token integrity before the run: Untrusted | Low | Medium | High. */
   integrity?: string
+  /**
+   * How the payload reached the target: "upload" writes the embedded binary to
+   * the target's temp directory and executes it; "memory" injects it into a
+   * host process and never writes a file. The backend picks one when the caller
+   * leaves it out. Absent on the parse path, which never touches a target.
+   */
+  mode?: MimikatzMode
+  /** The path written on the target. Empty on an in-memory run. */
+  targetPath?: string
+  /**
+   * Human-readable account of what the run did before the payload started —
+   * which host process was used, or why no file was written. Shown next to the
+   * credentials so a run is auditable without reading the raw output.
+   */
+  execution?: string
 }
 
+/**
+ * How the credential payload is executed on the target.
+ *
+ * "memory" needs a host process on the target and is refused when the session
+ * has none, rather than silently falling back to a disk write: an operator who
+ * asked for no file to be written must not get one.
+ */
+export type MimikatzMode = 'auto' | 'memory' | 'upload'
 /** Console credentials - the same pair the browser login prompt asks for. */
 export interface AuthSettings {
   username: string

@@ -1162,7 +1162,20 @@ export default {
     hostingProcessHint: 'leave empty to let the server choose',
     escalated: 'escalated to SYSTEM',
     integrity: 'token: {{level}}',
-    integrityHint: 'The token integrity level. sekurlsa and lsadump need High; a Medium token cannot open LSASS.'
+    integrityHint: 'The token integrity level. sekurlsa and lsadump need High; a Medium token cannot open LSASS.',
+    // Execution mode. An in-memory run writes nothing to the target's disk; an
+    // upload writes a temp file and deletes it after the run.
+    mode: 'Execution',
+    modeAuto: 'Auto',
+    modeAutoHint: 'in memory first, falls back to a disk write when injection is impossible',
+    modeMemory: 'In memory',
+    modeMemoryHint: 'writes nothing to the target; fails instead of falling back',
+    modeUpload: 'Upload and run',
+    modeUploadHint: 'writes to the target temp directory and deletes it afterwards',
+    process: 'Injection host',
+    processHint: 'leave empty to use the console default',
+    executionMemory: 'Nothing was written to the target',
+    executionUpload: 'The payload was written to the target and removed'
   },
   auth: {
     title: 'Console Authentication',

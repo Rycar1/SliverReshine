@@ -1,0 +1,258 @@
+#!/bin/bash
+
+
+# Sliver Implant Framework
+# Copyright (C) 2019  Bishop Fox
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+SKIP_GENERATE=0
+for arg in "$@"; do
+    if [ "$arg" = "--skip-generate" ]; then
+        SKIP_GENERATE=1
+    fi
+done
+
+echo "----------------------------------------------------------------"
+echo "WARNING: Running unit tests on slow systems can take a LONG time"
+echo "         Recommended to only run on 16+ CPU cores and 32Gb+ RAM"
+echo "----------------------------------------------------------------"
+TAGS=osusergo,netgo,go_sqlite
+
+## Client
+
+# client / command / alias
+if go test -tags=client,$TAGS ./client/command/alias ; then
+    :
+else
+    exit 1
+fi
+
+# client / command / extensions
+if go test -tags=client,$TAGS ./client/command/extensions ; then
+    :
+else
+    exit 1
+fi
+
+# client / command / generate
+if go test -tags=client,$TAGS ./client/command/generate ; then
+    :
+else
+    exit 1
+fi
+
+# client / credentials
+if go test -tags=client,$TAGS ./client/credentials ; then
+    :
+else
+    exit 1
+fi
+
+## Util
+
+# util 
+if go test -tags=server,$TAGS ./util ; then
+    :
+else
+    exit 1
+fi
+
+# util / encoders
+if go test -tags=server,$TAGS ./util/encoders/basex ; then
+    :
+else
+    exit 1
+fi
+if go test -tags=server,$TAGS ./util/encoders ; then
+    :
+else
+    exit 1
+fi
+
+# util / minisign
+if go test -tags=server,$TAGS ./util/minisign ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+## Implant
+
+# implant / sliver / extension
+if go test ./implant/sliver/extension ; then
+    :
+else
+    exit 1
+fi
+
+# implant / sliver / transports / dnsclient
+if go test ./implant/sliver/transports/dnsclient ; then
+    :
+else
+    exit 1
+fi
+
+# implant / sliver / transports / wireguard
+if go test ./implant/sliver/transports/wireguard ; then
+    :
+else
+    exit 1
+fi
+
+## Server
+
+# server / assets / traffic encoders
+if go test -timeout 10m -tags=server,$TAGS ./server/assets/traffic-encoders ; then
+    :
+else
+    exit 1
+fi
+
+# server / encoders
+if go test -timeout 10m -tags=server,$TAGS ./server/encoders ; then
+    :
+else
+    exit 1
+fi
+
+# server / website
+if go test -tags=server,$TAGS ./server/website ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / loot
+if go test -tags=server,$TAGS ./server/loot ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / certs
+if go test -tags=server,$TAGS ./server/certs ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / cryptography
+if go test -tags=server,$TAGS ./server/cryptography ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / encoders / shellcode / sgn
+if go test -tags=server,$TAGS ./server/encoders/shellcode/sgn ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / encoders / shellcode / arm64
+if go test -tags=server,$TAGS ./server/encoders/shellcode/arm64 ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / gogo / goname
+if go test -tags=server,$TAGS ./server/gogo/goname ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / gogo
+if go test -tags=server,$TAGS ./server/gogo ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / c2
+if go test -tags=server,$TAGS ./server/c2 ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / c2 / e2e (mtls + wg + yamux)
+SLIVER_ROOT_DIR_E2E="$(mktemp -d)"
+if SLIVER_ROOT_DIR="$SLIVER_ROOT_DIR_E2E" go test -tags=server,$TAGS,sliver_e2e ./server/c2 -run 'Test(MTLS|WG)Yamux_' -count=1 ; then
+    :
+else
+    cat "$SLIVER_ROOT_DIR_E2E/logs/sliver.log" 2>/dev/null || true
+    rm -rf "$SLIVER_ROOT_DIR_E2E"
+    exit 1
+fi
+
+# server / c2 / e2e (dns)
+if SLIVER_ROOT_DIR="$SLIVER_ROOT_DIR_E2E" go test -tags=server,$TAGS,sliver_e2e ./server/c2 -run 'TestDNS_' -count=1 ; then
+    :
+else
+    cat "$SLIVER_ROOT_DIR_E2E/logs/sliver.log" 2>/dev/null || true
+    rm -rf "$SLIVER_ROOT_DIR_E2E"
+    exit 1
+fi
+rm -rf "$SLIVER_ROOT_DIR_E2E"
+
+# server / configs
+if go test -tags=server,$TAGS ./server/configs ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / console
+if go test -tags=server,$TAGS ./server/console ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log
+    exit 1
+fi
+
+# server / generate
+if [ "$SKIP_GENERATE" -eq 0 ]; then
+    export GOPROXY=off
+    if go test -tags=server,$TAGS ./server/generate -timeout 6h ; then
+        :
+    else
+        cat ~/.sliver/logs/sliver.log
+        exit 1
+    fi
+else
+    echo "Skipping ./server/generate tests (--skip-generate)"
+fi
+
+# server / rpc / spoof metadata
+if go test -vet=off -tags=server,$TAGS ./server/rpc -run '^TestGenerateSpoofMetadataAppliesPETimestampOverBufnet$' -count=1 -timeout 30m ; then
+    :
+else
+    cat ~/.sliver/logs/sliver.log 2>/dev/null || true
+    exit 1
+fi

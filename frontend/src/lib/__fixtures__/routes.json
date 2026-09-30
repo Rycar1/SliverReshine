@@ -1,0 +1,738 @@
+[
+  {
+    "method": "GET",
+    "pattern": "/api/info"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/overview"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/connect"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/disconnect"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/profiles"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/profiles/{name}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/kill"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/fs"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/fs/pwd"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/cd"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/fs/cat"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/fs/download"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/upload"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/mkdir"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/sessions/{id}/fs"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/mv"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/ifconfig"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/ps"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/ps/kill"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/netstat"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/env"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/env"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/sessions/{id}/env/{key}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/exec"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/screenshot"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/exec-assembly"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/sideload"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/spawn-dll"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/migrate"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/process-dump"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/av-scan"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/impersonate"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/make-token"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/rev-to-self"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/getsystem"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/privs"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/av/test"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/settings/auth"
+  },
+  {
+    "method": "PUT",
+    "pattern": "/api/settings/auth"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/token-owner"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/execute-token"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/runas"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/pivots/graph"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/topology"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/webdelivery/formats"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/webdelivery"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/pivots/listeners"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/pivots/listeners"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/sessions/{id}/pivots/listeners/{pivotID}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/services"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/services/stop"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/services/remove"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/ssh"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/extensions"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/extensions/register"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/extensions/call"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/msf"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/msf/remote"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/msf/stage"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/backdoor"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/dll-hijack"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/shellcode/rdi"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/persistence/modules"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/persistence"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/persistence/install"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/persistence/remove"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/mimikatz/modules"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/mimikatz"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/mimikatz/parse"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/exec-shellcode"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/psexec"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/ping"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/reg/subkeys"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/reg/values"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/reg/read"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/reg/write"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/reg/create-key"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/reg/delete-key"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/reconfigure"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/close"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/monitor/start"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/monitor/stop"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/beacons/{id}/open-session"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/portfwd"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/portfwd"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/portfwd/{port}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/beacons/prune"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/prune"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/aliases"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/aliases"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/aliases/{name}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/aliases/{name}/run"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/beacons"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/beacons/{id}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/beacons/{id}/rename"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/beacons/{id}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/beacons/{id}/tasks"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/beacons/{id}/tasks/{taskID}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/rename"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/implant-profiles"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/implant-profiles"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/implant-profiles/{name}"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/implant-builds/{name}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/regenerate"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/operators"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/compiler"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/hosts"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/hosts/{uuid}"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/hosts/{uuid}"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/hosts/{uuid}/iocs/{iocID}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/websites"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/websites/{name}"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/websites/{name}/content"
+  },
+  {
+    "method": "PUT",
+    "pattern": "/api/websites/{name}/content"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/websites/{name}/content"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/websites/{name}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/canaries"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/wg/config"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/wg/ip"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/wg/forwarders"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/wg/forwarders"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/sessions/{id}/wg/forwarders/{fwdID}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/wg/socks"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/wg/socks"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/sessions/{id}/wg/socks/{serverID}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/socks"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/socks"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/socks/{id}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/loot"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/loot"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/loot/{id}/rename"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/loot/{id}"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/loot/{id}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/jobs"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/events"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/builders"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/generate"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/listeners"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/listeners/{id}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/listeners/bind"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/listeners/bind"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/listeners/bind/{id}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/rpc/methods"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/rpc/call"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/creds"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/creds"
+  },
+  {
+    "method": "PUT",
+    "pattern": "/api/creds"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/creds"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/creds/filter"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/creds/sniff"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/creds/{id}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/memfiles"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/memfiles"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/sessions/{id}/memfiles"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/chmod"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/chown"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/chtimes"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/grep"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/monitor/providers"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/monitor/providers"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/monitor/providers"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/c2profiles"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/c2profiles"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/c2profiles/{name}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/traffic-encoders"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/traffic-encoders"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/traffic-encoders/{name}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/shellcode-encoders"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/shellcode-encoders"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/wasm"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/wasm/register"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/wasm/exec"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/sessions/{id}/rportfwd"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/rportfwd"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/sessions/{id}/rportfwd/{fwdID}"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/certificates/ca"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/certificates"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/tunnel"
+  },
+  {
+    "method": "DELETE",
+    "pattern": "/api/tunnels"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/services/detail"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/services/start-by-name"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/reg/hive"
+  },
+  {
+    "method": "GET",
+    "pattern": "/ws/sessions/{id}/terminal"
+  }
+]

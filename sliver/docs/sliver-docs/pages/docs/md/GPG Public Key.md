@@ -1,0 +1,1 @@
+GPG siging is deprecated and should be avoided, use the [Minisign public key](/docs?name=Minisign+Public+Key) to verify binaries.

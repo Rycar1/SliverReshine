@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  tag-check:
+    name: Check Release Tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Check Out Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Find Semver Tag
+        id: tag
+        run: |
+          git fetch --prune --tags -f
+          tag=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Release
+    needs: tag-check
+    if: needs.tag-check.outputs.tag != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 45
+    steps:
+      - name: Check Out Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Go 1.25
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.6"
+
+      - name: Install Minisign
+        run: sudo apt-get update --fix-missing && sudo apt-get -y install minisign
+
+      - name: Build Clients
+        run: |
+          make clients
+          mkdir -p artifacts
+          mv sliver-client_* artifacts/
+
+      - name: Build Servers
+        run: |
+          make servers
+          mv sliver-server_* artifacts/
+
+      - name: Sign Artifacts
+        env:
+          MINISIGN_KEY: ${{ secrets.MINISIGN_SLIVER_RELEASE_KEY }}
+        run: |
+          echo "$MINISIGN_KEY" | base64 -d > minisign.key
+          echo "minisign.key bytes: $(wc -c < minisign.key | tr -d ' ')"
+          echo "minisign.key sha256: $(sha256sum minisign.key | awk '{print $1}')"
+          chmod 600 minisign.key
+          for file in artifacts/sliver-*; do
+            [ -f "$file" ] || continue
+            minisign -S -s minisign.key -m "$file" -x "$file.minisig" -W
+          done
+          rm -f minisign.key
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ needs.tag-check.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists."
+            exit 0
+          fi
+          gh release create "$tag" --generate-notes
+
+      - name: Upload Artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.tag-check.outputs.tag }}" artifacts/* --clobber

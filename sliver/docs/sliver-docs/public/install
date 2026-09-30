@@ -1,0 +1,152 @@
+#!/bin/bash
+set -e
+
+SLIVER_MINISIGN_PUB_KEY="RWTZPg959v3b7tLG7VzKHRB1/QT+d3c71Uzetfa44qAoX5rH7mGoQTTR"
+SLIVER_PLATFORM="linux"
+
+if [[ "$EUID" -ne 0 ]];then
+    echo "Please run as root"
+    exit
+fi
+
+# Determine OS type
+# Debian-based OS (Debian, Ubuntu, etc)
+if command -v apt-get &> /dev/null; then
+    echo "Installing dependencies using apt..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -yqq \
+        minisign curl build-essential git
+    	INSTALLER=(apt-get install -yqq)
+elif command -v yum &> /dev/null; then # Redhat-based OS (Fedora, CentOS, RHEL)
+    echo "Installing dependencies using yum..."
+    yum -y install minisign curl make git
+	INSTALLER=(yum -y)
+elif command -v pacman &>/dev/null; then # Arch-based (Manjaro, Garuda, Blackarch)
+	echo "Installing dependencies using pacman..."
+	pacman --noconfirm -S minisign
+    INSTALLER=(pacman --noconfirm -S)
+else
+    echo "Unsupported OS, exiting"
+    exit
+fi
+
+# Verify if necessary tools are installed
+for cmd in curl awk minisign; do
+    if ! command -v "$cmd" &> /dev/null; then		
+        echo "$cmd could not be found, installing..."
+		${INSTALLER[@]} "$cmd"
+    fi
+done
+
+cd /root || exit
+echo "Running from $(pwd)"
+
+echo "Using Minisign public key..."
+
+# Download and Unpack Sliver Server
+ARCH="$(uname -m)"
+case "$ARCH" in
+    x86_64|amd64)
+        SLIVER_PLATFORM="linux-amd64"
+        ;;
+    aarch64|arm64)
+        SLIVER_PLATFORM="linux-arm64"
+        ;;
+    *)
+        echo "Unsupported architecture: $ARCH"
+        exit 1
+        ;;
+esac
+
+echo "Fetching latest Sliver release URLs..."
+ARTIFACTS=$(curl -s "https://api.github.com/repos/BishopFox/sliver/releases/latest" | awk -F '"' '/browser_download_url/{print $4}')
+SLIVER_SERVER="sliver-server_${SLIVER_PLATFORM}"
+SLIVER_CLIENT="sliver-client_${SLIVER_PLATFORM}"
+
+for URL in $ARTIFACTS
+do
+    if [[ "$URL" == *"$SLIVER_SERVER"* ]]; then
+        echo "Downloading $URL"
+        curl --silent -L "$URL" --output "$(basename "$URL")"
+    fi
+    if [[ "$URL" == *"$SLIVER_CLIENT"* ]]; then
+        echo "Downloading $URL"
+        curl --silent -L "$URL" --output "$(basename "$URL")"
+    fi
+done
+
+# Signature verification
+echo "Verifying signatures ..."
+minisign -Vm "/root/$SLIVER_SERVER" -x "/root/$SLIVER_SERVER.minisig" -P "$SLIVER_MINISIGN_PUB_KEY"
+minisign -Vm "/root/$SLIVER_CLIENT" -x "/root/$SLIVER_CLIENT.minisig" -P "$SLIVER_MINISIGN_PUB_KEY"
+
+if test -f "/root/$SLIVER_SERVER"; then
+    echo "Moving the Sliver server executable to /root/sliver-server..."
+    mv "/root/$SLIVER_SERVER" /root/sliver-server
+
+    echo "Setting permissions for the Sliver server executable..."
+    chmod 755 /root/sliver-server
+
+    echo "Unpacking the Sliver server..."
+    /root/sliver-server unpack --force
+else
+    exit 3
+fi
+
+if test -f "/root/$SLIVER_CLIENT"; then
+    echo "Setting permissions for the Sliver client executable..."
+    chmod 755 "/root/$SLIVER_CLIENT"
+
+    echo "Copying the Sliver client executable to /usr/local/bin/sliver-client..."
+    cp -vv "/root/$SLIVER_CLIENT" /usr/local/bin/sliver-client
+
+    echo "Creating a symbolic link for sliver-client at /usr/local/bin/sliver..."
+    ln -sf /usr/local/bin/sliver-client /usr/local/bin/sliver
+
+    echo "Setting permissions for the symbolic link /usr/local/bin/sliver..."
+    chmod 755 /usr/local/bin/sliver
+else
+    exit 3
+fi
+
+# systemd
+echo "Configuring systemd service ..."
+cat > /etc/systemd/system/sliver.service <<-EOF
+[Unit]
+Description=Sliver
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=3
+User=root
+ExecStart=/root/sliver-server daemon
+
+[Install]
+WantedBy=multi-user.target
+EOF
+chown root:root /etc/systemd/system/sliver.service
+chmod 600 /etc/systemd/system/sliver.service
+echo "Starting the Sliver service..."
+systemctl start sliver # Start the service now
+
+# Generate local configs
+echo "Generating local configs ..."
+
+# Generate local configs
+echo "Generating operator configs ..."
+mkdir -p /root/.sliver-client/configs
+/root/sliver-server operator --name root --lhost localhost --permissions all --save /root/.sliver-client/configs
+chown -R root:root /root/.sliver-client/
+
+USER_DIRS=(/home/*)
+for USER_DIR in "${USER_DIRS[@]}"; do
+    USER=$(basename "$USER_DIR")
+    if id -u "$USER" >/dev/null 2>&1; then
+        echo "Generating operator configs for user $USER..."
+        mkdir -p "$USER_DIR/.sliver-client/configs"
+        /root/sliver-server operator --name "$USER" --lhost localhost --permissions all --save "$USER_DIR/.sliver-client/configs"
+        chown -R "$USER":"$(id -gn "$USER")" "$USER_DIR/.sliver-client/"
+    fi
+done

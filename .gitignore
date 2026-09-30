@@ -1,0 +1,22 @@
+# Build artifacts
+/c2tool
+/c2tool.exe
+/dist/
+/build/out/
+/build/assets/
+/build/damaged-backup/
+*.log
+
+# Generated server payloads (produced by build/embed-payload.ps1)
+/internal/embed/serverbin/*.gz
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+/web/dist/*
+!/web/dist/.gitkeep
+
+# Local state
+/data/
+*.dmp
+zzout/

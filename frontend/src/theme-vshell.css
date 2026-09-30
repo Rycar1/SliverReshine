@@ -1,0 +1,98 @@
+/* ── vshell-verge theme layer ─────────────────────────────────────────
+   视觉规范对齐 Rycar1/vshell-verge（static/css/style.css）。
+
+   做法：只重映射 index.css 里的语义 token，不改任何组件选择器。
+   组件已经全部走 var(--*)，所以这一层就能把整套界面从
+   「近黑 + 紫」切到参考项目的「深蓝 + #4a6cf7 蓝」，且不必碰 30+ 个页面文件。
+
+   参考色板 → 本文件：
+     #0f0f1a  主背景      → --bg
+     #1a1a2e  卡片/侧栏   → --bg-panel / --bg-sidebar
+     #2a2a4a  边框/悬停   → --border-strong / --bg-hover
+     #4a6cf7  品牌蓝      → --accent
+     #2ed573  在线绿      → --green
+     #ff4757  危险红      → --red
+
+   放在 index.css 末尾 import，确保在其它样式表之后生效。 */
+
+:root {
+  /* ── 背景层次 ────────────────────────────────────────────────────
+     参考项目用 lightness 拉层次：背景 #0f0f1a → 卡片 #1a1a2e → 悬停 #2a2a4a */
+  --bg: #0f0f1a;
+  --bg-sidebar: #1a1a2e;
+  --bg-panel: #1a1a2e;
+  --bg-panel-solid: #1a1a2e;
+  --bg-pop: #22223c;
+  --bg-deep: #0a0a14;
+  --bg-hover: rgba(74, 108, 247, 0.10);
+  --bg-active: rgba(74, 108, 247, 0.16);
+  --bg-selected: rgba(74, 108, 247, 0.16);
+  --surface-soft: rgba(255, 255, 255, 0.03);
+
+  /* ── 边框 ────────────────────────────────────────────────────────── */
+  --border: #2a2a4a;
+  --border-strong: #34345a;
+  --border-focus: rgba(74, 108, 247, 0.60);
+
+  /* ── 文本 ────────────────────────────────────────────────────────── */
+  --text: #ffffff;
+  --text-dim: #c9c9d6;
+  --text-mute: #8888a0;
+  --text-tertiary: #6b6b85;
+
+  /* ── 品牌色 ──────────────────────────────────────────────────────── */
+  --accent: #4a6cf7;
+  --accent-bright: #7b93ff;
+  --accent-grad: linear-gradient(135deg, #4a6cf7 0%, #6f8aff 100%);
+
+  /* ── 状态色 ──────────────────────────────────────────────────────── */
+  --green: #2ed573;
+  --red: #ff4757;
+  --yellow: #ffc048;
+  --orange: #ff9f43;
+  --green-bg: rgba(46, 213, 115, 0.14);
+  --success-bg: rgba(46, 213, 115, 0.12);
+  --red-bg: rgba(255, 71, 87, 0.14);
+  --yellow-bg: rgba(255, 192, 72, 0.14);
+  --orange-bg: rgba(255, 159, 67, 0.14);
+  --blue-bg: rgba(74, 108, 247, 0.16);
+
+  /* ── 阴影：参考项目几乎不用投影，靠边框分层 ─────────────────────── */
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-pop: 0 0 0 1px var(--border), 0 14px 36px rgba(0, 0, 0, 0.55);
+  --shadow-ring: 0 0 0 3px rgba(74, 108, 247, 0.20);
+}
+
+/* 选中文字 — 跟随品牌蓝 */
+::selection {
+  background: rgba(74, 108, 247, 0.35);
+  color: #fff;
+}
+::-moz-selection {
+  background: rgba(74, 108, 247, 0.35);
+  color: #fff;
+}
+
+/* 主操作按钮用品牌蓝实心（参考 .btn） */
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn.primary:hover:not(:disabled) {
+  background: #3b5de7;
+  border-color: #3b5de7;
+}
+
+/* 导航激活项 — 参考项目是左侧 3px 品牌蓝竖条 */
+.nav-item.active::before {
+  background: var(--accent);
+}
+
+/* 状态胶囊 — 对齐参考 .badge 的圆角与描边风格 */
+.badge,
+.status-badge {
+  border-radius: 10px;
+  font-size: 11px;
+}

@@ -1,0 +1,191 @@
+:root {
+  /* ── Background layers ──────────────────────────────────────────
+     调色逻辑:侧栏 = 主背景(只靠 border 区分);卡片 = +3% 提亮;
+     弹出层 = +6% 提亮。整体比原方案更黑,层次感靠 lightness,而非 border。 */
+  --bg: #0a0a0b;
+  --bg-sidebar: #0a0a0b;
+  --bg-panel: #131316;
+  --bg-panel-solid: #131316;
+  --bg-pop: #1c1c20;
+  --bg-hover: rgba(255, 255, 255, 0.045);
+  --bg-active: rgba(255, 255, 255, 0.075);
+  --bg-selected: rgba(124, 92, 225, 0.10);
+  --surface-soft: rgba(255, 255, 255, 0.03);
+  /* 代码块深底(原 --bg-deep 未定义,这里补全,供 .run-output / .prune-control input 使用) */
+  --bg-deep: #060607;
+
+  /* ── Borders (克制) ──────────────────────────────────────────── */
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --border-focus: rgba(124, 92, 225, 0.45);
+
+  /* ── Text (略带暖意,与背景协调) ──────────────────────────────── */
+  --text: #ededee;
+  --text-dim: #929299;
+  /* 提亮以满足 WCAG AA：--text-mute 用于占位符/副标题/导航(正文,需 4.5:1)；
+     --text-tertiary 仅用于面包屑分隔符(UI 组件,适用 3:1),保留“分隔符<页面名”的层级 */
+  --text-mute: #7c7c84;
+  --text-tertiary: #65656d;
+
+  /* ── Brand accent (单色紫,Linear 风格) ────────────────────────
+     原方案是 indigo → violet 渐变,这次压成单个 purple,
+     渐变仅用在 logo / 主操作按钮,且角度更平。 */
+  --accent: #7c5cff;
+  --accent-bright: #a78bfa;
+  --accent-grad: linear-gradient(135deg, #7c5cff 0%, #b794f5 100%);
+
+  /* ── Status (Linear 风:稍降饱和,提亮) ───────────────────────── */
+  --green: #4cb782;
+  --red: #e5484d;
+  --yellow: #f5b62e;
+  --orange: #f76808;
+  --green-bg: rgba(76, 183, 130, 0.14);
+  --success-bg: rgba(63, 213, 143, 0.08);
+  --red-bg: rgba(229, 72, 77, 0.14);
+  --yellow-bg: rgba(245, 182, 46, 0.14);
+  --blue-bg: rgba(124, 92, 225, 0.16);
+  --orange-bg: rgba(247, 104, 8, 0.14);
+
+  /* ── Shadows (保留克制,弹出层更立体) ────────────────────────── */
+  --shadow: 0 24px 64px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 14px 36px rgba(0, 0, 0, 0.55);
+  --shadow-ring: 0 0 0 3px rgba(124, 92, 225, 0.18);
+
+  /* ── Radii ─────────────────────────────────────────────────────
+     Linear 的圆角偏小(6-8),项目内最大为卡片 8px。 */
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  /* ── Type scale ──────────────────────────────────────────────── */
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, 'SF Mono', monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --lh-base: 1.5;
+
+  /* Motion ─ 统一曲线与时长,避免 0.1s/0.12s 混用 */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 0.1s;
+  --dur-2: 0.15s;
+  --dur-3: 0.25s;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* 选中文字 — 与紫色主题对齐(默认蓝色会突兀) */
+::selection {
+  background: rgba(124, 92, 225, 0.30);
+  color: #fff;
+}
+::-moz-selection {
+  background: rgba(124, 92, 225, 0.30);
+  color: #fff;
+}
+
+/* 键盘焦点环 — 仅键盘导航可见,鼠标点击不出现 */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* placeholder 颜色统一 */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-mute);
+  opacity: 1;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+select {
+  font-family: inherit;
+}
+
+input,
+select,
+button,
+textarea {
+  color-scheme: dark;
+}
+
+/* 通用工具类 */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  line-height: 1.4;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+/* 无障碍:对动效敏感的用户禁用页面转场与过渡 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

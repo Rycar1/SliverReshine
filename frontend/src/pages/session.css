@@ -1,0 +1,570 @@
+/* ─── Session detail layout ────────────────────────────────────── */
+.page-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.issue-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  flex: 1;
+  min-height: 0;
+}
+
+.issue-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.issue-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.issue-title-block {
+  min-width: 0;
+}
+
+.issue-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.issue-title-row .inline-edit {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.issue-title-meta {
+  color: var(--text-mute);
+  font-size: var(--fs-sm);
+  font-family: var(--font-mono);
+  margin-left: 2px;
+}
+
+/* ─── Right-side metadata panel (Linear 风格) ────────────────── */
+.issue-side {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.side-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px 10px;
+}
+
+.side-card-title {
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  color: var(--text-mute);
+  margin-bottom: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* .side-row/.side-label/.side-value/.side-value.mono 已在 pages.css 统一定义,此处删除重复副本(DYY 冲突)。 */
+
+.rename-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.rename-inline .input {
+  width: 150px;
+  padding: 4px 8px;
+  font-size: var(--fs-sm);
+}
+
+/* .side-actions/.side-actions .btn 已在 pages.css 统一定义,此处删除重复副本。 */
+
+/* ─── Session meta strip (替代原 session-meta 卡片) ────────── */
+.session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  background: transparent;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+.session-meta b {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: 5px;
+}
+
+.session-meta .sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+  align-self: center;
+}
+
+/* ─── Tabs (Linear 风格的下边线) ─────────────────────────────────
+   窄屏改为横向滚动而非换行,避免 tab 行高跳动。 */
+.tabs {
+  display: flex;
+  gap: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  padding: 7px 12px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition: color var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+  border-radius: 6px 6px 0 0;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* hover 加微背景提示,让用户感知可点击 */
+.tab:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.tab.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+}
+
+.tab-count {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: var(--fs-xs);
+  color: var(--text-mute);
+  font-family: var(--font-mono);
+}
+.tab.active .tab-count {
+  color: var(--text-dim);
+}
+
+.tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tab-content .card {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* ─── Files tab ───────────────────────────────────────────────── */
+.fs-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+/* The search panel reuses .fs-toolbar for its controls, so it only needs to sit
+   apart from the browser controls above it. */
+.fs-search {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.fs-search .fs-toolbar {
+  margin-bottom: 6px;
+}
+
+.fs-search-summary {
+  padding: 10px 16px;
+}
+
+/* Hits are the reason the search was run, so they get the room. */
+.grep-hits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+.fs-path {
+  flex: 1;
+  min-width: 220px;
+}
+
+.fs-cell-name {
+  cursor: pointer;
+}
+
+.fs-cell-name .dir {
+  color: var(--accent-bright);
+  font-weight: 500;
+}
+
+.fs-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.file-viewer {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.file-viewer pre {
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 380px;
+  overflow: auto;
+  color: var(--text);
+  margin: 0;
+}
+.file-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ─── Exec tab ────────────────────────────────────────────────── */
+.exec-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.exec-form input[type='text'] {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-base);
+  transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+.exec-form input[type='text']:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-ring);
+}
+
+.exec-path {
+  flex: 1;
+  min-width: 220px;
+}
+
+.exec-args {
+  flex: 2;
+  min-width: 240px;
+}
+
+.exec-output {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.exec-output pre {
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 420px;
+  overflow: auto;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.55;
+}
+.exec-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ─── Screenshot tab ──────────────────────────────────────────── */
+.screenshot-actions {
+  margin-bottom: 12px;
+}
+
+.screenshot-img {
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: block;
+}
+
+/* ─── Portfwd tab ─────────────────────────────────────────────── */
+
+/* Both forwarding directions are stacked as two cards, so give them room. */
+.pf-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pf-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.pf-form .field {
+  gap: 4px;
+}
+
+/* ─── Registry tab ────────────────────────────────────────────── */
+.reg-form {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.reg-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.reg-cols .card {
+  margin-bottom: 0;
+}
+
+.reg-item {
+  padding: 5px 9px;
+  cursor: pointer;
+  border-radius: 5px;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.reg-item:hover {
+  background: var(--bg-hover);
+}
+.reg-item .reg-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--accent-bright);
+}
+.reg-item .reg-icon.dir {
+  color: var(--yellow);
+}
+.reg-item .reg-del {
+  margin-left: auto;
+  visibility: hidden;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.reg-item:hover .reg-del {
+  visibility: visible;
+}
+.reg-item .reg-del:hover {
+  color: var(--red);
+  background: rgba(255, 60, 100, 0.1);
+}
+
+.reg-value {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.reg-value pre {
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+  margin: 0;
+}
+.reg-value-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ─── Env tab ─────────────────────────────────────────────────── */
+.env-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.env-form input[type='text'] {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-base);
+  transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+.env-form input[type='text']:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-ring);
+}
+
+/* ─── Activity feed (Linear 风) ───────────────────────────────── */
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.activity-item {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  padding: 6px 4px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.activity-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-bright));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.activity-meta {
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+
+.activity-body {
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.activity-body .code {
+  margin: 0 2px;
+}
+
+/* ─── Pivot tab ─────────────────────────────────────────────── */
+.pivot-tree {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+
+.pivot-tree > li {
+  margin: 6px 0;
+}
+
+.pivot-tree .pivot-tree {
+  margin-top: 4px;
+}
+
+.pivot-node {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+}
+
+
+/* .code-inline 已合并到 pages.css 的 .code,统一使用 .code 类 */
+
+/* ─── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .issue-layout {
+    flex-direction: column;
+    gap: 18px;
+  }
+  .issue-side {
+    width: 100%;
+  }
+  .issue-header {
+    flex-wrap: wrap;
+  }
+}

@@ -1,0 +1,609 @@
+.app {
+  display: flex;
+  height: 100%;
+  background: var(--bg);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ─── TopBar ──────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 48px;
+  flex-shrink: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-toggle {
+  flex-shrink: 0;
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.topbar-breadcrumb > span {
+  white-space: nowrap;
+}
+
+.topbar-ws {
+  color: var(--text);
+  font-weight: 550;
+}
+
+.topbar-sep {
+  color: var(--text-tertiary);
+}
+
+.topbar-page {
+  color: var(--text-mute);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.server-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.server-status.ok {
+  color: var(--green);
+}
+.server-status.bad {
+  color: var(--red);
+}
+.server-status .dot {
+  width: 7px;
+  height: 7px;
+}
+.server-status.ok .dot {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(76, 183, 130, 0.5);
+}
+.server-status.bad .dot {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(229, 72, 77, 0.45);
+}
+.server-status-text {
+  color: inherit;
+}
+
+/* ─── Sidebar ────────────────────────────────────────────────────
+   240px 分两列:头部(logo + workspace 导航 + 分组标题 + favorites) + 底部
+   (语言切换 + 连接状态)。与主区域仅靠 1px border 分割(背景同色)。 */
+.sidebar {
+  width: 240px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 10px 0 0;
+  font-size: var(--fs-base);
+}
+
+/* 顶部 logo 区 — Linear 风格:logo mark + 文字 + workspace 下拉箭头 */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 12px;
+  color: var(--text);
+}
+
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--accent-grad);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+/* 字号统一由 .logo-text 控制,避免 .logo 与 .logo-text 重复设置 */
+.logo-text {
+  font-weight: 600;
+  font-size: var(--fs-md);
+  letter-spacing: -0.01em;
+}
+
+.logo-caret {
+  margin-left: auto;
+  color: var(--text-mute);
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+}
+
+/* 分组导航 — 标题 11px / 间距 6px */
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+}
+
+.nav-section + .nav-section {
+  margin-top: 2px;
+}
+
+.nav-section-title {
+  display: flex;
+  align-items: center;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  color: var(--text-mute);
+  padding: 6px 8px 4px;
+  text-transform: none;
+}
+.nav-section-title .nav-section-action {
+  margin-left: auto;
+  color: var(--text-mute);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity var(--dur-2) var(--ease);
+}
+.nav-section-title .nav-section-action:hover { opacity: 1; }
+
+nav {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 5px 9px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: var(--fs-base);
+  font-weight: 450;
+  text-align: left;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+  letter-spacing: -0.005em;
+}
+
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.nav-item.active {
+  background: var(--bg-selected);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+
+.nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-mute);
+}
+
+.nav-item.active .nav-icon,
+.nav-item:hover .nav-icon {
+  color: var(--text);
+}
+
+.nav-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.nav-label {
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 导航徽标 — 真实计数,高信息密度 */
+.nav-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.nav-item:hover .nav-badge,
+.nav-item.active .nav-badge {
+  background: var(--bg-selected);
+  color: var(--accent-bright);
+}
+
+.nav-item.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+  padding: 5px 9px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-dim);
+}
+.nav-item.disabled .nav-icon {
+  color: var(--text-mute);
+}
+
+/* ─── Star toggle (收藏切换) ─────────────────────────────────────
+   默认隐藏;nav-item hover 时显示半透明;已收藏时始终显示(黄色实心);
+   toggle 自身 hover 时完全显示。用 span role=button 替代 button(避免嵌套)。 */
+.star-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-mute);
+  opacity: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.nav-item:hover .star-toggle {
+  opacity: 0.5;
+}
+
+.star-toggle:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
+.star-toggle.active {
+  opacity: 1;
+  color: var(--yellow);
+}
+
+.star-toggle.active:hover {
+  color: var(--yellow);
+  opacity: 1;
+}
+
+.star-toggle svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* 收藏计数 */
+.nav-section-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-mute);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* 收藏空态 */
+.nav-empty {
+  padding: 8px 10px;
+  color: var(--text-mute);
+  font-size: var(--fs-xs);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* ─── Sidebar footer ──────────────────────────────────────────── */
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lang-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: background var(--dur-2) var(--ease), color var(--dur-2) var(--ease);
+}
+.lang-switch:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.lang-switch svg {
+  width: 12px;
+  height: 12px;
+}
+
+.conn-status {
+  padding: 5px 9px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 6px;
+}
+.conn-status:hover { background: var(--bg-hover); }
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot.ok {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(76, 183, 130, 0.5);
+}
+
+.dot.bad {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(229, 72, 77, 0.45);
+}
+
+/* ─── Main content ───────────────────────────────────────────── */
+.content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  min-height: 0;
+}
+
+/* ─── 页面转场 ────────────────────────────────────────────────────
+   参考 Linear 的内容区域切换:
+   - 同级切换(same):微 fade + 6px 上移,180ms
+   - 深入(forward):从右滑入 20px + fade,200ms
+   - 返回(back):从左滑入 -20px + fade,200ms
+   侧栏不动,仅内容区域转场。key={pathname} 确保每次路由变化时
+   div 重新挂载,CSS animation 自动播放。 */
+.page-transition {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: page-enter-same var(--dur-3) var(--ease-out);
+  will-change: opacity, transform;
+}
+
+.page-transition.forward {
+  animation: page-enter-forward var(--dur-3) var(--ease-out);
+}
+
+.page-transition.back {
+  animation: page-enter-back var(--dur-3) var(--ease-out);
+}
+
+@keyframes page-enter-same {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-enter-forward {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes page-enter-back {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────
+   侧栏:宽屏 240px → 中屏 200px → 折叠图标栏 56px(按钮切换)。
+   顶栏左侧=汉堡 + breadcrumb;窄屏下 breadcrumb 收缩省略。 */
+.sidebar {
+  width: 240px;
+  transition: width var(--dur-3) var(--ease-out);
+}
+
+/* 折叠态 — 只保留图标,文字全部隐藏 */
+.app.sidebar-collapsed .sidebar {
+  width: 56px;
+}
+
+.app.sidebar-collapsed .logo {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app.sidebar-collapsed .logo-text,
+.app.sidebar-collapsed .logo-caret,
+.app.sidebar-collapsed .nav-section-title,
+.app.sidebar-collapsed .nav-badge,
+.app.sidebar-collapsed .star-toggle,
+.app.sidebar-collapsed .nav-empty,
+.app.sidebar-collapsed .nav-section-count,
+.app.sidebar-collapsed .conn-status span:last-child,
+.app.sidebar-collapsed .lang-switch span {
+  display: none;
+}
+
+.app.sidebar-collapsed nav {
+  overflow-x: hidden;
+}
+
+.app.sidebar-collapsed .nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app.sidebar-collapsed .nav-item.active::before {
+  left: -10px;
+  right: auto;
+}
+
+.app.sidebar-collapsed .sidebar-footer {
+  align-items: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app.sidebar-collapsed .conn-status {
+  justify-content: center;
+}
+
+.app.sidebar-collapsed .lang-switch {
+  width: 100%;
+}
+
+/* 中屏:侧栏略窄 + 顶栏更紧凑 */
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 200px;
+  }
+  .app.sidebar-collapsed .sidebar {
+    width: 56px;
+  }
+  .topbar {
+    padding: 0 14px;
+  }
+}
+
+/* 窄屏:强制紧凑,折叠侧栏优先展示内容 */
+@media (max-width: 760px) {
+  .app .sidebar {
+    width: 56px;
+  }
+  .app:not(.sidebar-collapsed) .sidebar {
+    width: 56px;
+  }
+  .app .logo {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .app .logo-text,
+  .app .logo-caret,
+  .app .nav-section-title,
+  .app .nav-badge,
+  .app .star-toggle,
+  .app .nav-empty,
+  .app .nav-section-count,
+  .app .conn-status span:last-child,
+  .app .lang-switch span {
+    display: none;
+  }
+  .app .nav-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .app .nav-item.active::before {
+    left: -10px;
+    right: auto;
+  }
+  .app .sidebar-footer {
+    align-items: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .app .conn-status {
+    justify-content: center;
+  }
+  .app .lang-switch {
+    width: 100%;
+  }
+  .topbar {
+    padding: 0 10px;
+  }
+  .topbar-breadcrumb {
+    display: none;
+  }
+}
+

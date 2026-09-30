@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sliver UI · Linear 风格迭代样张</title>
+    <link rel="stylesheet" href="/demo/showcase.css" />
+  </head>
+  <body>
+    <div class="showcase">
+      <header class="showcase-header">
+        <div>
+          <h1>Sliver UI · 风格迭代</h1>
+          <p>基于 Linear 深色界面的设计 DNA 改造 · 改造前 vs 改造后</p>
+        </div>
+        <div class="showcase-meta">
+          <span class="badge dot green">v0.2</span>
+          <span class="muted">仅样式变更,业务逻辑未改动</span>
+        </div>
+      </header>
+
+      <!-- ── Side-by-side: 应用骨架 ── -->
+      <section class="frame-row">
+        <div class="frame-col">
+          <div class="frame-title">改造前</div>
+          <div class="frame-screen before">
+            <aside class="sb">
+              <div class="sb-logo"><span class="mark lg"></span><span class="t">Sliver UI</span></div>
+              <nav>
+                <a class="ni">Inbox</a>
+                <a class="ni">Sessions</a>
+                <a class="ni active">Beacons</a>
+                <a class="ni">Listeners</a>
+                <a class="ni">Implants</a>
+                <a class="ni">SOCKS5</a>
+                <a class="ni">Events</a>
+                <a class="ni">Settings</a>
+              </nav>
+              <div class="sb-foot">
+                <div class="lang">EN</div>
+                <div class="conn">● v1.5</div>
+              </div>
+            </aside>
+            <main class="cnt">
+              <div class="ph"><div class="ph-t">会话</div><div class="ph-s">3 个活跃会话</div></div>
+              <div class="card">
+                <div class="ct">在线会话<span class="cb">●</span></div>
+                <table>
+                  <thead><tr><th>名称</th><th>主机</th><th>用户</th><th>系统</th><th>PID</th></tr></thead>
+                  <tbody>
+                    <tr><td class="mono">workstation-01</td><td>host-a</td><td>admin</td><td><span class="bd blue">linux/amd64</span></td><td class="mono">1024</td></tr>
+                    <tr><td class="mono">workstation-02</td><td>host-b</td><td>root</td><td><span class="bd blue">linux/arm64</span></td><td class="mono">411</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </main>
+          </div>
+        </div>
+        <div class="frame-col">
+          <div class="frame-title after-tag">改造后</div>
+          <div class="frame-screen after">
+            <aside class="sb">
+              <div class="sb-logo"><span class="mark lg"></span><span class="t">Sliver UI</span><span class="caret">▾</span></div>
+              <div class="sb-search">
+                <span class="si">⌕</span><span class="sl">搜索或跳转</span><span class="kbd">⌘K</span>
+              </div>
+              <nav>
+                <div class="ns">
+                  <div class="nsh">工作区<span class="nsa">+</span></div>
+                  <a class="ni">会话</a>
+                  <a class="ni active">信标</a>
+                  <a class="ni">监听器</a>
+                  <a class="ni">植入体</a>
+                  <a class="ni">SOCKS5</a>
+                  <a class="ni">事件</a>
+                </div>
+                <div class="ns">
+                  <div class="nsh">收藏<span class="nsa">+</span></div>
+                  <a class="ni">会话 <span class="fav">★</span></a>
+                  <a class="ni">植入体 <span class="fav">★</span></a>
+                  <a class="ni">信标 <span class="fav">★</span></a>
+                </div>
+              </nav>
+              <div class="sb-foot">
+                <div class="lang">EN</div>
+                <div class="conn"><span class="dot ok"></span> 已连接 v1.5</div>
+              </div>
+            </aside>
+            <main class="cnt">
+              <div class="ph">
+                <div class="ph-t">会话 <span class="ph-m">3</span></div>
+                <div class="ph-s">3 个活跃会话</div>
+              </div>
+              <div class="card flush">
+                <table>
+                  <thead><tr><th>名称</th><th>主机</th><th>用户</th><th>系统</th><th>PID</th><th></th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td class="mono">workstation-01</td>
+                      <td>host-a</td>
+                      <td>admin</td>
+                      <td><span class="bd blue">linux/amd64</span></td>
+                      <td class="mono">1024</td>
+                      <td><div class="ax"><button class="b sm">打开</button><button class="b sm p">终端</button></div></td>
+                    </tr>
+                    <tr>
+                      <td class="mono">workstation-02</td>
+                      <td>host-b</td>
+                      <td>root</td>
+                      <td><span class="bd blue">linux/arm64</span></td>
+                      <td class="mono">411</td>
+                      <td><div class="ax"><button class="b sm">打开</button><button class="b sm p">终端</button></div></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </main>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Session detail: tabs + side panel ── -->
+      <section class="frame-row">
+        <div class="frame-col">
+          <div class="frame-title">改造前 · 会话详情</div>
+          <div class="frame-screen before">
+            <main class="cnt wide">
+              <div class="ph"><div class="ph-t">会话</div></div>
+              <div class="meta-strip">
+                <span><b>主机</b>host-a</span><span><b>用户</b>admin</span><span><b>系统</b>linux/amd64</span>
+              </div>
+              <div class="tabs">
+                <span class="tab">文件</span>
+                <span class="tab">进程</span>
+                <span class="tab active">执行</span>
+                <span class="tab">环境</span>
+                <span class="tab">注册表</span>
+              </div>
+              <div class="card">
+                <div class="ct">执行命令<span class="cb">▌</span></div>
+                <div class="exec-form">
+                  <input class="ipt" placeholder="路径" value="/bin/whoami" />
+                  <input class="ipt" placeholder="参数" />
+                  <button class="b p">运行</button>
+                </div>
+                <div class="out">
+                  <div class="out-h">stdout · 退出码 0</div>
+                  <pre>admin
+uid=0(root) gid=0(root) groups=0(root)</pre>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+        <div class="frame-col">
+          <div class="frame-title after-tag">改造后 · 会话详情</div>
+          <div class="frame-screen after">
+            <main class="cnt wide">
+              <div class="ph"><div class="ph-t">会话 <span class="ph-m">host-a</span></div>
+                <div class="ph-s">Sliver 信标会话</div></div>
+              <div class="meta-strip">
+                <span><b>主机</b>host-a</span>
+                <span class="sep"></span>
+                <span><b>用户</b>admin</span>
+                <span class="sep"></span>
+                <span><b>系统</b><span class="bd blue">linux/amd64</span></span>
+                <span class="sep"></span>
+                <span><b>PID</b><code class="ci">1024</code></span>
+              </div>
+              <div class="tabs">
+                <span class="tab">文件</span>
+                <span class="tab">进程</span>
+                <span class="tab active">执行</span>
+                <span class="tab">网络</span>
+                <span class="tab">环境</span>
+                <span class="tab">注册表</span>
+              </div>
+              <div class="card">
+                <div class="card-h">
+                  <span class="ct">执行命令</span>
+                  <span class="card-ha">stdout · exit 0</span>
+                </div>
+                <div class="exec-form">
+                  <input class="ipt" value="/bin/whoami" />
+                  <input class="ipt" placeholder="参数" />
+                  <button class="b p">运行</button>
+                </div>
+                <div class="out">
+                  <pre>admin
+uid=0(root) gid=0(root) groups=0(root)</pre>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Badge & status palette ── -->
+      <section class="frame-row three">
+        <div class="frame-col">
+          <div class="frame-title">徽章系统</div>
+          <div class="frame-screen after pad">
+            <div class="chips">
+              <span class="bd dot green">活跃</span>
+              <span class="bd dot red">已失联</span>
+              <span class="bd dot yellow">警告</span>
+              <span class="bd dot blue">运行中</span>
+              <span class="bd dot orange">待处理</span>
+              <span class="bd">默认</span>
+              <span class="bd green">已连接</span>
+              <span class="bd red">失败</span>
+              <span class="bd blue">linux/amd64</span>
+              <span class="bd yellow">macos/arm64</span>
+            </div>
+            <div class="chips">
+              <code class="ci">deviceId</code>
+              <code class="ci">vehicle_state</code>
+              <code class="ci">implantId</code>
+              <code class="ci">session.UUID</code>
+            </div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <div class="frame-title">状态点 + 连接</div>
+          <div class="frame-screen after pad">
+            <div class="status-grid">
+              <div class="conn"><span class="dot ok"></span>已连接 v1.5.2</div>
+              <div class="conn"><span class="dot bad"></span>未连接</div>
+              <div class="conn"><span class="dot ok"></span>已连接 v0.0.5</div>
+              <div class="conn"><span class="dot yellow"></span>连接中...</div>
+            </div>
+            <div class="muted small">连接点配 box-shadow 微弱 glow,而不是粗描边</div>
+          </div>
+        </div>
+        <div class="frame-col">
+          <div class="frame-title">元数据面板</div>
+          <div class="frame-screen after pad">
+            <div class="side-card">
+              <div class="side-t">属性</div>
+              <div class="side-row"><span class="l">主机</span><span class="v">host-a</span></div>
+              <div class="side-row"><span class="l">用户</span><span class="v">admin</span></div>
+              <div class="side-row"><span class="l">系统</span><span class="v mono">linux/amd64</span></div>
+              <div class="side-row"><span class="l">传输</span><span class="v">mtls</span></div>
+              <div class="side-row"><span class="l">远程</span><span class="v mono">10.0.0.3</span></div>
+              <div class="side-row"><span class="l">C2</span><span class="v mono">mtls://srv</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Token legend ── -->
+      <section class="frame-row">
+        <div class="frame-col">
+          <div class="frame-title">设计令牌(节选)</div>
+          <div class="frame-screen after pad">
+            <table class="tokens">
+              <thead><tr><th>令牌</th><th>旧</th><th>新</th><th>用途</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">--bg</td><td><span class="sw old" data-c="#0f0f10"></span></td><td><span class="sw new" data-c="#0a0a0b"></span></td><td>主背景</td></tr>
+                <tr><td class="mono">--bg-panel</td><td><span class="sw old" data-c="#1a1a1d"></span></td><td><span class="sw new" data-c="#131316"></span></td><td>卡片底色</td></tr>
+                <tr><td class="mono">--bg-elevated</td><td><span class="sw old" data-c="#1d1d20"></span></td><td><span class="sw new" data-c="#1a1a1d"></span></td><td>弹出层</td></tr>
+                <tr><td class="mono">--accent</td><td><span class="sw old" data-c="#5e6ad2"></span></td><td><span class="sw new" data-c="#7c5cff"></span></td><td>品牌主色</td></tr>
+                <tr><td class="mono">--accent-bright</td><td><span class="sw old" data-c="#a55eea"></span></td><td><span class="sw new" data-c="#a78bfa"></span></td><td>辅助紫</td></tr>
+                <tr><td class="mono">--border</td><td>8% 白</td><td>7% 白</td><td>分隔线</td></tr>
+                <tr><td class="mono">--radius</td><td>8px</td><td>6px</td><td>卡片 / 按钮</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="frame-col">
+          <div class="frame-title">未还原/约束说明</div>
+          <div class="frame-screen after pad muted small">
+            <ul class="notes">
+              <li>Linear 右侧"AI 助手"侧面板是产品形态差异,不引入(本项目是 C2 操作台,非 issue tracker)。</li>
+              <li>卡片背景保留单层(无 row-stripe zebra),与原表格视觉一致,避免误读为斑马纹。</li>
+              <li>导航"收藏"组预置 3 项(sessions / implants / beacons),但实际收藏关系未持久化(后续可加 localStorage)。</li>
+              <li>终端 (xterm.js) 字体 / 配色保持不变——xterm 自管主题,与主面板解耦。</li>
+              <li>表单字号从 13px 微降到 13px(等同),行高保留 1.5,以兼容既有中文输入。</li>
+              <li>Logo 渐变色由 indigo→violet 改为 purple→light-purple,与新 --accent-grad 对齐。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer class="showcase-footer">
+        <span>线性化深色 · 单色紫主调 · 层级通过 lightness 而非 border</span>
+        <span>Sliver UI · Linear 风格迭代 v0.2</span>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -114,6 +114,9 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 	if err := s.unpack(ctx); err != nil {
 		return nil, err
 	}
+	if err := s.requireFreePort(s.opts.MultiplayerHost, s.opts.MultiplayerPort); err != nil {
+		return nil, err
+	}
 	if err := s.spawn(ctx); err != nil {
 		return nil, err
 	}
@@ -371,6 +374,36 @@ func (s *Server) spawn(ctx context.Context) error {
 }
 
 // waitForPort blocks until the multiplayer listener accepts connections.
+// requireFreePort fails when something is already listening on the gRPC address.
+//
+// It runs before the daemon is spawned because the failure it prevents is
+// otherwise invisible, and it is the failure that produced a console reporting
+// "server unreachable" behind a log that looked healthy:
+//
+//	Sliver's daemon cannot bind, prints one line into its own log, and exits.
+//	waitForPort then dials the address, reaches the *stranger* holding the port,
+//	and answers "ready". The operator profile is written by a console command
+//	with no daemon to talk to, auto-connect times out, and the UI says the server
+//	is unreachable -- none of which points at a port conflict.
+//
+// The check is inherently racy: something can take the port between this call and
+// the daemon's bind. The window is milliseconds, and the alternative is no check.
+func (s *Server) requireFreePort(host string, port int) error {
+	addr := net.JoinHostPort(host, fmt.Sprint(port))
+
+	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		ln.Close()
+		return nil
+	}
+
+	return fmt.Errorf(
+		"gRPC address %s is already in use (%v). The embedded Sliver daemon cannot bind "+
+			"while another process holds it, so the console would start, serve its UI and "+
+			"report the server unreachable. Stop that process, or set a different mpPort in "+
+			"the settings file",
+		addr, err)
+}
 func (s *Server) waitForPort(ctx context.Context) error {
 	addr := net.JoinHostPort(s.opts.MultiplayerHost, fmt.Sprint(s.opts.MultiplayerPort))
 	deadline := time.Now().Add(60 * time.Second)

@@ -64,9 +64,16 @@ func (tm *TunnelManager) loop() {
 	for {
 		msg, err := tm.stream.Recv()
 		if err != nil {
-			if err != io.EOF {
-				tm.closeAll()
-			}
+			// Close on every exit, including io.EOF.
+			//
+			// EOF is the *normal* way this stream ends -- the server closing it
+			// gracefully -- and it used to be the one path that skipped the
+			// close. Every tunnel then stayed registered, its reader blocked in
+			// cond.Wait with nothing left to wake it, and the browser was never
+			// sent the close frame: the operator watched a terminal that had
+			// silently stopped being connected to anything, with no error and no
+			// way to tell it from a host that had gone quiet.
+			tm.closeAll()
 			return
 		}
 		if msg == nil {

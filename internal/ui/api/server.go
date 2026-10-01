@@ -80,9 +80,30 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	// Invoke-RestMethod rendered it as 忙聣戮盲赂聧氓聢掳莽聰篓, which reads exactly
 	// like a server-side encoding bug and sends the operator hunting for one.
 	// Declaring the charset costs nothing and removes the whole class of report.
+	//
+	// The body is rendered into memory before the status is written. Encoding
+	// straight to w means the failure is discovered after a 200 has already gone
+	// out, and a status cannot be taken back -- which is exactly how a successful
+	// upload used to reach the operator as a failure, as an empty body the
+	// console's client could not parse.
+	buf, err := json.Marshal(v)
+	if err != nil {
+		// The value could not be represented at all. Saying so beats an empty 200
+		// that the client reports as a network error.
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"response could not be encoded"}`))
+		log.Printf("[api] response encoding failed: %v", err)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	if _, err := w.Write(buf); err != nil {
+		// The client hung up mid-write. The status is already committed, so all
+		// that is left is to note it.
+		log.Printf("[api] response write failed: %v", err)
+	}
 }
 
 func writeErr(w http.ResponseWriter, code int, msg string) {
@@ -387,7 +408,7 @@ func (s *Server) Routes() http.Handler {
 	// The body limit is applied in the middleware chain rather than in each
 	// handler, so a new endpoint cannot forget it. Every route below the mux reads
 	// r.Body, and an unbounded read is a way for one client to exhaust the console.
-	return basicAuth(s.auth, withBodyLimit(withCORS(withLogging(mux))))
+	return withSecurityHeaders(basicAuth(s.auth, withBodyLimit(withCSRF(withCORS(withLogging(mux))))))
 }
 
 // RoutePatterns returns the full HTTP contract (method + path pattern) of the
@@ -442,11 +463,28 @@ func withLogging(next http.Handler) http.Handler {
 	})
 }
 
+// withCORS answers preflight and, for same-origin callers, echoes the Origin.
+//
+// The wildcard this used to send was wrong for an authenticated API. "*" tells
+// every origin on the internet that the browser may hand it the response, and
+// while a browser withholds credentialed bodies from a wildcard response, the
+// header still advertises the console to any page the operator happens to have
+// open. A console is a same-origin application: it is served from the same
+// address it calls, so it never needs cross-origin access at all, and granting
+// none costs nothing.
+//
+// Vary: Origin is set unconditionally, including on the 204, so a shared cache
+// cannot hand one origin's response to another.
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Add("Vary", "Origin")
+
+		if origin := r.Header.Get("Origin"); origin != "" && sameOrigin(origin, r.Host) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
+
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

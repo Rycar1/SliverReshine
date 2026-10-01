@@ -37,6 +37,21 @@ type SocksProxy struct {
 	stream   rpcpb.SliverRPC_SocksProxyClient
 	cancel   context.CancelFunc
 
+	// streamMu serialises writes to stream.
+	//
+	// gRPC documents that SendMsg is safe alongside RecvMsg in another goroutine,
+	// but NOT safe to call from two goroutines at once
+	// (google.golang.org/grpc/stream.go, Stream interface). Every local connection
+	// has its own goroutine, so two concurrent SOCKS connections used to write the
+	// same stream simultaneously -- which corrupts the transport's internal send
+	// map and kills the process with a fatal "concurrent map writes". A fatal
+	// error is not recoverable, so this is not a rare race to shrug at: it is the
+	// console dying mid-engagement.
+	//
+	// CloseSend takes the same lock because the same contract forbids it running
+	// concurrently with SendMsg.
+	streamMu sync.Mutex
+
 	mu        sync.Mutex
 	conns     map[uint64]net.Conn
 	done      chan struct{}
@@ -189,7 +204,7 @@ func (p *SocksProxy) handleConn(conn net.Conn) {
 		p.mu.Lock()
 		delete(p.conns, socks.TunnelID)
 		p.mu.Unlock()
-		_ = p.stream.Send(&sliverpb.SocksData{
+		_ = p.send(&sliverpb.SocksData{
 			TunnelID:  socks.TunnelID,
 			CloseConn: true,
 			Request:   &commonpb.Request{SessionID: p.SessionID},
@@ -205,7 +220,7 @@ func (p *SocksProxy) handleConn(conn net.Conn) {
 			frame.Data = buf[:n]
 			frame.Sequence = seq
 			seq++
-			if serr := p.stream.Send(frame); serr != nil {
+			if serr := p.send(frame); serr != nil {
 				return
 			}
 		}
@@ -213,6 +228,18 @@ func (p *SocksProxy) handleConn(conn net.Conn) {
 			return
 		}
 	}
+}
+
+// send writes one frame to the shared SOCKS stream under streamMu.
+//
+// Every write in this file goes through here. The contract it enforces is the
+// one gRPC documents but does not check: concurrent SendMsg on one stream is
+// undefined behaviour, and its usual expression is a fatal runtime error that
+// takes the whole console down.
+func (p *SocksProxy) send(frame *sliverpb.SocksData) error {
+	p.streamMu.Lock()
+	defer p.streamMu.Unlock()
+	return p.stream.Send(frame)
 }
 
 // recvLoop drains the SocksProxy stream and writes data back to local conns.
@@ -250,7 +277,9 @@ func (p *SocksProxy) close() {
 			_ = p.listener.Close()
 		}
 		if p.stream != nil {
+			p.streamMu.Lock()
 			_ = p.stream.CloseSend()
+			p.streamMu.Unlock()
 		}
 		if p.cancel != nil {
 			p.cancel()

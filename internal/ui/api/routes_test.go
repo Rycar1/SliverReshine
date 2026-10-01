@@ -35,6 +35,9 @@ func TestRoutesAcceptDynamicResourceIDs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// The mutating routes need the Content-Type the CSRF guard requires;
+			// without it the 415 would be reported as "the handler did not match".
+			prepareMutation(tt.req)
 			rec := httptest.NewRecorder()
 			New().Routes().ServeHTTP(rec, tt.req)
 			if rec.Code != http.StatusServiceUnavailable {

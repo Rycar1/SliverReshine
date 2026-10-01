@@ -4,10 +4,10 @@
 // The whole point of this package is to remove the manual steps the upstream
 // project expects an operator to perform in the sliver-server TUI:
 //
-//	1. first-run asset unpack (Go toolchain + Zig + garble, extracted from the
-//	   server binary itself into the state directory)
-//	2. `multiplayer` listener start (the gRPC surface the web console speaks)
-//	3. `new-operator --permissions all` (profile generation)
+//  1. first-run asset unpack (Go toolchain + Zig + garble, extracted from the
+//     server binary itself into the state directory)
+//  2. `multiplayer` listener start (the gRPC surface the web console speaks)
+//  3. `new-operator --permissions all` (profile generation)
 //
 // Each step here is idempotent, so restarts are cheap.
 package launch
@@ -98,7 +98,18 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 
 	// The console discovers profiles through this variable; setting it here
 	// keeps the console and the launcher in agreement without any UI step.
-	_ = os.Setenv("SLIVER_CLIENT_CONFIGS", opts.ConfigDir)
+	// The profile directory is exported so the console can find it without a UI
+	// step, but only when the operator has not set it themselves. Overwriting an
+	// explicit value silently repointed the profile list at a different
+	// directory, and the symptom -- saved profiles missing from the console --
+	// points at the profiles rather than at this line.
+	if existing := os.Getenv("SLIVER_CLIENT_CONFIGS"); existing == "" {
+		if err := os.Setenv("SLIVER_CLIENT_CONFIGS", opts.ConfigDir); err != nil {
+			return nil, fmt.Errorf("export SLIVER_CLIENT_CONFIGS: %w", err)
+		}
+	} else {
+		log.Printf("[launch] SLIVER_CLIENT_CONFIGS is already set to %q; leaving it alone", existing)
+	}
 
 	if err := s.unpack(ctx); err != nil {
 		return nil, err

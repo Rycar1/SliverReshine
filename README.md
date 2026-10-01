@@ -214,7 +214,57 @@ build\build-mimikatz-shellcode.ps1 -DonutPath .\tools\donut\donut.exe
 
 ---
 
+## 安全（HTTPS 与默认配置）
+
+控制台用 HTTP Basic 认证，**浏览器每条请求都会自动重放这份凭据**。由此有两点要清楚：
+
+- 默认监听 `0.0.0.0:8080` 是**明文**的。Basic 头只是 base64，不是加密 —— 登录口令、命令回显、抓到的明文凭据都会裸奔在链路上。
+- 绑在非回环地址又没配 TLS 时，启动会打印一条醒目警告，而不是默默放过。
+
+### 启用 HTTPS
+
+在设置文件里同时给出证书和私钥：
+
+```json
+{
+  "addr": "0.0.0.0:8080",
+  "tlsCert": "/path/to/console.crt",
+  "tlsKey":  "/path/to/console.key"
+}
+```
+
+两个必须同时给。只给一个会**直接拒绝启动**：猜错一半等于把操作员静默降级回明文，而那正是他配置 TLS 想避免的事。
+
+自签证书：
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout console.key -out console.crt -subj "/CN=console.local"
+```
+
+**不改任何配置的最小安全部署**：绑定 `127.0.0.1:8080`，用 SSH 端口转发访问：
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@host
+```
+
+### 跨站请求伪造（CSRF）
+
+控制台的所有写操作都要求：
+
+1. `Content-Type: application/json` —— 跨站的表单和「简单请求」设置不了这个类型，也就拿不到预检
+2. `Origin` 如果存在，必须与本机 `Host` 一致
+
+命令行工具（curl、README 里的 PowerShell 片段、Go 测试）不发 `Origin`，因此**不受影响**。
+
+### 终端 WebSocket
+
+终端握手校验 `Origin`，跨站来源直接拒绝升级。终端是目标主机上的一个交互式 shell，这是跨站 WebSocket 劫持最想要的入口。
+
+---
+
 ## 已知限制
+
 
 | 限制 | 说明 |
 |---|---|

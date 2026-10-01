@@ -9,6 +9,7 @@ interface ConnectionValue {
   version: string
   counts: OverviewCounts
   ready: boolean
+  degraded: boolean
   refresh: () => Promise<void>
 }
 
@@ -17,6 +18,7 @@ const ConnectionContext = createContext<ConnectionValue>({
   version: '',
   counts: EMPTY_COUNTS,
   ready: false,
+  degraded: false,
   refresh: async () => {},
 })
 
@@ -29,19 +31,27 @@ export function ConnectionProvider({ children, interval = 5000 }: { children: Re
   const [version, setVersion] = useState('')
   const [counts, setCounts] = useState<OverviewCounts>(EMPTY_COUNTS)
   const [ready, setReady] = useState(false)
+  const [degraded, setDegraded] = useState(false)
 
   const refresh = useCallback(async () => {
     let current
     try {
       current = await api.info()
     } catch {
+      // The request itself failed: the console is genuinely not talking to the
+      // server.
       setConnected(false)
+      setDegraded(false)
       setVersion('')
       setCounts(EMPTY_COUNTS)
       setReady(true)
       return
     }
-    setConnected(!!current.connected)
+    // A server that answers but reports an error is reachable and degraded, not
+    // absent. Collapsing the two made a running server with an unreadable
+    // version look like no server at all.
+    setConnected(!!current.connected || !!current.error)
+    setDegraded(!!current.error)
     setVersion(current.version || '')
     if (!current.connected) {
       setCounts(EMPTY_COUNTS)
@@ -64,7 +74,7 @@ export function ConnectionProvider({ children, interval = 5000 }: { children: Re
   }, [refresh, interval])
 
   return (
-    <ConnectionContext.Provider value={{ connected, version, counts, ready, refresh }}>
+    <ConnectionContext.Provider value={{ connected, version, counts, ready, degraded, refresh }}>
       {children}
     </ConnectionContext.Provider>
   )

@@ -57,6 +57,13 @@ export interface ServerInfo {
   version: string
   connected: boolean
   error?: string
+  /**
+   * Set when the console has a connection to the server but could not read a
+   * fact about it. Without this the two cases were indistinguishable: both
+   * arrived as connected:false with a version, and the UI reported "not
+   * connected" for a server that was answering.
+   */
+  degraded?: boolean
 }
 
 /** One callable method on the SliverRPC surface. */

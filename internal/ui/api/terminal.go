@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -45,16 +46,54 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	rest = strings.TrimSuffix(rest, "/terminal")
 	id := rest
 
-	websocket.Server{Handler: func(ws *websocket.Conn) {
-		// x/net/websocket defaults to text frames; the frontend reads raw
-		// binary frames (ArrayBuffer), so force binary on both directions.
-		ws.PayloadType = websocket.BinaryFrame
-		s.runTerminal(ws, c, id)
-	}}.ServeHTTP(w, r)
+	// An empty id used to flow into the tunnel manager and fail there, on an
+	// already-upgraded socket -- which the operator sees as a terminal that opens
+	// and immediately dies. Refusing before the upgrade keeps this failure in the
+	// same shape as every other bad request.
+	if id == "" {
+		writeErr(w, http.StatusBadRequest, "invalid session id")
+		return
+	}
+
+	websocket.Server{
+		Handshake: sameOriginHandshake,
+		Handler: func(ws *websocket.Conn) {
+			// x/net/websocket defaults to text frames; the frontend reads raw
+			// binary frames (ArrayBuffer), so force binary on both directions.
+			ws.PayloadType = websocket.BinaryFrame
+			s.runTerminal(ws, c, id)
+		},
+	}.ServeHTTP(w, r)
 }
 
-//	maxWSFramePayload caps an incoming client frame so a corrupt header cannot
-//	force an unbounded read.
+// sameOriginHandshake rejects a WebSocket upgrade whose Origin is not this
+// console.
+//
+// This is the only point at which the check is possible. Once the connection is
+// upgraded the browser has committed and the console is already speaking to
+// whatever asked, so a check in the read loop would be a check on a socket that
+// should never have been opened. A terminal is an interactive shell on a
+// compromised host: the thing a cross-site WebSocket hijack would hand over is
+// exactly that.
+//
+// A missing Origin is allowed. Non-browser clients do not send one, and unlike
+// the HTTP path there is no credential-replay problem to solve for them: a
+// socket carries the credentials of whoever opened it, and a script that opens
+// one already knows the password. The origin check exists to stop a *browser*
+// from being used as the deputy.
+func sameOriginHandshake(config *websocket.Config, r *http.Request) error {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return nil
+	}
+	if !sameOrigin(origin, r.Host) {
+		return fmt.Errorf("cross-origin websocket refused")
+	}
+	return nil
+}
+
+// maxWSFramePayload caps an incoming client frame so a corrupt header cannot
+// force an unbounded read.
 const maxWSFramePayload = 1 << 20
 
 // wsFrameReader reassembles our [type][len][payload] frames. x/net/websocket's

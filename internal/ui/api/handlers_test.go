@@ -10,10 +10,30 @@ import (
 	"testing/fstest"
 )
 
+// newRecorder runs a request through the full middleware chain, including the
+// CSRF guard. Mutating requests are given the Content-Type the console's own
+// client sends, because the guard refuses anything else -- a request without it
+// never reaches the handler under test, and the resulting 415 would be reported
+// as a failure of that handler.
 func newRecorder(r *http.Request) *httptest.ResponseRecorder {
+	prepareMutation(r)
 	rec := httptest.NewRecorder()
 	New().Routes().ServeHTTP(rec, r)
 	return rec
+}
+
+// prepareMutation gives a state-changing request the headers a real client sends.
+//
+// Deliberately narrow: it sets Content-Type only when the request carries a body
+// or is one of the mutating methods, so a test that specifically exercises the
+// missing-content-type path still can.
+func prepareMutation(r *http.Request) {
+	switch r.Method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		if r.Header.Get("Content-Type") == "" {
+			r.Header.Set("Content-Type", "application/json")
+		}
+	}
 }
 
 func TestInfoWithoutClient(t *testing.T) {
@@ -174,9 +194,36 @@ func TestUnknownWSPathReturnsJSON404(t *testing.T) {
 }
 
 func TestCORSMiddleware(t *testing.T) {
+	// No Origin, no grant. The wildcard this used to send told every origin on
+	// the internet that a browser could hand it the response, which is the wrong
+	// advertisement for an authenticated console.
 	rec := newRecorder(httptest.NewRequest(http.MethodGet, "/api/info", nil))
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
-		t.Fatalf("Access-Control-Allow-Origin = %q, want *", got)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want empty for a request with no Origin", got)
+	}
+	if got := rec.Header().Get("Vary"); got != "Origin" {
+		t.Errorf("Vary = %q, want Origin so a cache cannot cross the streams", got)
+	}
+
+	// A same-origin caller is echoed back, so the console keeps working from a
+	// reverse proxy that fronts it under a name.
+	sameOriginReq := httptest.NewRequest(http.MethodGet, "/api/info", nil)
+	sameOriginReq.Host = "console.example:8080"
+	sameOriginReq.Header.Set("Origin", "http://console.example:8080")
+	recSame := newRecorder(sameOriginReq)
+	if got := recSame.Header().Get("Access-Control-Allow-Origin"); got != "http://console.example:8080" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want the echoed origin", got)
+	}
+
+	// A foreign origin gets nothing. It is not an error: the browser enforces the
+	// absence of the grant, and the request is still served for non-browser
+	// callers that never had credentials to leak.
+	foreign := httptest.NewRequest(http.MethodGet, "/api/info", nil)
+	foreign.Host = "console.example:8080"
+	foreign.Header.Set("Origin", "http://evil.example")
+	recForeign := newRecorder(foreign)
+	if got := recForeign.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want empty for a foreign origin", got)
 	}
 
 	preflight := httptest.NewRequest(http.MethodOptions, "/api/info", nil)

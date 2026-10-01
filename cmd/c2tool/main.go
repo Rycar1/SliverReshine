@@ -200,20 +200,82 @@ func main() {
 
 	httpSrv := newHTTPServer(listener.Addr().String(), web.Routes())
 
-	go func() {
-		if err := httpSrv.Serve(listener); err != nil && err.Error() != "http: Server closed" {
-			log.Printf("[c2tool] http server stopped: %v", err)
-			stop()
-		}
-	}()
+	scheme := "http"
+	switch {
+	case settings.TLSHalfConfigured():
+		// Half a TLS config is a mistake worth stopping for: guessing which half
+		// the operator meant would silently downgrade them to plain HTTP, which
+		// is the thing they were trying to avoid by setting it at all.
+		log.Fatalf("[c2tool] tlsCert and tlsKey must be set together (%s)", config.Path(base))
+	case settings.TLSConfigured():
+		scheme = "https"
+		go func() {
+			if err := httpSrv.ServeTLS(listener, settings.TLSCert, settings.TLSKey); err != nil &&
+				err.Error() != "http: Server closed" {
+				log.Printf("[c2tool] https server stopped: %v", err)
+				stop()
+			}
+		}()
+	default:
+		warnIfCleartextExposed(settings.Addr)
+		go func() {
+			if err := httpSrv.Serve(listener); err != nil && err.Error() != "http: Server closed" {
+				log.Printf("[c2tool] http server stopped: %v", err)
+				stop()
+			}
+		}()
+	}
 
-	log.Printf("[c2tool] web console listening on http://%s", displayAddr(listener.Addr().String()))
+	log.Printf("[c2tool] web console listening on %s://%s", scheme, displayAddr(listener.Addr().String()))
 	<-ctx.Done()
 	log.Printf("[c2tool] shutting down ...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
+}
+
+// warnIfCleartextExposed prints a prominent warning when the console is about to
+// serve plain HTTP on an address other than loopback.
+//
+// It is a warning rather than a refusal on purpose. Binding 0.0.0.0 is how the
+// console is reached from another machine, and an operator running it inside a
+// tunnel, a VLAN or an SSH forward is making a legitimate choice that this
+// process cannot see. What it can do is make sure the choice is deliberate
+// rather than inherited from a default, which is what the shipped
+// "addr": "0.0.0.0:8080" otherwise turns it into.
+func warnIfCleartextExposed(addr string) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	if isLoopbackHost(host) {
+		return
+	}
+
+	log.Printf("[c2tool] ---------------------------------------------------------------")
+	log.Printf("[c2tool] WARNING: serving plain HTTP on %s", addr)
+	log.Printf("[c2tool] The console login and every command result travel in clear text.")
+	log.Printf("[c2tool] Set tlsCert and tlsKey in the settings file to enable HTTPS, or")
+	log.Printf("[c2tool] bind 127.0.0.1:8080 and reach it through an SSH tunnel.")
+	log.Printf("[c2tool] ---------------------------------------------------------------")
+}
+
+// isLoopbackHost reports whether a listen host is local-only.
+//
+// An empty host is the wildcard, which is the opposite of loopback, so it is
+// deliberately not treated as safe here.
+func isLoopbackHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 // overrides carries the values that came from a flag or the environment, so

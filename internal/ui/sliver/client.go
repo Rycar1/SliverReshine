@@ -150,6 +150,15 @@ func ListProfiles() []string {
 
 // LoadProfile reads a profile JSON from the sliver-client config dirs.
 func LoadProfile(name string) (*ProfileConfig, error) {
+	// The name arrives as a URL path segment, and Go's ServeMux hands back the
+	// percent-decoded value -- so "%2F" is a literal separator by the time it
+	// gets here and filepath.Join would happily walk out of the config directory.
+	// Checked once, before the loop, so every directory in ConfigPaths() is
+	// covered by the same rule.
+	if err := validateArtifactName(name); err != nil {
+		return nil, fmt.Errorf("invalid profile name: %w", err)
+	}
+
 	for _, dir := range ConfigPaths() {
 		p := filepath.Join(dir, name+".json")
 		if data, err := os.ReadFile(p); err == nil {

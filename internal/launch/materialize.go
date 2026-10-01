@@ -104,9 +104,9 @@ func embeddedPlatforms() string {
 // Executable magic numbers. Only the formats the launcher can actually be built
 // for are recognised: an unrecognised file is rejected rather than assumed good.
 var (
-	magicELF   = []byte{0x7F, 'E', 'L', 'F'}
-	magicPE    = []byte{'M', 'Z'}
-	magicMachO = []byte{0xFE, 0xED, 0xFA, 0xCE}
+	magicELF     = []byte{0x7F, 'E', 'L', 'F'}
+	magicPE      = []byte{'M', 'Z'}
+	magicMachO   = []byte{0xFE, 0xED, 0xFA, 0xCE}
 	magicMachO64 = []byte{0xFE, 0xED, 0xFA, 0xCF}
 )
 
@@ -156,7 +156,153 @@ func verifyExecutableFormat(path string) error {
 	if want64(runtime.GOARCH) && is32BitImage(head, path) {
 		return fmt.Errorf("%s is a 32-bit image; this host is %s", filepath.Base(path), runtime.GOARCH)
 	}
+
+	// Bit width is not the only way two executables differ. An ARM64 PE is a
+	// 64-bit PE32+ image, so it passes every check above on an amd64 host and
+	// only fails once the loader has it -- with the message this function exists
+	// to replace. The machine field is the one that says which CPU the image is
+	// for, and it is what the reported failure was actually about.
+	if err := verifyMachine(path, head); err != nil {
+		return err
+	}
 	return nil
+}
+
+// PE COFF Machine values, and the ELF ones, for the architectures the launcher
+// can be built for. The tables are explicit rather than a formula because the
+// numbering is historical: PE has no relationship between 0x8664 and amd64 that
+// a formula could recover, and guessing is how a wrong-but-plausible constant
+// gets shipped.
+const (
+	peMachineI386  = 0x014C
+	peMachineAMD64 = 0x8664
+	peMachineARM   = 0x01C0
+	peMachineARM64 = 0xAA64
+
+	elfMachineI386  = 3   // EM_386
+	elfMachineAMD64 = 62  // EM_X86_64
+	elfMachineARM   = 40  // EM_ARM
+	elfMachineARM64 = 183 // EM_AARCH64
+)
+
+// verifyMachine checks that the image is built for this host's CPU.
+//
+// An architecture with no entry in the table is not refused: the launcher can be
+// built for a platform this table does not know, and refusing there would break
+// a working deployment to catch a mistake it cannot make. The check is
+// best-effort in the direction of silence, never in the direction of a false
+// rejection.
+func verifyMachine(path string, head []byte) error {
+	var machine uint16
+	var name string
+
+	switch {
+	case bytes.HasPrefix(head, magicPE):
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		// The Machine field is the first two bytes of the COFF header, which
+		// starts right after the 4-byte PE signature.
+		var off [4]byte
+		if _, err := f.ReadAt(off[:], 0x3C); err != nil {
+			return nil // Header unreadable; the caller has already accepted it.
+		}
+		peOff := int64(uint32(off[0]) | uint32(off[1])<<8 | uint32(off[2])<<16 | uint32(off[3])<<24)
+		var m [2]byte
+		if _, err := f.ReadAt(m[:], peOff+4); err != nil {
+			return nil
+		}
+		machine = uint16(m[0]) | uint16(m[1])<<8
+		name = peMachineName(machine)
+
+	case bytes.HasPrefix(head, magicELF):
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		// e_machine is a two-byte field at offset 18, stored in the file's own
+		// byte order. Only little-endian hosts are targeted here, which is what
+		// makes reading it directly acceptable; a big-endian target would read
+		// as its own swapped value and fall through to "table does not know it",
+		// which is the safe direction.
+		var m [2]byte
+		if _, err := f.ReadAt(m[:], 18); err != nil {
+			return nil
+		}
+		machine = uint16(m[0]) | uint16(m[1])<<8
+		name = elfMachineName(machine)
+
+	default:
+		return nil
+	}
+
+	// 0 is never a valid machine and is what a short or odd file yields.
+	if machine == 0 || name == "" {
+		return nil
+	}
+
+	if !machineMatchesHost(machine) {
+		return fmt.Errorf("%s is a %s image, but this host is %s; the embedded payload is for the wrong CPU architecture",
+			filepath.Base(path), name, runtime.GOARCH)
+	}
+	return nil
+}
+
+// machineMatchesHost reports whether an image machine value is this host's.
+//
+// Several Go architectures map to one CPU family (386 and amd64 are both x86),
+// but an image for either runs only on the matching width, which is32BitImage
+// has already checked by the time this is called. So the comparison here is
+// exact.
+func machineMatchesHost(machine uint16) bool {
+	switch runtime.GOARCH {
+	case "amd64":
+		return machine == peMachineAMD64 || machine == elfMachineAMD64
+	case "386":
+		return machine == peMachineI386 || machine == elfMachineI386
+	case "arm64":
+		return machine == peMachineARM64 || machine == elfMachineARM64
+	case "arm":
+		return machine == peMachineARM || machine == elfMachineARM
+	default:
+		// An architecture with no mapping cannot be verified, so it is not
+		// refused. Returning false here would break every deployment on a
+		// platform this table has not been taught about.
+		return true
+	}
+}
+
+func peMachineName(machine uint16) string {
+	switch machine {
+	case peMachineI386:
+		return "386"
+	case peMachineAMD64:
+		return "amd64"
+	case peMachineARM:
+		return "arm"
+	case peMachineARM64:
+		return "arm64"
+	default:
+		return ""
+	}
+}
+
+func elfMachineName(machine uint16) string {
+	switch machine {
+	case elfMachineI386:
+		return "386"
+	case elfMachineAMD64:
+		return "amd64"
+	case elfMachineARM:
+		return "arm"
+	case elfMachineARM64:
+		return "arm64"
+	default:
+		return ""
+	}
 }
 
 // hexMagic renders leading bytes for an error message: "4d 5a 90 00".

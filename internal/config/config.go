@@ -56,7 +56,29 @@ type Config struct {
 	// ServerOnly runs the embedded C2 server without the web console.
 	ServerOnly bool `json:"serverOnly"`
 
+	// TLSCert and TLSKey, when both are set, make the console serve HTTPS.
+	//
+	// Without them the console speaks plain HTTP, and HTTP Basic sends the
+	// operator's password as base64 -- which is to say, in the clear. On a
+	// loopback-only deployment that is a local trust boundary the operator
+	// already owns; on 0.0.0.0, which is the shipped default, it puts the
+	// password and every command output on the wire for anyone on the path.
+	//
+	// Both must be set together. One without the other is a configuration
+	// mistake, and starting an HTTP listener because half a TLS config was
+	// present would be the worst possible reading of it.
+	TLSCert string `json:"tlsCert"`
+	TLSKey  string `json:"tlsKey"`
+
 	Auth AuthConfig `json:"auth"`
+}
+
+// TLSConfigured reports whether the operator has asked for HTTPS.
+func (c Config) TLSConfigured() bool { return c.TLSCert != "" && c.TLSKey != "" }
+
+// TLSHalfConfigured reports a cert without a key, or the reverse.
+func (c Config) TLSHalfConfigured() bool {
+	return (c.TLSCert == "") != (c.TLSKey == "")
 }
 
 // Default returns the settings a first run starts from.

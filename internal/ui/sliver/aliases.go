@@ -147,7 +147,19 @@ func InstallAlias(bundleB64 string) (*AliasView, error) {
 		return nil, errors.New("invalid alias.json: name and command_name are required")
 	}
 
+	// The command name is the install directory, and it comes from a file inside
+	// the uploaded archive -- so it is attacker-controlled by anyone who can hand
+	// the operator a bundle. Validated before the RemoveAll below, because
+	// discovering the name is unsafe after the delete has already run is not a
+	// recovery, it is a second incident.
+	if err := validateArtifactName(manifest.CommandName); err != nil {
+		return nil, fmt.Errorf("invalid alias.json: command_name %q: %w", manifest.CommandName, err)
+	}
+
 	installPath := filepath.Join(AliasDir, manifest.CommandName)
+	if err := mustStayInside(AliasDir, installPath); err != nil {
+		return nil, err
+	}
 	if err := os.RemoveAll(installPath); err != nil {
 		return nil, err
 	}
@@ -204,16 +216,44 @@ func safeAliasRelPath(p string) (string, error) {
 	return filepath.FromSlash(cleaned), nil
 }
 
+// Decompression limits for an alias bundle.
+//
+// The request body limit bounds the COMPRESSED size, and gzip reaches ratios of
+// a thousand to one on repetitive data -- so a bundle comfortably inside that
+// limit could still expand to more memory than the console has. A console that
+// runs out of memory is a console the operator has lost mid-engagement, which is
+// why these are hard caps rather than a warning.
+//
+// The numbers are generous against real bundles. The largest alias in the
+// official armory is a few megabytes of .NET assembly; nothing legitimate comes
+// close to any of these.
+const (
+	// maxAliasBundleBytes caps the total decompressed payload.
+	maxAliasBundleBytes = 64 << 20
+	// maxAliasEntryBytes caps one extracted file.
+	maxAliasEntryBytes = 32 << 20
+	// maxAliasBundleFiles caps the entry count, so a bundle of a million tiny
+	// files cannot exhaust memory through per-entry overhead instead of bytes.
+	maxAliasBundleFiles = 256
+)
+
 // readAliasTarGz extracts alias.json and every file from a tar.gz bundle.
+//
+// Every read is bounded. io.LimitReader is used rather than a counter so the
+// limit is enforced on the read itself: a counter checked afterwards would
+// already have allocated the memory the limit exists to protect.
 func readAliasTarGz(bundle []byte) ([]byte, map[string][]byte, error) {
 	zr, err := gzip.NewReader(bytes.NewReader(bundle))
 	if err != nil {
 		return nil, nil, errors.New("invalid gzip bundle")
 	}
 	defer zr.Close()
+
 	tr := tar.NewReader(zr)
 	files := map[string][]byte{}
 	var manifest []byte
+	var total int64
+
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -227,10 +267,27 @@ func readAliasTarGz(bundle []byte) ([]byte, map[string][]byte, error) {
 		if name == "" || hdr.Typeflag != tar.TypeReg {
 			continue
 		}
-		data, err := io.ReadAll(tr)
+
+		if len(files) >= maxAliasBundleFiles {
+			return nil, nil, fmt.Errorf("bundle has more than %d files", maxAliasBundleFiles)
+		}
+
+		// One byte past the cap is read on purpose: reaching it proves the entry
+		// is over the limit, where reading exactly the cap cannot tell "exactly
+		// at the limit" from "truncated by the reader".
+		data, err := io.ReadAll(io.LimitReader(tr, maxAliasEntryBytes+1))
 		if err != nil {
 			return nil, nil, err
 		}
+		if int64(len(data)) > maxAliasEntryBytes {
+			return nil, nil, fmt.Errorf("bundle file %q is larger than %d bytes", name, maxAliasEntryBytes)
+		}
+
+		total += int64(len(data))
+		if total > maxAliasBundleBytes {
+			return nil, nil, fmt.Errorf("bundle expands to more than %d bytes", maxAliasBundleBytes)
+		}
+
 		if name == "alias.json" {
 			manifest = data
 		} else {
@@ -244,10 +301,56 @@ func readAliasTarGz(bundle []byte) ([]byte, map[string][]byte, error) {
 }
 
 // RemoveAlias deletes an installed alias.
+//
+// The name reaches os.RemoveAll, and this function used to join it onto AliasDir
+// with nothing in between: a name of "../../../etc" escaped the directory and the
+// recursive delete ran on whatever it landed on. The validator now runs before
+// the join rather than after, so there is no escaped path left to reason about.
 func RemoveAlias(name string) error {
+	if err := validateArtifactName(name); err != nil {
+		return fmt.Errorf("alias name %q: %w", name, err)
+	}
+
 	installPath := filepath.Join(AliasDir, name)
+
+	// Belt and braces: even with the allowlist above, refuse to act on a path
+	// that did not end up inside AliasDir. This is the guard that survives a
+	// future edit to the validator, or AliasDir being pointed somewhere odd by an
+	// embedder -- which is the situation that produced the original bug.
+	if err := mustStayInside(AliasDir, installPath); err != nil {
+		return err
+	}
+
 	if err := os.RemoveAll(installPath); err != nil {
 		return err
+	}
+	return nil
+}
+
+// mustStayInside reports an error when child is not inside parent.
+//
+// Both paths are made absolute first, because "aliases/x" is not lexically
+// inside the relative "aliases" as far as filepath.Rel is concerned once either
+// side is absolute. The check is lexical rather than symlink-resolved on purpose:
+// this is a last line of defence behind an allowlist, not the primary control,
+// and resolving symlinks here would make the guard depend on filesystem state an
+// attacker can change between the check and the call.
+func mustStayInside(parent, child string) error {
+	absParent, err := filepath.Abs(parent)
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", parent, err)
+	}
+	absChild, err := filepath.Abs(child)
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", child, err)
+	}
+
+	rel, err := filepath.Rel(absParent, absChild)
+	if err != nil {
+		return fmt.Errorf("refusing to act on %s: it is not inside %s", absChild, absParent)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return fmt.Errorf("refusing to act on %s: it is not inside %s", absChild, absParent)
 	}
 	return nil
 }

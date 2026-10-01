@@ -1,6 +1,7 @@
 package api
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 )
@@ -72,7 +73,11 @@ func (s *Server) handleWGStopPortForward(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	fwdID, err := strconv.Atoi(r.PathValue("fwdID"))
-	if err != nil {
+	if err != nil || fwdID < 0 || fwdID > math.MaxInt32 {
+		// Bounded before the narrowing conversion. Atoi accepts anything an int64
+		// holds, so 2147483648 would otherwise wrap to a negative int32 and be
+		// sent to the server as an id that cannot exist -- producing an error
+		// that describes the server's confusion rather than the request's.
 		writeErr(w, http.StatusBadRequest, "invalid forwarder id")
 		return
 	}
@@ -122,7 +127,7 @@ func (s *Server) handleWGStopSocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	serverID, err := strconv.Atoi(r.PathValue("serverID"))
-	if err != nil {
+	if err != nil || serverID < 0 || serverID > math.MaxInt32 {
 		writeErr(w, http.StatusBadRequest, "invalid socks id")
 		return
 	}
@@ -133,4 +138,3 @@ func (s *Server) handleWGStopSocks(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"server": server, "async": async})
 }
-

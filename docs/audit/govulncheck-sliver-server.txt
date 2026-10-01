@@ -1,0 +1,481 @@
+﻿=== Symbol Results ===
+
+Vulnerability #1: GO-2026-6443
+    Server panic via missing authority or Host headers in google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6443
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.82.2
+    Example traces found:
+      #1: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve, which eventually calls transport.http2Server.HandleStreams
+
+Vulnerability #2: GO-2026-6348
+    Heap Memory Exhaustion (OOM) via HTTP/2 DATA Frame Fragmentation in
+    google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6348
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.83.1
+    Example traces found:
+      #1: server/rpc/rpc-tunnel.go:140:22: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Send, which eventually calls mem.BufferSlice.MaterializeToBuffer
+      #2: server/rpc/rpc-tunnel.go:140:22: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Send, which eventually calls mem.IsBelowBufferPoolingThreshold
+      #3: server/rpc/rpc-tunnel.go:140:22: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Send, which eventually calls mem.NewBuffer
+      #4: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls mem.ReadAll
+      #5: server/rpc/rpc-client-logs.go:179:2: rpc.gzipFile calls gzip.Writer.Close, which calls mem.writer.Write
+      #6: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.ClientStream.Close
+      #7: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.ClientStream.Header
+      #8: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.ClientStream.Read
+      #9: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.ClientStream.RecvCompress
+      #10: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.ClientStream.TrailersOnly
+      #11: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls transport.NewHTTP2Client
+      #12: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve, which eventually calls transport.NewServerTransport
+      #13: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.ServerStream.Read
+      #14: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.Stream.ReadMessageHeader
+      #15: server/builder/builder.go:85:12: builder.Builder.Stop calls grpc.ClientConn.Close, which eventually calls transport.http2Client.Close
+      #16: server/builder/builder.go:85:12: builder.Builder.Stop calls grpc.ClientConn.Close, which eventually calls transport.http2Client.GracefulClose
+      #17: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.http2Client.NewStream
+      #18: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve, which eventually calls transport.http2Server.Close
+      #19: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve, which eventually calls transport.http2Server.HandleStreams
+
+Vulnerability #3: GO-2026-6218
+    Avoid quadratic complexity in resolvePath in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-6218
+  Standard library
+    Found in: net/url@go1.25.6
+    Fixed in: net/url@go1.25.13
+    Example traces found:
+      #1: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls url.URL.Parse
+      #2: server/watchtower/watchtower.go:93:15: watchtower.StartWatchTower calls snitch.Snitch.Start, which eventually calls url.URL.ResolveReference
+
+Vulnerability #4: GO-2026-6091
+    Fix Javascript regexp context tracking in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-6091
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.13
+    Example traces found:
+      #1: server/notifications/templates.go:85:24: notifications.templateRenderer.render calls template.Template.Execute
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #5: GO-2026-6090
+    Limit handshake messages we are willing to accept post-handshake in
+    crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-6090
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.13
+    Example traces found:
+      #1: server/db/wasmsqlite/sqlite.go:48:24: wasmsqlite.Dialector.Initialize calls sql.Open, which eventually calls tls.Conn.Handshake
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which calls tls.Conn.Read
+      #4: server/c2/wireguard.go:114:13: c2.StartWGListener calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: server/c2/bind.go:257:33: c2.BindListener.dial calls tls.DialWithDialer
+      #6: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #6: GO-2026-6089
+    Apply ReadHeaderTimeout when doing unencrypted HTTP/2 check in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6089
+  Standard library
+    Found in: net/http@go1.25.6
+    Fixed in: net/http@go1.25.13
+    Example traces found:
+      #1: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe
+      #2: server/c2/jobs.go:209:46: c2.StartHTTPListenerJob calls http.Server.ListenAndServeTLS
+      #3: server/c2/jobs.go:297:18: c2.listenAndServeTLS calls http.Server.Serve
+      #4: server/netstack/tun.go:269:24: netstack.netTun.Write calls channel.Endpoint.InjectInbound, which eventually calls http.Server.ServeTLS
+
+Vulnerability #7: GO-2026-6088
+    Add recursion depth guard during decode in encoding/xml
+  More info: https://pkg.go.dev/vuln/GO-2026-6088
+  Standard library
+    Found in: encoding/xml@go1.25.6
+    Fixed in: encoding/xml@go1.25.13
+    Example traces found:
+      #1: client/command/edit/editor.go:11:2: edit.init calls styles.init, which eventually calls xml.Decoder.Decode
+      #2: client/command/edit/edit.go:13:2: edit.init calls lexers.init, which eventually calls xml.Decoder.DecodeElement
+      #3: server/notifications/manager.go:113:32: notifications.Manager.dispatch calls amazonses.AmazonSES.Send, which eventually calls xml.Decoder.Skip
+      #4: client/command/edit/edit.go:13:2: edit.init calls lexers.init, which eventually calls xml.Decoder.Token
+      #5: server/notifications/manager.go:113:32: notifications.Manager.dispatch calls textmagic.Service.Send, which eventually calls xml.Unmarshal
+
+Vulnerability #8: GO-2026-6061
+    Vulnerabilities in the xDS RBAC authorization engine and the HTTP/2
+    transport server implementation in google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6061
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.82.1
+    Example traces found:
+      #1: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.ClientStream.Close
+      #2: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.ClientStream.Header
+      #3: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.ClientStream.Read
+      #4: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.ClientStream.RecvCompress
+      #5: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.ClientStream.TrailersOnly
+      #6: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.ClientStream.Write
+      #7: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls transport.NewHTTP2Client
+      #8: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve, which eventually calls transport.NewServerTransport
+      #9: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.ServerStream.Read
+      #10: server/rpc/rpc-tunnel.go:140:22: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Send, which eventually calls transport.ServerStream.Write
+      #11: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.ServerStream.WriteStatus
+      #12: server/rpc/rpc-tunnel.go:122:33: rpc.Server.TunnelData calls grpc.GenericServerStream[github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData, github.com/bishopfox/sliver/protobuf/sliverpb.TunnelData].Recv, which eventually calls transport.Stream.ReadMessageHeader
+      #13: server/builder/builder.go:85:12: builder.Builder.Stop calls grpc.ClientConn.Close, which eventually calls transport.http2Client.Close
+      #14: server/builder/builder.go:85:12: builder.Builder.Stop calls grpc.ClientConn.Close, which eventually calls transport.http2Client.GracefulClose
+      #15: protobuf/rpcpb/services_grpc.pb.go:1019:34: rpcpb.sliverRPCClient.BuilderRegister calls grpc.clientStream.SendMsg, which eventually calls transport.http2Client.NewStream
+      #16: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve, which eventually calls transport.http2Server.Drain
+      #17: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve, which eventually calls transport.http2Server.HandleStreams
+
+Vulnerability #9: GO-2026-5972
+    Enforce maximum recursion depth in encoding/asn1
+  More info: https://pkg.go.dev/vuln/GO-2026-5972
+  Standard library
+    Found in: encoding/asn1@go1.25.6
+    Fixed in: encoding/asn1@go1.25.13
+    Example traces found:
+      #1: server/certs/ca.go:92:36: certs.GetCertificateAuthority calls x509.ParseECPrivateKey, which eventually calls asn1.Unmarshal
+
+Vulnerability #10: GO-2026-5970
+    Infinite loop on invalid input in golang.org/x/text
+  More info: https://pkg.go.dev/vuln/GO-2026-5970
+  Module: golang.org/x/text
+    Found in: golang.org/x/text@v0.32.0
+    Fixed in: golang.org/x/text@v0.39.0
+    Example traces found:
+      #1: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls norm.Form.Bytes
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls norm.Form.IsNormalString
+      #3: server/certs/subject.go:441:47: certs.randomOrganization calls cases.Caser.String, which eventually calls norm.Form.Properties
+      #4: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls norm.Form.QuickSpan
+      #5: server/db/wasmsqlite/sqlite.go:48:24: wasmsqlite.Dialector.Initialize calls sql.Open, which eventually calls norm.Form.Span
+      #6: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls norm.Form.String
+      #7: client/core/bof.go:64:33: core.BOFArgsBuffer.AddWString calls encoding.Encoder.Bytes, which eventually calls norm.Form.Transform
+
+Vulnerability #11: GO-2026-5856
+    Invoking Encrypted Client Hello privacy leak in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-5856
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.12
+    Example traces found:
+      #1: server/db/wasmsqlite/sqlite.go:48:24: wasmsqlite.Dialector.Initialize calls sql.Open, which eventually calls tls.Conn.Handshake
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which calls tls.Conn.Read
+      #4: server/c2/wireguard.go:114:13: c2.StartWGListener calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: server/c2/bind.go:257:33: c2.BindListener.dial calls tls.DialWithDialer
+      #6: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #12: GO-2026-5506
+    OpenTelemetry-Go: Multi-value baggage header extraction causes excessive
+    allocations in go.opentelemetry.io/otel
+  More info: https://pkg.go.dev/vuln/GO-2026-5506
+  Module: go.opentelemetry.io/otel
+    Found in: go.opentelemetry.io/otel@v1.39.0
+    Fixed in: go.opentelemetry.io/otel@v1.41.0
+    Example traces found:
+      #1: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls global.ErrDelegator.Handle
+      #2: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls global.GetErrorHandler
+
+Vulnerability #13: GO-2026-5039
+    Arbitrary inputs are included in errors without any escaping in
+    net/textproto
+  More info: https://pkg.go.dev/vuln/GO-2026-5039
+  Standard library
+    Found in: net/textproto@go1.25.6
+    Fixed in: net/textproto@go1.25.11
+    Example traces found:
+      #1: server/rpc/rpc-generate.go:1068:52: rpc.Server.TrafficEncoderRm calls errors.joinError.Error, which calls textproto.Error.Error
+      #2: server/cryptography/cryptography.go:161:30: cryptography.AgeDecrypt calls io.ReadAll, which eventually calls textproto.Reader.ReadMIMEHeader
+      #3: server/notifications/manager.go:113:32: notifications.Manager.dispatch calls mail.Mail.Send, which eventually calls textproto.Reader.ReadResponse
+
+Vulnerability #14: GO-2026-5037
+    Inefficient candidate hostname parsing in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-5037
+  Standard library
+    Found in: crypto/x509@go1.25.6
+    Fixed in: crypto/x509@go1.25.11
+    Example traces found:
+      #1: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which eventually calls x509.Certificate.Verify
+      #2: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which eventually calls x509.Certificate.VerifyHostname
+      #3: server/rpc/rpc-generate.go:1068:52: rpc.Server.TrafficEncoderRm calls x509.HostnameError.Error
+
+Vulnerability #15: GO-2026-5026
+    Invoking failure to reject ASCII-only Punycode-encoded labels in
+    golang.org/x/net/idna
+  More info: https://pkg.go.dev/vuln/GO-2026-5026
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.55.0
+    Example traces found:
+      #1: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls idna.Profile.ToASCII
+      #2: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls idna.ToASCII
+
+  Standard library
+    Found in: net/http@go1.25.6
+    Fixed in: net/http@go1.25.13
+    Example traces found:
+      #1: server/cli/cli.go:168:27: cli.Execute calls cobra.Command.Execute, which eventually calls http.Client.CloseIdleConnections
+      #2: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http.Client.Do
+      #3: client/version/updates.go:137:25: version.fetchReleases calls http.Client.Get
+      #4: server/notifications/builder.go:1060:36: notifications.buildTelegram calls telegram.New, which eventually calls http.Client.PostForm
+      #5: client/overlord/overlord.go:226:23: overlord.QueryDebugTargets calls http.Get
+      #6: server/core/sessions.go:261:18: core.sessions.FromImplantConnection calls sync.Map.Range, which eventually calls http.Transport.CloseIdleConnections
+      #7: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http.Transport.RoundTrip
+
+Vulnerability #16: GO-2026-5004
+    SQL Injection via placeholder confusion with dollar quoted string literals
+    in github.com/jackc/pgx
+  More info: https://pkg.go.dev/vuln/GO-2026-5004
+  Module: github.com/jackc/pgx/v5
+    Found in: github.com/jackc/pgx/v5@v5.7.6
+    Fixed in: github.com/jackc/pgx/v5@v5.9.2
+    Example traces found:
+      #1: server/db/wasmsqlite/migrator.go:249:45: wasmsqlite.Migrator.CurrentDatabase calls sql.Row.Scan, which eventually calls sanitize.SanitizeSQL
+
+Vulnerability #17: GO-2026-4986
+    Quadratic string concatentation in consumeComment in net/mail
+  More info: https://pkg.go.dev/vuln/GO-2026-4986
+  Standard library
+    Found in: net/mail@go1.25.6
+    Fixed in: net/mail@go1.25.10
+    Example traces found:
+      #1: server/notifications/manager.go:113:32: notifications.Manager.dispatch calls pagerduty.PagerDuty.Send, which eventually calls mail.ParseAddress
+
+Vulnerability #18: GO-2026-4982
+    Bypass of meta content URL escaping causes XSS in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4982
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.10
+    Example traces found:
+      #1: server/notifications/templates.go:85:24: notifications.templateRenderer.render calls template.Template.Execute
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #19: GO-2026-4981
+    Crash when handling long CNAME response in net
+  More info: https://pkg.go.dev/vuln/GO-2026-4981
+  Standard library
+    Found in: net@go1.25.6
+    Fixed in: net@go1.25.10
+    Example traces found:
+      #1: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupCNAME
+
+Vulnerability #20: GO-2026-4980
+    Escaper bypass leads to XSS in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4980
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.10
+    Example traces found:
+      #1: server/notifications/templates.go:85:24: notifications.templateRenderer.render calls template.Template.Execute
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #21: GO-2026-4977
+    Quadratic string concatenation in consumePhrase in net/mail
+  More info: https://pkg.go.dev/vuln/GO-2026-4977
+  Standard library
+    Found in: net/mail@go1.25.6
+    Fixed in: net/mail@go1.25.10
+    Example traces found:
+      #1: server/notifications/manager.go:113:32: notifications.Manager.dispatch calls pagerduty.PagerDuty.Send, which eventually calls mail.ParseAddress
+
+Vulnerability #22: GO-2026-4976
+    ReverseProxy forwards queries with more than urlmaxqueryparams parameters in
+    net/http/httputil
+  More info: https://pkg.go.dev/vuln/GO-2026-4976
+  Standard library
+    Found in: net/http/httputil@go1.25.6
+    Fixed in: net/http/httputil@go1.25.10
+    Example traces found:
+      #1: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls httputil.ReverseProxy.ServeHTTP
+
+Vulnerability #23: GO-2026-4971
+    Panic in Dial and LookupPort when handling NUL byte on Windows in net
+  More info: https://pkg.go.dev/vuln/GO-2026-4971
+  Standard library
+    Found in: net@go1.25.6
+    Fixed in: net@go1.25.10
+    Example traces found:
+      #1: server/notifications/manager.go:113:32: notifications.Manager.dispatch calls mail.Mail.Send, which eventually calls net.Dial
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Dialer.Dial
+      #3: server/handlers/sessions.go:239:39: handlers.createReverseTunnelHandler calls net.Dialer.DialContext
+      #4: server/transport/mtls.go:57:23: transport.StartMtlsClientListener calls net.Listen
+      #5: server/rpc/rpc-generate.go:1123:62: rpc.Server.GenerateStage calls fmt.Sprintf, which eventually calls net.ListenConfig.Listen
+      #6: server/c2/wireguard.go:139:31: c2.StartWGListener calls device.Device.IpcSetOperation, which eventually calls net.ListenConfig.ListenPacket
+      #7: server/c2/dns.go:365:32: c2.SliverDNSServer.ListenAndServe calls dns.Server.ListenAndServe, which eventually calls net.ListenPacket
+      #8: client/command/network/netstat.go:83:31: network.PrintNetstat calls net.LookupAddr
+      #9: server/notifications/builder.go:522:37: notifications.buildAmazonSES calls amazonses.New, which eventually calls net.LookupHost
+      #10: server/transport/tailscale.go:70:31: transport.StartTsNetClientListener calls tsnet.Server.Listen, which eventually calls net.LookupPort
+      #11: server/rpc/rpc-stager.go:68:35: rpc.checkInterface calls net.ResolveTCPAddr
+      #12: server/c2/wireguard.go:139:31: c2.StartWGListener calls device.Device.IpcSetOperation, which eventually calls net.ResolveUDPAddr
+      #13: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupAddr
+      #14: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupCNAME
+      #15: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls net.Resolver.LookupHost
+      #16: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupIP
+      #17: client/overlord/overlord.go:171:21: overlord.ExecuteJS calls chromedp.Run, which eventually calls net.Resolver.LookupIPAddr
+      #18: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupNS
+      #19: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupNetIP
+      #20: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupSRV
+      #21: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls net.Resolver.LookupTXT
+
+Vulnerability #24: GO-2026-4947
+    Unexpected work during chain building in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4947
+  Standard library
+    Found in: crypto/x509@go1.25.6
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which eventually calls x509.Certificate.Verify
+
+Vulnerability #25: GO-2026-4946
+    Inefficient policy validation in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4946
+  Standard library
+    Found in: crypto/x509@go1.25.6
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which eventually calls x509.Certificate.Verify
+
+Vulnerability #26: GO-2026-4945
+    Go JOSE Panics in JWE decryption in github.com/go-jose/go-jose
+  More info: https://pkg.go.dev/vuln/GO-2026-4945
+  Module: github.com/go-jose/go-jose/v4
+    Found in: github.com/go-jose/go-jose/v4@v4.1.3
+    Fixed in: github.com/go-jose/go-jose/v4@v4.1.4
+    Example traces found:
+      #1: server/notifications/builder.go:22:2: notifications.init calls fcm.init, which eventually calls jose.init
+
+Vulnerability #27: GO-2026-4918
+    Infinite loop in HTTP/2 transport when given bad SETTINGS_MAX_FRAME_SIZE in
+    net/http/internal/http2 in golang.org/x/net
+  More info: https://pkg.go.dev/vuln/GO-2026-4918
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.53.0
+    Example traces found:
+      #1: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http2.Transport.NewClientConn
+      #2: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http2.Transport.RoundTrip
+      #3: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http2.noDialH2RoundTripper.RoundTrip
+      #4: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http2.unencryptedTransport.RoundTrip
+
+  Standard library
+    Found in: net/http@go1.25.6
+    Fixed in: net/http@go1.25.10
+    Example traces found:
+      #1: server/cli/cli.go:168:27: cli.Execute calls cobra.Command.Execute, which eventually calls http.Client.CloseIdleConnections
+      #2: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http.Client.Do
+      #3: client/version/updates.go:137:25: version.fetchReleases calls http.Client.Get
+      #4: server/notifications/builder.go:1060:36: notifications.buildTelegram calls telegram.New, which eventually calls http.Client.PostForm
+      #5: client/overlord/overlord.go:226:23: overlord.QueryDebugTargets calls http.Get
+      #6: server/core/sessions.go:261:18: core.sessions.FromImplantConnection calls sync.Map.Range, which eventually calls http.Transport.CloseIdleConnections
+      #7: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls http.Transport.RoundTrip
+
+Vulnerability #28: GO-2026-4870
+    Unauthenticated TLS 1.3 KeyUpdate record can cause persistent connection
+    retention and DoS in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-4870
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.9
+    Example traces found:
+      #1: server/db/wasmsqlite/sqlite.go:48:24: wasmsqlite.Dialector.Initialize calls sql.Open, which eventually calls tls.Conn.Handshake
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which calls tls.Conn.Read
+      #4: server/c2/wireguard.go:114:13: c2.StartWGListener calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: server/c2/bind.go:257:33: c2.BindListener.dial calls tls.DialWithDialer
+      #6: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #29: GO-2026-4869
+    Unbounded allocation for old GNU sparse in archive/tar
+  More info: https://pkg.go.dev/vuln/GO-2026-4869
+  Standard library
+    Found in: archive/tar@go1.25.6
+    Fixed in: archive/tar@go1.25.9
+    Example traces found:
+      #1: server/assets/assets-helpers.go:337:24: assets.untarSkipTopLevel calls tar.Reader.Next
+
+Vulnerability #30: GO-2026-4865
+    JsBraceDepth Context Tracking Bugs (XSS) in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4865
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.9
+    Example traces found:
+      #1: server/rpc/rpc-generate.go:1068:52: rpc.Server.TrafficEncoderRm calls errors.joinError.Error, which calls template.Error.Error
+      #2: server/notifications/templates.go:85:24: notifications.templateRenderer.render calls template.Template.Execute
+      #3: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls template.Template.ExecuteTemplate
+      #4: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls template.Template.Funcs
+      #5: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls template.Template.Parse
+      #6: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls template.Template.ParseFS
+      #7: server/rpc/rpc-generate.go:1123:62: rpc.Server.GenerateStage calls fmt.Sprintf, which eventually calls template.context.String
+
+Vulnerability #31: GO-2026-4762
+    Authorization bypass in gRPC-Go via missing leading slash in :path in
+    google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-4762
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.79.3
+    Example traces found:
+      #1: server/transport/tailscale.go:95:29: transport.StartTsNetClientListener calls grpc.Server.Serve
+
+Vulnerability #32: GO-2026-4603
+    URLs in meta content attribute actions are not escaped in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4603
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.8
+    Example traces found:
+      #1: server/notifications/templates.go:85:24: notifications.templateRenderer.render calls template.Template.Execute
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #33: GO-2026-4602
+    FileInfo can escape from a Root in os
+  More info: https://pkg.go.dev/vuln/GO-2026-4602
+  Standard library
+    Found in: os@go1.25.6
+    Fixed in: os@go1.25.8
+    Example traces found:
+      #1: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls os.File.ReadDir
+      #2: server/certs/certs.go:175:18: certs.GenerateRSACertificate calls logrus.Entry.Fatalf, which eventually calls os.File.Readdir
+      #3: server/encoders/encoders.go:303:23: encoders.PassthroughEncoderFS.ReadDir calls os.ReadDir
+
+Vulnerability #34: GO-2026-4601
+    Incorrect parsing of IPv6 host literals in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-4601
+  Standard library
+    Found in: net/url@go1.25.6
+    Fixed in: net/url@go1.25.8
+    Example traces found:
+      #1: server/db/models/implant.go:574:26: models.IsC2Enabled calls url.Parse
+      #2: server/notifications/builder.go:757:32: notifications.buildLine calls line.New, which eventually calls url.ParseRequestURI
+      #3: server/c2/dns.go:352:17: c2.SliverDNSServer.Shutdown calls sync.Once.Do, which eventually calls url.URL.Parse
+
+Vulnerability #35: GO-2026-4394
+    OpenTelemetry Go SDK Vulnerable to Arbitrary Code Execution via PATH
+    Hijacking in go.opentelemetry.io/otel/sdk
+  More info: https://pkg.go.dev/vuln/GO-2026-4394
+  Module: go.opentelemetry.io/otel/sdk
+    Found in: go.opentelemetry.io/otel/sdk@v1.39.0
+    Fixed in: go.opentelemetry.io/otel/sdk@v1.40.0
+    Example traces found:
+      #1: server/notifications/builder.go:22:2: notifications.init calls fcm.init, which eventually calls instrumentation.init
+      #2: server/notifications/builder.go:22:2: notifications.init calls fcm.init, which eventually calls resource.init
+      #3: server/notifications/builder.go:22:2: notifications.init calls fcm.init, which eventually calls sdk.init
+      #4: server/notifications/builder.go:22:2: notifications.init calls fcm.init, which eventually calls x.init
+
+Vulnerability #36: GO-2026-4337
+    Unexpected session resumption in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-4337
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.7
+    Example traces found:
+      #1: server/db/wasmsqlite/sqlite.go:48:24: wasmsqlite.Dialector.Initialize calls sql.Open, which eventually calls tls.Conn.Handshake
+      #2: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Conn.HandshakeContext
+      #3: server/c2/wireguard.go:261:17: c2.wgBufferedConn.Read calls bufio.Reader.Read, which calls tls.Conn.Read
+      #4: server/c2/wireguard.go:114:13: c2.StartWGListener calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: server/c2/bind.go:257:33: c2.BindListener.dial calls tls.DialWithDialer
+      #6: server/c2/http.go:182:3: c2.StartHTTPListener calls http.Server.ListenAndServe, which eventually calls tls.Dialer.DialContext
+
+Your code is affected by 36 vulnerabilities from 6 modules and the Go standard library.
+This scan also found 11 vulnerabilities in packages you import and 26
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.
+Use '-show verbose' for more details.

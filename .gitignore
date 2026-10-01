@@ -17,8 +17,13 @@
 # signature every deployment would then share.
 /internal/embed/mimikatz/*.bin
 
-# donut, if an operator vendors it beside the build scripts
+# donut and upx, if an operator vendors them beside the build scripts. Both are
+# third-party binaries fetched at build time, not source: committing them would
+# pin one version for every deployment and put a few hundred KB of someone
+# else's executable in the history. The scripts look for them here and fail with
+# an instruction when they are missing.
 tools/donut/
+tools/upx/
 
 # Frontend
 /frontend/node_modules/

@@ -73,6 +73,11 @@ describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('FileReader', FakeFileReader)
+    // Storage is per-file shared state in jsdom. The page no longer writes the
+    // operator config anywhere, but clearing here keeps a leftover profile name
+    // from a sibling test from changing what this file renders.
+    sessionStorage.clear()
+    localStorage.clear()
     mockedApi.listProfiles.mockResolvedValue({ profiles: ['local', 'lab'] })
     mockConnected(false)
   })

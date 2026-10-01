@@ -59,11 +59,19 @@ $ErrorActionPreference = 'Stop'
 
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $dist = Join-Path $root 'dist'
-# The variant is part of the name because the two archives are different
-# artifacts: an operator picking one from a release page needs to know which
-# they are getting, and "c2tool-linux-amd64.zip" cannot say.
+# The variant is part of both the archive name and the staging directory name
+# because the two archives are different artifacts: an operator picking one from
+# a release page needs to know which they are getting, and
+# "c2tool-linux-amd64.zip" cannot say.
+#
+# Scoping the stage per variant also matters for correctness. The stage holds the
+# binary between the build and the zip, and the UPX branch rewrites it in place
+# before probing it. When both variants stage through one directory, a plain
+# build running alongside an -Upx build can replace the packed launcher with an
+# unpacked one between the pack and the liveness check -- and that check then
+# reports "the packed launcher does not run" for a binary it never packed.
 $variant = if ($Upx) { 'upx' } else { 'plain' }
-$stage = Join-Path $dist "c2tool-$GOOS-$GOARCH"
+$stage = Join-Path $dist "c2tool-$GOOS-$GOARCH-$variant"
 $zip = Join-Path $dist "c2tool-$GOOS-$GOARCH-$variant.zip"
 
 function Step($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }
@@ -273,9 +281,27 @@ if ($Upx) {
     # binary often enough that shipping one unchecked is not worth the disk it
     # saves. --help answers without touching any state, so this is a safe
     # liveness check rather than a functional one.
-    $probe = & $binPath --help 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "the packed launcher does not run (exit $LASTEXITCODE); rebuild without -Upx"
+    # The launcher prints its usage to stderr, and Windows PowerShell 5.1 turns
+    # any stderr write from a native process into a terminating
+    # NativeCommandError while $ErrorActionPreference is 'Stop' -- even when the
+    # process succeeded. That is the same trap Invoke-Native exists for, and it
+    # made this check, the one meant to catch a broken binary, kill a healthy
+    # build instead: the packed launcher ran, printed its usage and exited 0,
+    # and the script still died on the line below without ever reaching the
+    # packaging step, so no archive was produced. Relax the preference and
+    # judge the binary by its exit code and its output, not by which stream it
+    # chose to write to.
+    $probeEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $probe = (& $binPath --help 2>&1 | Out-String)
+        $probeExit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $probeEap
+    }
+    if ($probeExit -ne 0) {
+        throw "the packed launcher does not run (exit $probeExit); rebuild without -Upx"
     }
     if ($probe -notmatch 'Usage of') {
         throw 'the packed launcher ran but printed no usage text'

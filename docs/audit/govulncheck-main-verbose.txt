@@ -1,0 +1,463 @@
+﻿Fetching vulnerabilities from the database...
+
+Checking the code against the vulnerabilities...
+
+The package pattern matched the following 8 root packages:
+  c2tool/internal/config
+  c2tool/internal/embed
+  c2tool/internal/launch
+  c2tool/internal/ui/sliver
+  c2tool/web
+  c2tool/internal/ui/api
+  c2tool/cmd/c2tool
+  c2tool/zz_debt9_probe
+Govulncheck scanned the following 9 modules and the go1.25.6 standard library:
+  c2tool
+  ./sliver
+  ./sliver
+  golang.org/x/net@v0.48.0
+  golang.org/x/sys@v0.41.0
+  golang.org/x/text@v0.32.0
+  google.golang.org/genproto/googleapis/rpc@v0.0.0-20251202230838-ff82c1b0f217
+  google.golang.org/grpc@v1.77.0
+  google.golang.org/protobuf@v1.36.11
+
+=== Symbol Results ===
+
+Vulnerability #1: GO-2026-6348
+    Heap Memory Exhaustion (OOM) via HTTP/2 DATA Frame Fragmentation in
+    google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6348
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.83.1
+    Example traces found:
+      #1: internal/ui/sliver/data.go:256:29: sliver.Client.Events calls rpcpb.sliverRPCClient.Events, which eventually calls mem.BufferSlice.MaterializeToBuffer
+      #2: internal/ui/sliver/data.go:256:29: sliver.Client.Events calls rpcpb.sliverRPCClient.Events, which eventually calls mem.IsBelowBufferPoolingThreshold
+      #3: internal/ui/sliver/data.go:256:29: sliver.Client.Events calls rpcpb.sliverRPCClient.Events, which eventually calls mem.NewBuffer
+      #4: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls mem.ReadAll
+      #5: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.Close
+      #6: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.Header
+      #7: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.Read
+      #8: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.RecvCompress
+      #9: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.TrailersOnly
+      #10: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls transport.NewHTTP2Client
+      #11: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.Stream.ReadMessageHeader
+      #12: internal/ui/sliver/client.go:278:19: sliver.Client.Close calls grpc.ClientConn.Close, which eventually calls transport.http2Client.Close
+      #13: internal/ui/sliver/client.go:278:19: sliver.Client.Close calls grpc.ClientConn.Close, which eventually calls transport.http2Client.GracefulClose
+      #14: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.http2Client.NewStream
+
+Vulnerability #2: GO-2026-6218
+    Avoid quadratic complexity in resolvePath in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-6218
+  Standard library
+    Found in: net/url@go1.25.6
+    Fixed in: net/url@go1.25.13
+    Example traces found:
+      #1: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do, which eventually calls url.URL.Parse
+
+Vulnerability #3: GO-2026-6091
+    Fix Javascript regexp context tracking in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-6091
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.13
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.Execute
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #4: GO-2026-6090
+    Limit handshake messages we are willing to accept post-handshake in
+    crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-6090
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.13
+    Example traces found:
+      #1: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls tls.Conn.Handshake
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/ui/sliver/avlookup.go:138:25: sliver.AVLookupClient.Lookup calls io.ReadAll, which eventually calls tls.Conn.Read
+      #4: internal/ui/sliver/avlookup.go:102:14: sliver.BuildTasklistText calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #5: GO-2026-6089
+    Apply ReadHeaderTimeout when doing unencrypted HTTP/2 check in net/http
+  More info: https://pkg.go.dev/vuln/GO-2026-6089
+  Standard library
+    Found in: net/http@go1.25.6
+    Fixed in: net/http@go1.25.13
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve
+      #2: cmd/c2tool/main.go:222:30: c2tool.main calls http.Server.ServeTLS
+
+Vulnerability #6: GO-2026-6061
+    Vulnerabilities in the xDS RBAC authorization engine and the HTTP/2
+    transport server implementation in google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6061
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.82.1
+    Example traces found:
+      #1: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.Close
+      #2: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.Header
+      #3: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.Read
+      #4: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.RecvCompress
+      #5: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.TrailersOnly
+      #6: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.ClientStream.Write
+      #7: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls transport.NewHTTP2Client
+      #8: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.Stream.ReadMessageHeader
+      #9: internal/ui/sliver/client.go:278:19: sliver.Client.Close calls grpc.ClientConn.Close, which eventually calls transport.http2Client.Close
+      #10: internal/ui/sliver/client.go:278:19: sliver.Client.Close calls grpc.ClientConn.Close, which eventually calls transport.http2Client.GracefulClose
+      #11: internal/ui/sliver/data.go:262:24: sliver.Client.Events calls grpc.GenericClientStream[github.com/bishopfox/sliver/protobuf/commonpb.Empty, github.com/bishopfox/sliver/protobuf/clientpb.Event].Recv, which eventually calls transport.http2Client.NewStream
+
+Vulnerability #7: GO-2026-5972
+    Enforce maximum recursion depth in encoding/asn1
+  More info: https://pkg.go.dev/vuln/GO-2026-5972
+  Standard library
+    Found in: encoding/asn1@go1.25.6
+    Fixed in: encoding/asn1@go1.25.13
+    Example traces found:
+      #1: internal/ui/sliver/client.go:209:30: sliver.Connect calls tls.X509KeyPair, which eventually calls asn1.Unmarshal
+
+Vulnerability #8: GO-2026-5856
+    Invoking Encrypted Client Hello privacy leak in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-5856
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.12
+    Example traces found:
+      #1: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls tls.Conn.Handshake
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/ui/sliver/avlookup.go:138:25: sliver.AVLookupClient.Lookup calls io.ReadAll, which eventually calls tls.Conn.Read
+      #4: internal/ui/sliver/avlookup.go:102:14: sliver.BuildTasklistText calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #9: GO-2026-5039
+    Arbitrary inputs are included in errors without any escaping in
+    net/textproto
+  More info: https://pkg.go.dev/vuln/GO-2026-5039
+  Standard library
+    Found in: net/textproto@go1.25.6
+    Fixed in: net/textproto@go1.25.11
+    Example traces found:
+      #1: internal/ui/sliver/avlookup.go:138:25: sliver.AVLookupClient.Lookup calls io.ReadAll, which eventually calls textproto.Reader.ReadMIMEHeader
+
+Vulnerability #10: GO-2026-5037
+    Inefficient candidate hostname parsing in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-5037
+  Standard library
+    Found in: crypto/x509@go1.25.6
+    Fixed in: crypto/x509@go1.25.11
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls x509.Certificate.Verify
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls x509.Certificate.VerifyHostname
+      #3: internal/ui/sliver/persistence.go:1116:23: sliver.Client.runPersistenceCommand calls x509.HostnameError.Error
+
+Vulnerability #11: GO-2026-5026
+    Invoking failure to reject ASCII-only Punycode-encoded labels in
+    golang.org/x/net/idna
+  More info: https://pkg.go.dev/vuln/GO-2026-5026
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.55.0
+
+  Standard library
+    Found in: net/http@go1.25.6
+    Fixed in: net/http@go1.25.13
+    Example traces found:
+      #1: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do
+
+Vulnerability #12: GO-2026-4982
+    Bypass of meta content URL escaping causes XSS in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4982
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.10
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.Execute
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #13: GO-2026-4980
+    Escaper bypass leads to XSS in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4980
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.10
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.Execute
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #14: GO-2026-4971
+    Panic in Dial and LookupPort when handling NUL byte on Windows in net
+  More info: https://pkg.go.dev/vuln/GO-2026-4971
+  Standard library
+    Found in: net@go1.25.6
+    Fixed in: net@go1.25.10
+    Example traces found:
+      #1: internal/launch/server.go:491:31: launch.Server.waitForPort calls net.DialTimeout
+      #2: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do, which eventually calls net.Dialer.DialContext
+      #3: internal/ui/sliver/socks.go:103:29: sliver.SocksManager.Start calls net.Listen
+
+Vulnerability #15: GO-2026-4947
+    Unexpected work during chain building in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4947
+  Standard library
+    Found in: crypto/x509@go1.25.6
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls x509.Certificate.Verify
+
+Vulnerability #16: GO-2026-4946
+    Inefficient policy validation in crypto/x509
+  More info: https://pkg.go.dev/vuln/GO-2026-4946
+  Standard library
+    Found in: crypto/x509@go1.25.6
+    Fixed in: crypto/x509@go1.25.9
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls x509.Certificate.Verify
+
+Vulnerability #17: GO-2026-4918
+    Infinite loop in HTTP/2 transport when given bad SETTINGS_MAX_FRAME_SIZE in
+    net/http/internal/http2 in golang.org/x/net
+  More info: https://pkg.go.dev/vuln/GO-2026-4918
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.53.0
+
+  Standard library
+    Found in: net/http@go1.25.6
+    Fixed in: net/http@go1.25.10
+    Example traces found:
+      #1: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do
+
+Vulnerability #18: GO-2026-4870
+    Unauthenticated TLS 1.3 KeyUpdate record can cause persistent connection
+    retention and DoS in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-4870
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.9
+    Example traces found:
+      #1: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls tls.Conn.Handshake
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/ui/sliver/avlookup.go:138:25: sliver.AVLookupClient.Lookup calls io.ReadAll, which eventually calls tls.Conn.Read
+      #4: internal/ui/sliver/avlookup.go:102:14: sliver.BuildTasklistText calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+Vulnerability #19: GO-2026-4869
+    Unbounded allocation for old GNU sparse in archive/tar
+  More info: https://pkg.go.dev/vuln/GO-2026-4869
+  Standard library
+    Found in: archive/tar@go1.25.6
+    Fixed in: archive/tar@go1.25.9
+    Example traces found:
+      #1: internal/ui/sliver/aliases.go:258:22: sliver.readAliasTarGz calls tar.Reader.Next
+
+Vulnerability #20: GO-2026-4865
+    JsBraceDepth Context Tracking Bugs (XSS) in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4865
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.9
+    Example traces found:
+      #1: internal/ui/sliver/mimikatz.go:861:32: sliver.Client.MimikatzRun calls fmt.Sprintf, which eventually calls template.Error.Error
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.Execute
+      #3: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.ExecuteTemplate
+      #4: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls template.Template.Funcs
+      #5: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls template.Template.Parse
+      #6: internal/ui/sliver/mimikatz.go:861:32: sliver.Client.MimikatzRun calls fmt.Sprintf, which eventually calls template.context.String
+
+Vulnerability #21: GO-2026-4603
+    URLs in meta content attribute actions are not escaped in html/template
+  More info: https://pkg.go.dev/vuln/GO-2026-4603
+  Standard library
+    Found in: html/template@go1.25.6
+    Fixed in: html/template@go1.25.8
+    Example traces found:
+      #1: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.Execute
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls template.Template.ExecuteTemplate
+
+Vulnerability #22: GO-2026-4602
+    FileInfo can escape from a Root in os
+  More info: https://pkg.go.dev/vuln/GO-2026-4602
+  Standard library
+    Found in: os@go1.25.6
+    Fixed in: os@go1.25.8
+    Example traces found:
+      #1: internal/ui/sliver/client.go:129:29: sliver.ListProfiles calls os.ReadDir
+
+Vulnerability #23: GO-2026-4601
+    Incorrect parsing of IPv6 host literals in net/url
+  More info: https://pkg.go.dev/vuln/GO-2026-4601
+  Standard library
+    Found in: net/url@go1.25.6
+    Fixed in: net/url@go1.25.8
+    Example traces found:
+      #1: internal/ui/sliver/avlookup.go:121:40: sliver.AVLookupClient.Lookup calls http.NewRequestWithContext, which calls url.Parse
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls url.ParseRequestURI
+      #3: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do, which eventually calls url.URL.Parse
+
+Vulnerability #24: GO-2026-4337
+    Unexpected session resumption in crypto/tls
+  More info: https://pkg.go.dev/vuln/GO-2026-4337
+  Standard library
+    Found in: crypto/tls@go1.25.6
+    Fixed in: crypto/tls@go1.25.7
+    Example traces found:
+      #1: internal/ui/sliver/socks.go:275:16: sliver.SocksProxy.close calls sync.Once.Do, which eventually calls tls.Conn.Handshake
+      #2: cmd/c2tool/main.go:231:27: c2tool.main calls http.Server.Serve, which eventually calls tls.Conn.HandshakeContext
+      #3: internal/ui/sliver/avlookup.go:138:25: sliver.AVLookupClient.Lookup calls io.ReadAll, which eventually calls tls.Conn.Read
+      #4: internal/ui/sliver/avlookup.go:102:14: sliver.BuildTasklistText calls fmt.Fprintf, which calls tls.Conn.Write
+      #5: internal/ui/sliver/avlookup.go:132:24: sliver.AVLookupClient.Lookup calls http.Client.Do, which eventually calls tls.Dialer.DialContext
+
+=== Package Results ===
+
+Vulnerability #1: GO-2026-6443
+    Server panic via missing authority or Host headers in google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6443
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.82.2
+
+Vulnerability #2: GO-2026-5970
+    Infinite loop on invalid input in golang.org/x/text
+  More info: https://pkg.go.dev/vuln/GO-2026-5970
+  Module: golang.org/x/text
+    Found in: golang.org/x/text@v0.32.0
+    Fixed in: golang.org/x/text@v0.39.0
+
+Vulnerability #3: GO-2026-5038
+    Quadratic complexity in WordDecoder.DecodeHeader in mime
+  More info: https://pkg.go.dev/vuln/GO-2026-5038
+  Standard library
+    Found in: mime@go1.25.6
+    Fixed in: mime@go1.25.11
+
+Vulnerability #4: GO-2026-5024
+    Invoking integer overflow in NewNTUnicodeString in golang.org/x/sys/windows
+  More info: https://pkg.go.dev/vuln/GO-2026-5024
+  Module: golang.org/x/sys
+    Found in: golang.org/x/sys@v0.41.0
+    Fixed in: golang.org/x/sys@v0.44.0
+    Platforms: windows
+
+Vulnerability #5: GO-2026-4981
+    Crash when handling long CNAME response in net
+  More info: https://pkg.go.dev/vuln/GO-2026-4981
+  Standard library
+    Found in: net@go1.25.6
+    Fixed in: net@go1.25.10
+
+Vulnerability #6: GO-2026-4976
+    ReverseProxy forwards queries with more than urlmaxqueryparams parameters in
+    net/http/httputil
+  More info: https://pkg.go.dev/vuln/GO-2026-4976
+  Standard library
+    Found in: net/http/httputil@go1.25.6
+    Fixed in: net/http/httputil@go1.25.10
+
+Vulnerability #7: GO-2026-4970
+    Root escape via symlink plus trailing slash in os
+  More info: https://pkg.go.dev/vuln/GO-2026-4970
+  Standard library
+    Found in: os@go1.25.6
+    Fixed in: os@go1.25.12
+
+Vulnerability #8: GO-2026-4762
+    Authorization bypass in gRPC-Go via missing leading slash in :path in
+    google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-4762
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.79.3
+
+=== Module Results ===
+
+Vulnerability #1: GO-2026-6441
+    Bypass of xDS RBAC HTTP filter header matching in google.golang.org/grpc
+  More info: https://pkg.go.dev/vuln/GO-2026-6441
+  Module: google.golang.org/grpc
+    Found in: google.golang.org/grpc@v1.77.0
+    Fixed in: google.golang.org/grpc@v1.83.1
+
+Vulnerability #2: GO-2026-6088
+    Add recursion depth guard during decode in encoding/xml
+  More info: https://pkg.go.dev/vuln/GO-2026-6088
+  Standard library
+    Found in: stdlib@go1.25.6
+    Fixed in: stdlib@go1.25.13
+
+Vulnerability #3: GO-2026-5942
+    Parsing an invalid SVCB or HTTPS RR can panic in
+    golang.org/x/net/dns/dnsmessage
+  More info: https://pkg.go.dev/vuln/GO-2026-5942
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.56.0
+
+Vulnerability #4: GO-2026-5030
+    Invoking duplicate attributes can cause XSS in golang.org/x/net/html
+  More info: https://pkg.go.dev/vuln/GO-2026-5030
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.55.0
+
+Vulnerability #5: GO-2026-5029
+    Invoking incorrect handling of character references in DOCTYPE nodes in
+    golang.org/x/net/html
+  More info: https://pkg.go.dev/vuln/GO-2026-5029
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.55.0
+
+Vulnerability #6: GO-2026-5028
+    Invoking denial of service when parsing arbitrary HTML in
+    golang.org/x/net/html
+  More info: https://pkg.go.dev/vuln/GO-2026-5028
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.55.0
+
+Vulnerability #7: GO-2026-5027
+    Invoking incorrect handling of HTML elements in foreign content in
+    golang.org/x/net/html
+  More info: https://pkg.go.dev/vuln/GO-2026-5027
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.55.0
+
+Vulnerability #8: GO-2026-5025
+    Invoking incorrect handling of namespaced elements in foreign content in
+    golang.org/x/net/html
+  More info: https://pkg.go.dev/vuln/GO-2026-5025
+  Module: golang.org/x/net
+    Found in: golang.org/x/net@v0.48.0
+    Fixed in: golang.org/x/net@v0.55.0
+
+Vulnerability #9: GO-2026-4986
+    Quadratic string concatentation in consumeComment in net/mail
+  More info: https://pkg.go.dev/vuln/GO-2026-4986
+  Standard library
+    Found in: stdlib@go1.25.6
+    Fixed in: stdlib@go1.25.10
+
+Vulnerability #10: GO-2026-4977
+    Quadratic string concatenation in consumePhrase in net/mail
+  More info: https://pkg.go.dev/vuln/GO-2026-4977
+  Standard library
+    Found in: stdlib@go1.25.6
+    Fixed in: stdlib@go1.25.10
+
+Vulnerability #11: GO-2026-4864
+    TOCTOU permits root escape on Linux via Root.Chmod in os in
+    internal/syscall/unix
+  More info: https://pkg.go.dev/vuln/GO-2026-4864
+  Standard library
+    Found in: stdlib@go1.25.6
+    Fixed in: stdlib@go1.25.9
+    Platforms: linux
+
+Your code is affected by 24 vulnerabilities from 1 module and the Go standard library.
+This scan also found 8 vulnerabilities in packages you import and 11
+vulnerabilities in modules you require, but your code doesn't appear to call
+these vulnerabilities.

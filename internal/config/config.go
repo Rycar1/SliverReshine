@@ -70,6 +70,21 @@ type Config struct {
 	TLSCert string `json:"tlsCert"`
 	TLSKey  string `json:"tlsKey"`
 
+	// RequireTLS turns the cleartext warning into a startup failure.
+	//
+	// It is off by default so the shipped behaviour stays "copy one file, run
+	// it, reach the console": binding 0.0.0.0 is how the console is reached
+	// from another machine, and an operator doing that inside a tunnel, a VLAN
+	// or an SSH forward is making a choice this process cannot see. What it can
+	// do is let the operator who knows they never want cleartext say so once,
+	// in the settings file, and then refuse to start rather than warn and
+	// continue. The warning tells them what to do; this makes it impossible to
+	// ignore.
+	//
+	// It only forbids anything when TLS is absent: with tlsCert and tlsKey set
+	// the console is already encrypted and there is nothing left to refuse.
+	RequireTLS bool `json:"requireTLS"`
+
 	Auth AuthConfig `json:"auth"`
 }
 
@@ -90,6 +105,9 @@ func Default() Config {
 		MultiplayerPort: 31337,
 		AutoConnect:     true,
 		ServerOnly:      false,
+		// The console warns loudly about cleartext exposure but still starts.
+		// This is the enforcing version of that warning; see RequireTLS.
+		RequireTLS: false,
 		Auth: AuthConfig{
 			Enabled: true,
 			User:    "operator",
@@ -236,6 +254,14 @@ Change the listen address or the login
       "user":    "operator",  the account name
       "realm":   ""           text shown in the browser prompt
     }
+
+  Plain HTTP on a non-loopback address prints a loud warning on every start,
+  because the login and every command result cross the network unencrypted.
+  HTTP Basic is base64, not encryption. Two ways to answer it:
+
+    "tlsCert": "/path/console.crt"   serve HTTPS (both keys together)
+    "tlsKey":  "/path/console.key"
+    "requireTLS": true                or refuse to start unencrypted
 
   The password is not in that file. It is the second field of console-auth:
 

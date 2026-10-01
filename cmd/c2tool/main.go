@@ -193,6 +193,15 @@ func main() {
 		printCredentials(user, pass, credPath, config.Path(base), settings.Addr, consoleScheme(settings))
 	}
 
+	// ---- cleartext policy ---------------------------------------------------
+	//
+	// Checked before the listener exists, so a refusal leaves no port bound and
+	// nothing to clean up. The warning below is advisory; this is the version an
+	// operator can opt into when they want the process to hold them to it.
+	if err := checkCleartextPolicy(settings); err != nil {
+		log.Fatalf("[c2tool] %v", err)
+	}
+
 	listener, err := net.Listen("tcp", settings.Addr)
 	if err != nil {
 		log.Fatalf("[c2tool] cannot listen on %s: %v", settings.Addr, err)
@@ -235,6 +244,37 @@ func main() {
 	_ = httpSrv.Shutdown(shutdownCtx)
 }
 
+// checkCleartextPolicy refuses to start when the operator has asked to be held
+// to TLS and the configuration would nevertheless serve plain HTTP.
+//
+// An operator who sets requireTLS has said, in the settings file, that they
+// never want this console on the wire in the clear. Starting anyway and printing
+// a warning would be exactly the failure mode they set the flag to avoid -- a
+// deployment that looks protected and is not. The only two ways out are the two
+// the error names: configure TLS, or bind an address that never leaves the host.
+//
+// Loopback is allowed through because there is no wire. A tunnel, a VLAN or a
+// local reverse proxy terminates the encryption somewhere this process cannot
+// see, but it terminates it before the traffic reaches an interface it does not
+// own, which is the property that matters here.
+func checkCleartextPolicy(settings config.Config) error {
+	if !settings.RequireTLS || settings.TLSConfigured() {
+		return nil
+	}
+
+	host, _, err := net.SplitHostPort(settings.Addr)
+	if err != nil {
+		host = settings.Addr
+	}
+	if isLoopbackHost(host) {
+		return nil
+	}
+
+	return fmt.Errorf("requireTLS is set but the console would serve plain HTTP on %s: "+
+		"set tlsCert and tlsKey to serve HTTPS, or bind 127.0.0.1:8080 and reach it "+
+		"through an SSH tunnel", settings.Addr)
+}
+
 // warnIfCleartextExposed prints a prominent warning when the console is about to
 // serve plain HTTP on an address other than loopback.
 //
@@ -244,6 +284,10 @@ func main() {
 // process cannot see. What it can do is make sure the choice is deliberate
 // rather than inherited from a default, which is what the shipped
 // "addr": "0.0.0.0:8080" otherwise turns it into.
+//
+// The operator who does not want the choice left open at all sets requireTLS in
+// the settings file, and checkCleartextPolicy turns this warning into a refusal
+// to start.
 func warnIfCleartextExposed(addr string) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -253,12 +297,21 @@ func warnIfCleartextExposed(addr string) {
 		return
 	}
 
-	log.Printf("[c2tool] ---------------------------------------------------------------")
-	log.Printf("[c2tool] WARNING: serving plain HTTP on %s", addr)
-	log.Printf("[c2tool] The console login and every command result travel in clear text.")
-	log.Printf("[c2tool] Set tlsCert and tlsKey in the settings file to enable HTTPS, or")
-	log.Printf("[c2tool] bind 127.0.0.1:8080 and reach it through an SSH tunnel.")
-	log.Printf("[c2tool] ---------------------------------------------------------------")
+	const rule = "================================================================"
+	log.Printf("[c2tool] %s", rule)
+	log.Printf("[c2tool] WARNING: UNSENCRYPTED CONSOLE ON A NETWORK INTERFACE")
+	log.Printf("[c2tool] %s", rule)
+	log.Printf("[c2tool] Listening on %s over plain HTTP.", addr)
+	log.Printf("[c2tool] The console login and every command result travel in clear text,")
+	log.Printf("[c2tool] and HTTP Basic is base64, not encryption: anyone on this network can")
+	log.Printf("[c2tool] read both, and can reuse the login to run commands on every implant.")
+	log.Printf("[c2tool]")
+	log.Printf("[c2tool] Three ways to fix it, in order of how much they cost:")
+	log.Printf("[c2tool]   1. bind 127.0.0.1:8080 here, and put an SSH tunnel in front:")
+	log.Printf("[c2tool]        ssh -L 8080:127.0.0.1:8080 user@this-host")
+	log.Printf("[c2tool]   2. set tlsCert and tlsKey in the settings file to serve HTTPS")
+	log.Printf("[c2tool]   3. set requireTLS to make this console refuse to start like this")
+	log.Printf("[c2tool] %s", rule)
 }
 
 // isLoopbackHost reports whether a listen host is local-only.

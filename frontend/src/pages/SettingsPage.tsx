@@ -14,13 +14,23 @@ interface LoadedConfig {
   hasCerts: boolean
 }
 
-// The loaded operator config, which contains the client certificate AND the
-// mTLS private key. It is kept in sessionStorage rather than localStorage:
-// sessionStorage is scoped to the tab and cleared when it closes, so the key
-// does not sit in the browser profile indefinitely, where any script in the
-// origin or anyone with profile access could read it. It is also cleared on
-// an explicit disconnect.
-const CONFIG_KEY = 'c2tool.config'
+// The loaded operator config holds the client certificate AND the mTLS private
+// key. Both the raw file text and the parsed summary are held in React state
+// for the lifetime of this page and nowhere else -- no sessionStorage, no
+// localStorage, no IndexedDB, no cookie.
+//
+// It used to live in sessionStorage, on the theory that the tab scope limited
+// the exposure. That narrowed the window without changing the property that
+// matters: Web Storage is readable by any script running on this origin, so the
+// key is only ever as trustworthy as the least trustworthy script the console
+// loads, and it stayed readable for as long as the tab lived. A key that cannot
+// be read out of a storage API is a key an injected script has to steal from a
+// live closure instead, which is a materially harder target.
+//
+// The accepted cost is that a page reload forgets the file and the operator
+// selects it again. That is the whole point: an unlocked private key should not
+// outlive the operator's attention. Re-selecting the profile IS the recovery
+// path, and there is deliberately no silent one.
 const PROFILE_KEY = 'c2tool.activeProfile'
 
 function parseConfig(text: string): LoadedConfig {
@@ -66,15 +76,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadProfiles()
-    try {
-      const saved = sessionStorage.getItem(CONFIG_KEY)
-      if (saved) {
-        setConfigContent(saved)
-        setConfigInfo(parseConfig(saved))
-      }
-    } catch {
-      sessionStorage.removeItem(CONFIG_KEY)
-    }
+    // Nothing about the operator config is restored here, by design. Anything
+    // this effect could put back would have had to survive in Web Storage
+    // first, and the private key must not. The console therefore comes up with
+    // no file loaded and the operator picks one again -- see the connect hint.
+
     const profile = localStorage.getItem(PROFILE_KEY)
     if (profile) setActiveProfile(profile)
   }, [])
@@ -108,11 +114,9 @@ export default function SettingsPage() {
         const info = parseConfig(text)
         setConfigContent(text)
         setConfigInfo(info)
-        sessionStorage.setItem(CONFIG_KEY, text)
       } catch (err) {
         setConfigContent('')
         setConfigInfo(null)
-        sessionStorage.removeItem(CONFIG_KEY)
         setError(`${t('settings.invalidConfig')}: ${(err as Error).message}`)
       }
     }
@@ -149,10 +153,9 @@ export default function SettingsPage() {
     setSuccess('')
     try {
       await api.disconnect()
-      // Drop the operator identity as well as the session. Leaving the
-      // private key in storage after a deliberate disconnect would defeat
-      // the point of disconnecting.
-      sessionStorage.removeItem(CONFIG_KEY)
+      // Drop the operator identity as well as the session. The key only ever
+      // existed in this component's state, so clearing it below is what
+      // forgets it; there is no storage entry left behind to clean up.
       setConfigContent('')
       setConfigInfo(null)
       setSuccess(t('settings.disconnectedMsg'))
@@ -388,6 +391,13 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* The key lives in memory only, so a reload really does lose it. Say so
+            here rather than letting the operator discover it as a dead Connect
+            button after a refresh. */}
+        <p className="page-sub" style={{ marginTop: 12, marginBottom: 0 }}>
+          {t('settings.configMemoryOnly')}
+        </p>
 
         <div className="toolbar" style={{ marginTop: 16 }}>
           <button

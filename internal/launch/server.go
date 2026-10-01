@@ -403,7 +403,6 @@ func (s *Server) spawn(ctx context.Context) error {
 	return nil
 }
 
-// waitForPort blocks until the multiplayer listener accepts connections.
 // requireFreePort fails when something is already listening on the gRPC address.
 //
 // It runs before the daemon is spawned because the failure it prevents is
@@ -418,6 +417,12 @@ func (s *Server) spawn(ctx context.Context) error {
 //
 // The check is inherently racy: something can take the port between this call and
 // the daemon's bind. The window is milliseconds, and the alternative is no check.
+//
+// When the port is taken the error names the process holding it, because that is
+// the detail which turns the message into an action. The check shipped first
+// without it, the operator was told only that *something* held the port, and
+// finding out what cost a manual investigation -- the holder in that case was
+// wslrelay.exe, a name that appears nowhere in Sliver's own log.
 func (s *Server) requireFreePort(host string, port int) error {
 	addr := net.JoinHostPort(host, fmt.Sprint(port))
 
@@ -427,13 +432,57 @@ func (s *Server) requireFreePort(host string, port int) error {
 		return nil
 	}
 
-	return fmt.Errorf(
-		"gRPC address %s is already in use (%v). The embedded Sliver daemon cannot bind "+
-			"while another process holds it, so the console would start, serve its UI and "+
-			"report the server unreachable. Stop that process, or set a different mpPort in "+
-			"the settings file",
-		addr, err)
+	// Naming the holder is what turns "the port is busy" into something the
+	// operator can act on without a second investigation. Best-effort by
+	// construction: describeListener returns "" when the pid cannot be resolved.
+	return portInUseError(addr, err, describeListener(port))
 }
+
+// describeListener names the process holding port, or "" when it cannot be
+// determined.
+//
+// Best-effort on purpose, and it has to stay that way: the port being unavailable
+// is the fact that matters, and failing to name the holder must degrade to the
+// message that already worked rather than turn a clear error into a vague one.
+// Everything here is therefore optional detail layered on top -- including the
+// syscall, which is why it lives behind the platform files.
+//
+// A bare pid is still an improvement over no name at all: it is the handle the
+// operator needs to investigate, and it survives the case where the executable
+// cannot be read because the holder belongs to another user and the query is
+// refused.
+func describeListener(port int) string {
+	pid := listeningPID(port)
+	if pid <= 0 {
+		return ""
+	}
+	// filepath.Base because the platform helper returns a full path: the
+	// operator needs "wslrelay.exe", not "C:\\Windows\\System32\\wslrelay.exe".
+	if name := processName(pid); name != "" {
+		return fmt.Sprintf("%s (pid %d)", filepath.Base(name), pid)
+	}
+	return fmt.Sprintf("pid %d", pid)
+}
+
+// portInUseError builds the port-conflict message.
+//
+// Split out from requireFreePort so both shapes -- with and without a named
+// holder -- can be asserted without depending on whether the machine running the
+// tests can resolve a pid, which is the environment-dependent part.
+//
+// With no holder the raw listen error is kept: it is then the only evidence
+// left, and it names the address and the syscall failure.
+func portInUseError(addr string, cause error, holder string) error {
+	const consequence = "The embedded Sliver daemon cannot bind while another process " +
+		"holds it, so the console would start, serve its UI and report the server unreachable. " +
+		"Stop that process, or set a different mpPort in the settings file"
+	if holder == "" {
+		return fmt.Errorf("gRPC address %s is already in use (%v). %s", addr, cause, consequence)
+	}
+	return fmt.Errorf("gRPC address %s is already in use by %s. %s", addr, holder, consequence)
+}
+
+// waitForPort blocks until the multiplayer listener accepts connections.
 func (s *Server) waitForPort(ctx context.Context) error {
 	addr := net.JoinHostPort(s.opts.MultiplayerHost, fmt.Sprint(s.opts.MultiplayerPort))
 	deadline := time.Now().Add(60 * time.Second)

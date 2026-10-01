@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Session,
   Beacon,
   Event,
@@ -71,6 +71,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
   if (body.error) throw new Error(body.error)
   return body as T
+}
+
+/**
+ * Pull the filename out of a Content-Disposition header.
+ *
+ * Only the quoted form is handled, which is the only one this console sends.
+ * An unparseable header returns '' so the caller falls back rather than
+ * producing a download named "undefined".
+ */
+function filenameFromDisposition(header: string | null): string {
+  if (!header) return ''
+  const m = /filename="([^"]*)"/.exec(header)
+  return m ? m[1] : ''
 }
 
 export const api = {
@@ -230,10 +243,32 @@ export const api = {
     request<{ Data: string; Name: string }>(
       `/sessions/${sessionId}/fs/cat?path=${encodeURIComponent(path)}`,
     ),
-  fsDownload: (sessionId: string, path: string) =>
-    request<{ Data: string; Name: string }>(
-      `/sessions/${sessionId}/fs/download?path=${encodeURIComponent(path)}`,
-    ),
+  /**
+   * Fetch a file from the target as raw bytes.
+   *
+   * This returns a Blob rather than going through request<T>(): the endpoint
+   * streams the file itself, not JSON, because base64 through JSON inflated the
+   * payload by a third and forced the whole thing to be buffered as a string on
+   * both ends before anything could be saved.
+   */
+  fsDownload: async (
+    sessionId: string,
+    path: string,
+  ): Promise<{ blob: Blob; name: string }> => {
+    const res = await fetch(
+      `${BASE}/sessions/${sessionId}/fs/download?path=${encodeURIComponent(path)}`,
+      { cache: 'no-store' },
+    )
+    if (!res.ok) {
+      // Error responses are still JSON, so the message survives.
+      const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+      throw new Error(body.error || `HTTP ${res.status}`)
+    }
+    // The server names the file in Content-Disposition; fall back to the last
+    // path element so the operator never sees an unnamed download.
+    const name = filenameFromDisposition(res.headers.get('Content-Disposition')) || path.split(/[/\\]/).pop() || 'download'
+    return { blob: await res.blob(), name }
+  },
   fsUpload: (sessionId: string, path: string, data: string) =>
     request<{ success: boolean }>(`/sessions/${sessionId}/fs/upload`, {
       method: 'POST',

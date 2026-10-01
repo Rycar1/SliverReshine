@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -102,6 +103,14 @@ func (s *Server) handleFsCat(w http.ResponseWriter, r *http.Request) {
 	s.handleFsDownload(w, r)
 }
 
+// handleFsDownload streams a file from the target to the browser.
+//
+// The response is the file itself, not JSON. The previous shape was
+// {"Data":"<base64>","Name":"..."}, which inflated the payload by a third and
+// required the whole thing to exist as a string in Go and again in the browser
+// before a single byte could be saved -- so a large file was a memory problem on
+// both ends rather than a slow download. The minidump endpoint next door already
+// streams for the same reason; this now matches it.
 func (s *Server) handleFsDownload(w http.ResponseWriter, r *http.Request) {
 	id, c := s.sessionID(w, r)
 	if c == nil {
@@ -112,12 +121,69 @@ func (s *Server) handleFsDownload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "missing path")
 		return
 	}
-	data, name, err := c.Download(id, path)
+
+	b64, name, err := c.Download(id, path)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"Data": data, "Name": name})
+
+	// Download returns base64 because that is what the RPC hands back. It is
+	// decoded here rather than in the client so the bytes are the only thing
+	// that leaves this function: nothing downstream sees the inflated form.
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "the downloaded file could not be decoded")
+		return
+	}
+
+	// The name comes from the target and is shown in the operator's Downloads
+	// folder, so it is reduced to its last path element and stripped of the
+	// bytes that would let it break out of the quoted header value. A Windows
+	// path arrives with backslashes; url.PathEscape would mangle the name a user
+	// sees, so the quoting is done here instead.
+	filename := headerSafeFilename(name, path)
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+// headerSafeFilename reduces a path to a filename that is safe inside a quoted
+// Content-Disposition value.
+//
+// Two things matter. Only the last element is used, so a target-supplied path
+// cannot become a directory traversal in the operator's downloads. And quote,
+// backslash, CR and LF are dropped, because any of them would end the quoted
+// string early and let the remainder be read as another header -- a response
+// splitting primitive reachable through a filename.
+//
+// The result is deliberately not percent-encoded: the browser shows this string
+// to the operator, and an escaped name is worse to look at than a filtered one.
+func headerSafeFilename(name, path string) string {
+	base := name
+	if base == "" {
+		base = path
+	}
+	// Windows and POSIX separators both, since the target decides which.
+	base = base[strings.LastIndexAny(base, `/\`)+1:]
+
+	var b strings.Builder
+	for _, r := range base {
+		switch r {
+		case '"', '\\', '\r', '\n', 0:
+			continue
+		}
+		b.WriteRune(r)
+	}
+	// A name that was nothing but filtered characters leaves an empty header,
+	// which some browsers reject outright.
+	if b.Len() == 0 {
+		return "download"
+	}
+	return b.String()
 }
 
 func (s *Server) handleFsUpload(w http.ResponseWriter, r *http.Request) {

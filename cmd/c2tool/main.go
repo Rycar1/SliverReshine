@@ -190,7 +190,7 @@ func main() {
 		}
 		web.SetBasicAuth(cfg)
 
-		printCredentials(user, pass, credPath, config.Path(base), settings.Addr)
+		printCredentials(user, pass, credPath, config.Path(base), settings.Addr, consoleScheme(settings))
 	}
 
 	listener, err := net.Listen("tcp", settings.Addr)
@@ -377,11 +377,38 @@ func generatePassword() (string, error) {
 	return string(buf), nil
 }
 
+// consoleScheme reports the scheme the console will actually serve on.
+//
+// It duplicates one branch of the serving switch below, and that duplication is
+// deliberate: the banner is printed before the listener is created, so the
+// decision has to be available here. Keeping the predicate in one function is
+// what stops the two from disagreeing -- which is exactly the bug this replaces,
+// where the banner said http:// unconditionally.
+func consoleScheme(settings config.Config) string {
+	if settings.TLSConfigured() {
+		return "https"
+	}
+	return "http"
+}
+
 // printCredentials shows the login before the console starts serving.
 //
 // It is printed rather than only logged because it is the one thing the operator
 // needs to open the console, and on a first run it has just been generated.
-func printCredentials(user, pass, credPath, settingsPath, addr string) {
+// printCredentials shows the login before the console starts serving.
+//
+// The frame is plain ASCII on purpose. It used to be box-drawing characters
+// written as raw UTF-8, with nothing setting the console code page -- so on any
+// Windows console that is not already UTF-8 (the default on a Chinese install is
+// 936) each byte was rendered in the local code page and the frame arrived as
+// mojibake around otherwise-readable credentials. Switching the code page would
+// fix it here and leave every other writer to remember; ASCII cannot be got
+// wrong, and this is a five-line box.
+//
+// scheme is passed in rather than assumed: the URL was hardcoded to http://, so
+// an operator running the console over TLS was handed a link that does not
+// connect.
+func printCredentials(user, pass, credPath, settingsPath, addr, scheme string) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		host, port = addr, ""
@@ -389,15 +416,16 @@ func printCredentials(user, pass, credPath, settingsPath, addr string) {
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "<this-host>"
 	}
-	url := "http://" + host
+	url := scheme + "://" + host
 	if port != "" {
 		url += ":" + port
 	}
 
+	const rule = "+" + "-----------------------------------------------------------" + "+"
 	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "  ┌────────────────────────────────────────────────────────────┐\n")
-	fmt.Fprintf(os.Stderr, "  │  c2tool console                                            │\n")
-	fmt.Fprintf(os.Stderr, "  └────────────────────────────────────────────────────────────┘\n")
+	fmt.Fprintf(os.Stderr, "  %s\n", rule)
+	fmt.Fprintf(os.Stderr, "  | c2tool console                                            |\n")
+	fmt.Fprintf(os.Stderr, "  %s\n", rule)
 	fmt.Fprintf(os.Stderr, "     url      : %s\n", url)
 	fmt.Fprintf(os.Stderr, "     username : %s\n", user)
 	fmt.Fprintf(os.Stderr, "     password : %s\n", pass)

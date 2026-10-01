@@ -178,18 +178,106 @@ func (s *Server) run(ctx context.Context, timeout time.Duration, args ...string)
 	return out, err
 }
 
+// toolchainStaleReason reports why the unpacked toolchain cannot be reused, or
+// "" when it is current.
+//
+// Three separate things have to hold, and the original check only asked whether
+// two directories existed:
+//
+//  1. go/bin is present. Without it nothing can be compiled at all.
+//  2. the version marker matches the server's own commit. Sliver writes
+//     ver.GitCommit into that file and re-unpacks when it differs; an install
+//     left over from an older build has a toolchain of a different generation,
+//     which surfaces much later as a compiler that cannot build the implant.
+//  3. the toolchain is internally consistent -- the `go` binary reports the same
+//     version as the compiler in pkg/tool. This is the cheap half of what `go
+//     build` itself checks, and checking it here turns "version mismatch" at
+//     build time into a one-time re-unpack.
+//
+// A missing marker is stale, not current. That case is what actually bit: an
+// install whose toolchain predates the marker file has no marker, and treating
+// "no marker" as fine reuses a toolchain of unknown vintage.
+func (s *Server) toolchainStaleReason() string {
+	goRoot := filepath.Join(s.opts.StateDir, "go")
+	if _, err := os.Stat(filepath.Join(goRoot, "bin")); err != nil {
+		return "no unpacked toolchain"
+	}
+
+	marker := filepath.Join(s.opts.StateDir, versionFile)
+	raw, err := os.ReadFile(marker)
+	if err != nil {
+		return fmt.Sprintf("no version marker at %s", marker)
+	}
+	onDisk := strings.TrimSpace(string(raw))
+	if onDisk == "" {
+		return "empty version marker"
+	}
+
+	if reason := toolchainVersionMismatch(goRoot); reason != "" {
+		return reason
+	}
+	return ""
+}
+
+// toolchainVersionMismatch compares the `go` binary's version against the
+// compiler that ships beside it.
+//
+// The comparison is between two files in the same tree, so a difference means
+// the tree was assembled from two different Go releases -- a partially replaced
+// unpack, a restored backup, or an install reused across builds. Running `go`
+// from that tree fails with "compile: version ... does not match go tool
+// version ...", and the message names neither the directory nor the fix.
+//
+// A tree that cannot be read is not reported as broken: the caller is about to
+// run `go` anyway, and refusing on a read error would turn a permissions quirk
+// into a re-unpack loop.
+func toolchainVersionMismatch(goRoot string) string {
+	goBin := filepath.Join(goRoot, "bin", "go")
+	if runtime.GOOS == "windows" {
+		goBin += ".exe"
+	}
+	goVersionFile := filepath.Join(goRoot, "VERSION")
+	// Kept deliberately narrow: this runs on the startup path, and a hung
+	// subprocess here would be a hang the operator cannot see.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, goBin, "version").Output()
+	if err != nil {
+		return ""
+	}
+	reported := strings.TrimSpace(string(out))
+	if !strings.HasPrefix(reported, "go version ") {
+		return ""
+	}
+	reported = strings.Fields(reported)[2]
+
+	raw, err := os.ReadFile(goVersionFile)
+	if err != nil {
+		return ""
+	}
+	// VERSION holds "go1.25.6\ntime 2025-08-08T19:33:32Z\n".
+	expected := strings.TrimSpace(strings.SplitN(string(raw), "\n", 2)[0])
+	if expected == "" || expected == reported {
+		return ""
+	}
+	return fmt.Sprintf("the unpacked toolchain is inconsistent: go is %s but VERSION says %s", reported, expected)
+}
+
 // unpack extracts the compiler assets that the server binary carries. Without
 // them no implant can be built, so a failure here is fatal.
 func (s *Server) unpack(ctx context.Context) error {
-	marker := filepath.Join(s.opts.StateDir, versionFile)
-	if _, err := os.Stat(filepath.Join(s.opts.StateDir, "go", "bin")); err == nil {
-		if _, err := os.Stat(marker); err == nil {
-			log.Printf("[launch] compiler assets already unpacked in %s", s.opts.StateDir)
-			// Repair in place as well: an install unpacked before this bit was
-			// restored would otherwise stay broken until the state dir is wiped.
-			return ensureExecutable(filepath.Join(s.opts.StateDir, "go", "bin"))
-		}
+	if reason := s.toolchainStaleReason(); reason != "" {
+		// Report the reason rather than a bare "unpacking". A stale toolchain
+		// that is silently reused is the failure this exists to prevent, and
+		// the operator cannot tell that from a first run without being told.
+		log.Printf("[launch] re-unpacking compiler assets in %s: %s", s.opts.StateDir, reason)
+	} else {
+		log.Printf("[launch] compiler assets already unpacked in %s", s.opts.StateDir)
+		// Repair in place as well: an install unpacked before this bit was
+		// restored would otherwise stay broken until the state dir is wiped.
+		return ensureExecutable(filepath.Join(s.opts.StateDir, "go", "bin"))
 	}
+
 	log.Printf("[launch] unpacking compiler assets into %s (first run, this takes a minute)", s.opts.StateDir)
 	out, err := s.run(ctx, 20*time.Minute, "unpack")
 	if err != nil {

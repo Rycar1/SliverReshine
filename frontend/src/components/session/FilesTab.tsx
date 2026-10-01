@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
-import { base64ToBytes, bytesToText, triggerDownload } from '../../lib/binary'
+import { bytesToText, triggerDownload } from '../../lib/binary'
 import { joinPath, parentOf } from '../../lib/paths'
 import type { DirView, GrepOut } from '../../lib/types'
 import ConfirmDialog from '../common/ConfirmDialog'
@@ -132,9 +132,10 @@ export default function FilesTab({
   const download = async (name: string, isDir: boolean) => {
     if (isDir) return
     try {
-      const res = await api.fsDownload(sessionId, joinPath(path, name, sep))
-      const bytes = base64ToBytes(res.Data)
-      triggerDownload(res.Name || name, bytes)
+      // The endpoint streams the file, so this is a Blob rather than a base64
+      // string: nothing inflates it by a third on the way through.
+      const { blob, name: suggested } = await api.fsDownload(sessionId, joinPath(path, name, sep))
+      triggerDownload(suggested || name, blob)
     } catch (e) {
       setError((e as Error).message)
     }

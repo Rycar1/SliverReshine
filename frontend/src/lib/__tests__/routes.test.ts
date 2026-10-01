@@ -26,6 +26,11 @@ describe('frontend/backend route contract', () => {
       status: 200,
       json: async () => ({}),
       blob: async () => new Blob(),
+      // A real fetch always returns a Headers object. It is modelled here
+      // because the file-download path reads Content-Disposition off it, and a
+      // mock without one fails with a TypeError that looks like a bug in the
+      // code under test rather than in the mock.
+      headers: new Headers(),
     }
   })
 

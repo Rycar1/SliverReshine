@@ -5,8 +5,15 @@ export function base64ToBytes(b64: string): ArrayBuffer {
   return bytes.buffer
 }
 
-export function triggerDownload(name: string, bytes: ArrayBuffer) {
-  const blob = new Blob([bytes], { type: 'application/octet-stream' })
+/**
+ * Save bytes to the operator's machine.
+ *
+ * Accepts a Blob as well as an ArrayBuffer: the file-download endpoint streams
+ * its response, so the caller already has a Blob and wrapping it in another one
+ * would copy the whole file for no reason.
+ */
+export function triggerDownload(name: string, data: ArrayBuffer | Blob) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/octet-stream' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

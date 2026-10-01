@@ -274,6 +274,34 @@ var shellcodeArches = map[string][]string{
 	"freebsd": {},
 }
 
+// sharedLibArches records the targets that can actually produce a c-shared
+// library.
+//
+// The matrix run found five combinations that the console offered, accepted,
+// and then failed with a bare "rpc error: code = Internal desc = exit status 1"
+// after a compiler ran. Three separate causes, none of them a defect in this
+// code, and all of them avoidable before the build starts:
+//
+//  1. Sliver's zig target table has no entry for linux/arm or any freebsd
+//     target, so the CC it builds is "zig cc -target " with an empty target and
+//     the compiler dies with "error: unknown architecture: ”".
+//
+//  2. Darwin cross-compilation shells out to a hardcoded osxcross path
+//     (/opt/osxcross/...) that exists in Sliver's own Linux build container and
+//     nowhere else -- certainly not on a Windows host running this console.
+//
+//  3. The Go toolchain itself does not support -buildmode=c-shared on
+//     freebsd/386.
+//
+// Only windows and linux/amd64, linux/arm64 are reachable here. Notably
+// linux/386 shared also depends on zig, which does have a target for it.
+var sharedLibArches = map[string][]string{
+	"windows": {"amd64", "386", "arm64"},
+	"linux":   {"amd64", "386", "arm64"},
+	"darwin":  {},
+	"freebsd": {},
+}
+
 // validateBuildRequest reports the first thing about a request that cannot be
 // built, or an empty string when it is fine.
 //
@@ -322,6 +350,33 @@ func validateBuildRequest(os, arch, format string) string {
 					return fmt.Sprintf("%s does not support the shellcode format; use exe or shared", os)
 				}
 				return fmt.Sprintf("%s shellcode is not supported on %s; supported: %s",
+					os, arch, strings.Join(arches, ", "))
+			}
+		}
+	}
+
+	// A shared library needs a C toolchain, and which ones this deployment can
+	// reach is narrower than the target list. Checked here so the operator gets
+	// a sentence instead of a compiler's exit code.
+	if strings.EqualFold(format, "shared") && os != "" && arch != "" {
+		arches, ok := sharedLibArches[strings.ToLower(os)]
+		if ok {
+			allowed := false
+			for _, a := range arches {
+				if strings.EqualFold(a, arch) {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				if len(arches) == 0 {
+					return fmt.Sprintf("%s shared libraries cannot be built by this console "+
+						"(they need an osxcross toolchain that exists only in Sliver's own build "+
+						"container); use exe or shellcode", os)
+				}
+				return fmt.Sprintf("%s shared libraries are not supported on %s; supported: %s. "+
+					"linux/arm and freebsd need a zig C target that this build does not define, "+
+					"and freebsd/386 is refused by the Go toolchain itself",
 					os, arch, strings.Join(arches, ", "))
 			}
 		}

@@ -72,13 +72,35 @@ const SHELLCODE_ARCHES: Record<string, string[]> = {
   darwin: ['arm64'],
 }
 
+/**
+ * Architectures each OS can produce a c-shared library for.
+ *
+ * Narrower than the target list for three unrelated reasons, all found by
+ * building the whole matrix: Sliver has no zig C target for linux/arm or any
+ * freebsd, so CC comes out with an empty -target; darwin cross-compilation
+ * needs an osxcross toolchain that only exists in Sliver's own build container;
+ * and the Go toolchain refuses -buildmode=c-shared on freebsd/386.
+ *
+ * An OS with no entry cannot produce a shared library at all here.
+ */
+const SHARED_ARCHES: Record<string, string[]> = {
+  windows: ['amd64', '386', 'arm64'],
+  linux: ['amd64', '386', 'arm64'],
+}
+
 /** The formats actually buildable for one OS/arch pair. */
 function formatsFor(os: string, arch: string): string[] {
   const base = FORMATS[os] || ['exe']
   return base.filter((f) => {
-    if (f !== 'shellcode') return true
-    const arches = SHELLCODE_ARCHES[os]
-    return !!arches && arches.includes(arch)
+    if (f === 'shellcode') {
+      const arches = SHELLCODE_ARCHES[os]
+      return !!arches && arches.includes(arch)
+    }
+    if (f === 'shared') {
+      const arches = SHARED_ARCHES[os]
+      return !!arches && arches.includes(arch)
+    }
+    return true
   })
 }
 

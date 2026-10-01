@@ -27,17 +27,8 @@ func TestValidateBuildRequestAcceptsTheOfferedMatrix(t *testing.T) {
 	for os, arches := range buildTargets {
 		for _, arch := range arches {
 			for format := range outputFormats {
-				if format == "shellcode" {
-					allowed := false
-					for _, a := range shellcodeArches[os] {
-						if a == arch {
-							allowed = true
-							break
-						}
-					}
-					if !allowed {
-						continue
-					}
+				if !formatAllowedOn(os, arch, format) {
+					continue
 				}
 				if problem := validateBuildRequest(os, arch, format); problem != "" {
 					t.Errorf("%s/%s %s was refused: %s", os, arch, format, problem)
@@ -182,19 +173,75 @@ func TestValidateBuildRequestAcceptsSupportedShellcodeArches(t *testing.T) {
 	}
 }
 
-// Narrowing shellcode must not touch the other formats: exe builds on every
-// architecture the OS offers.
-func TestValidateBuildRequestLeavesOtherFormatsAlone(t *testing.T) {
-	for os, arches := range buildTargets {
+// The shared-library format is narrower than the target list for reasons that
+// live outside this code: a missing zig C target, an osxcross toolchain that
+// exists only in Sliver's build container, and a Go toolchain restriction. The
+// findings came from building the whole matrix; before this check each one
+// surfaced as a bare "exit status 1" after a compiler had run.
+func TestValidateBuildRequestRejectsUnbuildableSharedTargets(t *testing.T) {
+	cases := []struct {
+		os, arch string
+	}{
+		{"linux", "arm"},
+		{"freebsd", "amd64"},
+		{"freebsd", "386"},
+		{"freebsd", "arm64"},
+		{"darwin", "amd64"},
+		{"darwin", "arm64"},
+	}
+	for _, tc := range cases {
+		problem := validateBuildRequest(tc.os, tc.arch, "shared")
+		if problem == "" {
+			t.Errorf("%s/%s shared was accepted; the build would fail with an opaque exit status",
+				tc.os, tc.arch)
+			continue
+		}
+		if !strings.Contains(problem, "shared") {
+			t.Errorf("%s/%s: message does not name the format: %s", tc.os, tc.arch, problem)
+		}
+	}
+}
+
+func TestValidateBuildRequestAcceptsBuildableSharedTargets(t *testing.T) {
+	for os, arches := range sharedLibArches {
 		for _, arch := range arches {
-			for _, format := range []string{"exe", "shared"} {
-				if _, ok := outputFormats[format]; !ok {
-					continue
-				}
-				if problem := validateBuildRequest(os, arch, format); problem != "" {
-					t.Errorf("%s/%s %s was refused: %s", os, arch, format, problem)
-				}
+			if problem := validateBuildRequest(os, arch, "shared"); problem != "" {
+				t.Errorf("%s/%s shared was refused: %s", os, arch, problem)
 			}
 		}
 	}
+}
+
+// exe is the one format with no target restrictions, and narrowing the other
+// two must not have touched it -- the matrix showed every exe combination
+// building.
+func TestValidateBuildRequestLeavesExeUnrestricted(t *testing.T) {
+	for os, arches := range buildTargets {
+		for _, arch := range arches {
+			if problem := validateBuildRequest(os, arch, "exe"); problem != "" {
+				t.Errorf("%s/%s exe was refused: %s", os, arch, problem)
+			}
+		}
+	}
+}
+
+// formatAllowedOn reports whether a format is offered for an OS/arch pair at
+// all. The matrix test uses it to skip combinations the console does not claim
+// to support, so that "refused" only fails for something it does claim.
+func formatAllowedOn(os, arch, format string) bool {
+	var table map[string][]string
+	switch strings.ToLower(format) {
+	case "shellcode":
+		table = shellcodeArches
+	case "shared":
+		table = sharedLibArches
+	default:
+		return true
+	}
+	for _, a := range table[strings.ToLower(os)] {
+		if strings.EqualFold(a, arch) {
+			return true
+		}
+	}
+	return false
 }

@@ -77,7 +77,10 @@ func (s *Server) handleBeacon(w http.ResponseWriter, r *http.Request) {
 	}
 	beacon, err := c.Beacon(r.PathValue("id"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		// A beacon that does not exist is the caller's mistake, not a console
+		// fault, and the server grades it as Internal -- so the status has to be
+		// derived from the error rather than assumed.
+		writeClientError(w, err)
 		return
 	}
 	if beacon == nil {
@@ -188,8 +191,8 @@ func (s *Server) handleSaveImplantProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var req struct {
-		Name     string                `json:"name"`
-		IsBeacon bool                  `json:"is_beacon"`
+		Name     string                 `json:"name"`
+		IsBeacon bool                   `json:"is_beacon"`
 		Config   sliver.GenerateRequest `json:"config"`
 	}
 	if !decodeBody(w, r, &req) {
@@ -258,10 +261,10 @@ func (s *Server) handleSocksStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":   true,
-		"id":        p.ID,
-		"bindAddr":  p.BindAddr,
-		"bindPort":  p.BindPort,
+		"success":  true,
+		"id":       p.ID,
+		"bindAddr": p.BindAddr,
+		"bindPort": p.BindPort,
 	})
 }
 
@@ -334,7 +337,7 @@ func (s *Server) handleLootRename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.LootRename(r.PathValue("id"), req.Name); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -352,7 +355,7 @@ func (s *Server) handleLootContent(w http.ResponseWriter, r *http.Request) {
 	}
 	loot, err := c.LootContent(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, loot)
@@ -369,7 +372,7 @@ func (s *Server) handleLootRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.LootRemove(id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})

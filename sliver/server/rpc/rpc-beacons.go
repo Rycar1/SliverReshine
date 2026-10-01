@@ -55,7 +55,12 @@ func (rpc *Server) GetBeacon(ctx context.Context, req *clientpb.Beacon) (*client
 	beacon, err := db.BeaconByID(req.ID)
 	if err != nil {
 		beaconRpcLog.Error(err)
-		return nil, ErrDatabaseFailure
+		// An ID that is not in the table is the caller's mistake, and saying so
+		// is what lets a client answer 404 instead of 500. This returned
+		// ErrDatabaseFailure, which reads as "the database is broken" and sent
+		// anyone debugging it to the wrong place -- its sibling RmBeacon, four
+		// lines below, already used ErrInvalidBeaconID for the same lookup.
+		return nil, ErrInvalidBeaconID
 	}
 	return beacon.ToProtobuf(), nil
 }

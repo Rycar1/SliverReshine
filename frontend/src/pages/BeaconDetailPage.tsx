@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import type { Beacon, BeaconTask } from '../lib/types'
 import InlineEdit from '../components/InlineEdit'
 import DataTable, { type Column } from '../components/common/DataTable'
+import HarvestTab from '../components/session/HarvestTab'
 import StatusBadge from '../components/common/StatusBadge'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import DetailDrawer from '../components/common/DetailDrawer'
@@ -58,6 +59,9 @@ export default function BeaconDetailPage() {
   const [removing, setRemoving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [opening, setOpening] = useState(false)
+  // Which pane is showing. The page was a single view before; the tabs exist so
+  // the credential harvest has somewhere to live.
+  const [tab, setTab] = useState<'tasks' | 'harvest'>('tasks')
 
   const openSession = async () => {
     if (!beacon) return
@@ -202,22 +206,43 @@ export default function BeaconDetailPage() {
 
           <div className="issue-layout">
             <div className="issue-main">
-              <div className="card card-flush">
-                <div className="card-title" style={{ padding: '12px 16px 0' }}>
+              <div className="toolbar" style={{ marginBottom: 10 }}>
+                <button
+                  type="button"
+                  className={tab === 'tasks' ? 'btn primary sm' : 'btn sm'}
+                  onClick={() => setTab('tasks')}
+                >
                   {t('beacons.tasks')}
-                </div>
-                <DataTable
-                  columns={columns}
-                  rows={tasks}
-                  rowKey={(task) => task.ID}
-                  searchable
-                  searchPlaceholder={t('tasks.search')}
-                  searchText={(task) => `${task.Description} ${task.State}`}
-                  empty={t('tasks.empty')}
-                  onRowClick={open}
-                  navigable
-                />
+                </button>
+                <button
+                  type="button"
+                  className={tab === 'harvest' ? 'btn primary sm' : 'btn sm'}
+                  onClick={() => setTab('harvest')}
+                >
+                  {t('harvest.title')}
+                </button>
               </div>
+
+              {tab === 'harvest' ? (
+                <HarvestTab sessionId={beacon.ID} />
+              ) : (
+                <div className="card card-flush">
+                  <div className="card-title" style={{ padding: '12px 16px 0' }}>
+                    {t('beacons.tasks')}
+                  </div>
+                  <DataTable
+                    columns={columns}
+                    rows={tasks}
+                    rowKey={(task) => task.ID}
+                    searchable
+                    searchPlaceholder={t('tasks.search')}
+                    searchText={(task) => `${task.Description} ${task.State}`}
+                    empty={t('tasks.empty')}
+                    onRowClick={open}
+                    navigable
+                  />
+                </div>
+              )}
             </div>
             <aside className="issue-side">
               <div className="side-card">

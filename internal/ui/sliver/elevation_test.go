@@ -3,6 +3,7 @@ package sliver
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
@@ -169,7 +170,7 @@ func TestEscalateForMimikatzSkipsWhenAlreadyElevated(t *testing.T) {
 
 	c := &Client{RPC: stub}
 	result := &MimikatzResult{}
-	if note := c.escalateForMimikatz("s-1", "", result); note != "" {
+	if note := c.escalateForMimikatz(harvestTarget{SessionID: "s-1"}, "", result); note != "" {
 		t.Errorf("note = %q, want empty for an already-elevated token", note)
 	}
 	if result.Elevated {
@@ -191,7 +192,7 @@ func TestEscalateForMimikatzExplainsAFailedEscalation(t *testing.T) {
 
 	c := &Client{RPC: stub}
 	result := &MimikatzResult{}
-	note := c.escalateForMimikatz("s-1", "", result)
+	note := c.escalateForMimikatz(harvestTarget{SessionID: "s-1"}, "", result)
 	if note == "" {
 		t.Fatal("a failed escalation produced no explanation")
 	}
@@ -205,13 +206,30 @@ func TestEscalateForMimikatzExplainsAFailedEscalation(t *testing.T) {
 	}
 }
 
-// A non-Windows session cannot answer GetPrivs at all. That is not an error the
-// operator needs to see: the run proceeds and its own output is the report.
-func TestEscalateForMimikatzIgnoresAnUnreadableIntegrity(t *testing.T) {
+// When the integrity cannot be read, the run proceeds but says so.
+//
+// This test used to assert the opposite -- that the note stays empty, on the
+// reasoning that an unreadable integrity is not the operator's problem. That
+// reasoning is what hid a real defect for as long as it did: on a beacon the
+// read fails every single time, and saying nothing left the operator to read
+// mimikatz's "LSA access was denied" as a statement about their own token.
+//
+// The run is still best-effort, and that half of the old test is kept.
+func TestEscalateForMimikatzReportsAnUnreadableIntegrity(t *testing.T) {
 	c := &Client{RPC: &elevationStub{privsErr: errors.New("unknown message type")}}
 	result := &MimikatzResult{}
-	if note := c.escalateForMimikatz("s-1", "", result); note != "" {
-		t.Errorf("note = %q, want empty when the integrity cannot be read", note)
+
+	note := c.escalateForMimikatz(harvestTarget{SessionID: "s-1"}, "", result)
+
+	if note == "" {
+		t.Fatal("an unreadable integrity produced no note; the operator would be left guessing")
+	}
+	// The note has to name the cause, say what was skipped, and point at the
+	// alternative that does work -- otherwise it is a second puzzle.
+	for _, want := range []string{"unknown message type", "skipped", "vault::cred"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("the note does not mention %q: %s", want, note)
+		}
 	}
 	if result.Elevated {
 		t.Error("result was marked elevated without escalating")
@@ -233,7 +251,7 @@ func TestEscalateForMimikatzSwitchesToTheSystemSession(t *testing.T) {
 
 	c := &Client{RPC: stub}
 	result := &MimikatzResult{}
-	note := c.escalateForMimikatz("s-1", "", result)
+	note := c.escalateForMimikatz(harvestTarget{SessionID: "s-1"}, "", result)
 	if !result.Elevated {
 		t.Fatalf("escalation did not report success (note %q)", note)
 	}

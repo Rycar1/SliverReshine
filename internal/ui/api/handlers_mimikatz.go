@@ -111,7 +111,14 @@ func (s *Server) handleMimikatzRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uuid, _ := s.sessionMetaFor(c, id)
-	result, err := c.MimikatzRun(id, run, uuid)
+	// The path parameter may name a session or a beacon; which one it is is
+	// resolved by lookup rather than by guessing from the string.
+	target, err := c.ResolveTarget(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, err.Error())
+		return
+	}
+	result, err := c.MimikatzRun(target, run, uuid)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return

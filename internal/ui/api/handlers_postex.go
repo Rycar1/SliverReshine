@@ -21,7 +21,7 @@ func (s *Server) handleCreds(w http.ResponseWriter, r *http.Request) {
 	}
 	creds, err := c.Creds()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})
@@ -55,7 +55,7 @@ func (s *Server) handleCredsAdd(w http.ResponseWriter, r *http.Request) {
 		}}
 	}
 	if err := c.CredsAdd(batch); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "added": len(batch)})
@@ -78,7 +78,7 @@ func (s *Server) handleCredsRemove(w http.ResponseWriter, r *http.Request) {
 		ids = []string{req.ID}
 	}
 	if err := c.CredsRm(ids); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -96,7 +96,7 @@ func (s *Server) handleCredsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.CredsUpdate(req.Credentials); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -109,7 +109,7 @@ func (s *Server) handleCredByID(w http.ResponseWriter, r *http.Request) {
 	}
 	cred, err := c.GetCredByID(r.PathValue("id"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, cred)
@@ -128,7 +128,7 @@ func (s *Server) handleCredsSniff(w http.ResponseWriter, r *http.Request) {
 	}
 	cred, err := c.CredsSniffHashType(req.Hash)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, cred)
@@ -160,7 +160,7 @@ func (s *Server) handleCredsByHashType(w http.ResponseWriter, r *http.Request) {
 		creds, err = c.GetCredsByHashType(hashType)
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})
@@ -177,7 +177,7 @@ func (s *Server) handleMemfilesList(w http.ResponseWriter, r *http.Request) {
 	}
 	dir, err := c.MemfilesList(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, dir)
@@ -190,7 +190,7 @@ func (s *Server) handleMemfilesAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	fd, err := c.MemfilesAdd(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"fd": fd})
@@ -208,7 +208,7 @@ func (s *Server) handleMemfilesRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.MemfilesRm(id, req.Fd); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -232,7 +232,7 @@ func (s *Server) handleChmod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Chmod(id, req.Path, req.Mode, req.Recursive); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -253,7 +253,7 @@ func (s *Server) handleChown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Chown(id, req.Path, req.UID, req.GID, req.Recursive); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -275,7 +275,7 @@ func (s *Server) handleChtimes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Chtimes(id, req.Path, req.ATime, req.MTime); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -301,7 +301,7 @@ func (s *Server) handleGrep(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := c.Grep(id, req.Pattern, req.Path, req.Recursive, req.Before, req.After)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -318,7 +318,7 @@ func (s *Server) handleMonitorProviders(w http.ResponseWriter, r *http.Request) 
 	}
 	providers, err := c.MonitorListConfig()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"providers": providers})
@@ -334,7 +334,7 @@ func (s *Server) handleMonitorAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.MonitorAddConfig(req); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -350,7 +350,7 @@ func (s *Server) handleMonitorRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.MonitorDelConfig(req); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -367,7 +367,7 @@ func (s *Server) handleC2Profiles(w http.ResponseWriter, r *http.Request) {
 	}
 	profiles, err := c.HTTPC2Profiles()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"profiles": profiles})
@@ -380,7 +380,7 @@ func (s *Server) handleC2Profile(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, err := c.HTTPC2Profile(r.PathValue("name"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, cfg)
@@ -399,7 +399,7 @@ func (s *Server) handleC2ProfileSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.SaveHTTPC2Profile(req.Profile, req.Overwrite); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -416,7 +416,7 @@ func (s *Server) handleTrafficEncoders(w http.ResponseWriter, r *http.Request) {
 	}
 	names, err := c.TrafficEncoders()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"encoders": names})
@@ -442,7 +442,7 @@ func (s *Server) handleTrafficEncoderAdd(w http.ResponseWriter, r *http.Request)
 	}
 	report, err := c.TrafficEncoderAdd(req.Name, wasm, req.SkipTests)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
@@ -454,7 +454,7 @@ func (s *Server) handleTrafficEncoderRemove(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := c.TrafficEncoderRm(r.PathValue("name")); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -471,7 +471,7 @@ func (s *Server) handleShellcodeEncoders(w http.ResponseWriter, r *http.Request)
 	}
 	encoders, err := c.ShellcodeEncoders()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"encoders": encoders})
@@ -499,7 +499,7 @@ func (s *Server) handleShellcodeEncode(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := c.ShellcodeEncode(req.Encoder, req.Arch, data, req.Iterations, []byte(req.BadChars))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -519,7 +519,7 @@ func (s *Server) handleWasmExtensions(w http.ResponseWriter, r *http.Request) {
 	}
 	names, err := c.WasmExtensions(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"extensions": names})
@@ -543,7 +543,7 @@ func (s *Server) handleWasmRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RegisterWasmExtension(id, req.Name, wasm); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -563,7 +563,7 @@ func (s *Server) handleWasmExec(w http.ResponseWriter, r *http.Request) {
 	}
 	stdout, stderr, code, err := c.ExecWasmExtension(id, req.Name, req.Args)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -584,7 +584,7 @@ func (s *Server) handleRportFwdList(w http.ResponseWriter, r *http.Request) {
 	}
 	listeners, err := c.RportFwdListeners(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"listeners": listeners})
@@ -606,7 +606,7 @@ func (s *Server) handleRportFwdStart(w http.ResponseWriter, r *http.Request) {
 	}
 	l, err := c.StartRportFwdListener(id, req.BindAddress, req.BindPort, req.ForwardAddress, req.ForwardPort)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, l)
@@ -624,7 +624,7 @@ func (s *Server) handleRportFwdStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.StopRportFwdListener(id, uint32(n)); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -641,7 +641,7 @@ func (s *Server) handleCACertificates(w http.ResponseWriter, r *http.Request) {
 	}
 	certs, err := c.CertificateAuthority()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"certificates": certs})
@@ -663,7 +663,7 @@ func (s *Server) handleCertificates(w http.ResponseWriter, r *http.Request) {
 	}
 	certs, err := c.Certificates(category, r.URL.Query().Get("cn"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"certificates": certs})
@@ -680,7 +680,7 @@ func (s *Server) handleTunnelCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	tunnelID, err := c.CreateTunnel(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tunnelID": tunnelID})
@@ -699,7 +699,7 @@ func (s *Server) handleTunnelClose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.CloseTunnel(req.TunnelID, req.SessionID); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -723,7 +723,7 @@ func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := c.ServiceDetail(id, req.Name, req.Hostname)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, detail)
@@ -742,7 +742,7 @@ func (s *Server) handleServiceStartByName(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := c.StartServiceByName(id, req.Name, req.Hostname); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -768,7 +768,7 @@ func (s *Server) handleRegistryHive(w http.ResponseWriter, r *http.Request) {
 	}
 	data, encoder, err := c.RegistryReadHive(id, req.RootHive, req.RequestedHive)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	// The implant may compress or base64 the hive depending on platform; report

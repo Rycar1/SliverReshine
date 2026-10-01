@@ -109,3 +109,63 @@ func TestClientErrorMessageStripsTheGRPCFraming(t *testing.T) {
 		t.Errorf("nil -> %q, want empty", got)
 	}
 }
+
+// The categories the route sweep actually produced, so the classifier is tested
+// against the real messages rather than invented ones.
+func TestHTTPStatusForErrorAgainstRealServerMessages(t *testing.T) {
+	cases := []struct {
+		msg  string
+		want int
+	}{
+		// A missing record, which sliver grades as Internal.
+		{"Invalid session ID", http.StatusNotFound},
+		{"Invalid beacon ID", http.StatusNotFound},
+		{"record not found", http.StatusNotFound},
+		{"Credential not found", http.StatusNotFound},
+		{"session no-such-thing not found", http.StatusNotFound},
+		{"no credentials supplied", http.StatusNotFound},
+		{"no traffic encoder named \"no-such-thing\"", http.StatusNotFound},
+		{"alias \"no-such-thing\" is not installed", http.StatusNotFound},
+		// The request was malformed.
+		{"session id is required", http.StatusBadRequest},
+		{"profile name is required", http.StatusBadRequest},
+		{"hostname is required", http.StatusBadRequest},
+		{"no profile supplied", http.StatusBadRequest},
+		{"invalid file data: illegal base64 data at input byte 0", http.StatusBadRequest},
+		{"unsupported listener type \"x\"", http.StatusBadRequest},
+		{"unsupported os \"plan9\"", http.StatusBadRequest},
+		{"invalid compiler target: windows/mips", http.StatusBadRequest},
+		// The server build lacks the feature. Not the caller's fault, not a
+		// console fault: 501 says "understood, cannot serve".
+		{"ExecuteToken is not supported by the connected sliver-server version", http.StatusNotImplemented},
+		{"MSF stager generation is not supported by the connected sliver-server version", http.StatusNotImplemented},
+		{"rpc error: code = Unimplemented desc = unknown message type", http.StatusNotImplemented},
+	}
+	for _, tc := range cases {
+		err := status.Error(codes.Internal, tc.msg)
+		if got := httpStatusForError(err); got != tc.want {
+			t.Errorf("Internal %q -> %d, want %d", tc.msg, got, tc.want)
+		}
+	}
+}
+
+// Reachability failures must not be reported as "the thing you asked for does
+// not exist". "no such host" is a DNS failure, and a bare "not found" match
+// would have turned it into a 404 and sent the operator looking for a typo.
+func TestHTTPStatusForErrorDoesNotMistakeTransportFailuresForMissingRecords(t *testing.T) {
+	cases := []string{
+		`rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:31337: connectex: No connection could be made because the target machine actively refused it."`,
+		"dial tcp: lookup sliver.example on 1.1.1.1:53: no such host",
+		"context deadline exceeded",
+		"connection reset by peer",
+	}
+	for _, msg := range cases {
+		got := httpStatusForError(errors.New(msg))
+		if got == http.StatusNotFound {
+			t.Errorf("%q became a 404; a reachability failure must not read as a missing record", msg)
+		}
+		if got != http.StatusBadGateway {
+			t.Errorf("%q -> %d, want 502 (an upstream failed, which is not the console's own outage)", msg, got)
+		}
+	}
+}

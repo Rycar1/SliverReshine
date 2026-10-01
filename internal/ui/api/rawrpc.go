@@ -201,7 +201,7 @@ func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
 	if !method.Streaming {
 		out, err := marshalProtoJSON(resp.Interface())
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			writeClientError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})

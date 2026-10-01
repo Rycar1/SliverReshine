@@ -17,7 +17,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	}
 	graph, err := c.TopologyGraph()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, graph)
@@ -30,7 +30,7 @@ func (s *Server) handlePivotGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	graph, err := c.PivotGraph()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, graph)
@@ -43,7 +43,7 @@ func (s *Server) handlePivotListeners(w http.ResponseWriter, r *http.Request) {
 	}
 	listeners, err := c.PivotSessionListeners(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"listeners": listeners})
@@ -63,7 +63,7 @@ func (s *Server) handlePivotStartListener(w http.ResponseWriter, r *http.Request
 	}
 	listener, err := c.PivotStartListener(id, req.Type, req.BindAddress)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, listener)
@@ -81,7 +81,7 @@ func (s *Server) handlePivotStopListener(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := c.PivotStopListener(id, uint32(pivotID)); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})

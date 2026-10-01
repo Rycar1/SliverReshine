@@ -22,7 +22,7 @@ func (s *Server) handleBackdoor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Backdoor(id, req.FilePath, req.ProfileName); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -62,7 +62,7 @@ func (s *Server) handleHijackDLL(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := c.HijackDLL(id, req.ReferenceDLLPath, req.TargetLocation, refDLL, targetDLL, req.ProfileName); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -106,7 +106,7 @@ func (s *Server) handleShellcodeRDI(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := c.ShellcodeRDI(data, req.FunctionName, req.Arguments)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -137,7 +137,7 @@ func (s *Server) handleExecuteShellcode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := c.ExecuteShellcode(id, data, req.Pid, req.RWXPages); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -162,7 +162,7 @@ func (s *Server) handlePsExec(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := c.PsExec(id, req.Hostname, req.ProfileName, req.ServiceName, req.ServiceDesc, req.BinPath)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

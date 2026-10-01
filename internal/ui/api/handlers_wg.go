@@ -15,7 +15,7 @@ func (s *Server) handleWGClientConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, err := c.GenerateWGClientConfig()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, cfg)
@@ -28,7 +28,7 @@ func (s *Server) handleWGUniqueIP(w http.ResponseWriter, r *http.Request) {
 	}
 	ip, err := c.GenerateUniqueIP()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"ip": ip})
@@ -41,7 +41,7 @@ func (s *Server) handleWGForwarders(w http.ResponseWriter, r *http.Request) {
 	}
 	forwarders, err := c.WGForwarders(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"forwarders": forwarders})
@@ -61,7 +61,7 @@ func (s *Server) handleWGStartPortForward(w http.ResponseWriter, r *http.Request
 	}
 	fwd, async, err := c.WGStartPortForward(id, req.LocalPort, req.RemoteAddress)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"forwarder": fwd, "async": async})
@@ -83,7 +83,7 @@ func (s *Server) handleWGStopPortForward(w http.ResponseWriter, r *http.Request)
 	}
 	fwd, async, err := c.WGStopPortForward(id, int32(fwdID))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"forwarder": fwd, "async": async})
@@ -96,7 +96,7 @@ func (s *Server) handleWGSocksServers(w http.ResponseWriter, r *http.Request) {
 	}
 	servers, err := c.WGSocksServers(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"servers": servers})
@@ -115,7 +115,7 @@ func (s *Server) handleWGStartSocks(w http.ResponseWriter, r *http.Request) {
 	}
 	server, async, err := c.WGStartSocks(id, req.Port)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"server": server, "async": async})
@@ -133,7 +133,7 @@ func (s *Server) handleWGStopSocks(w http.ResponseWriter, r *http.Request) {
 	}
 	server, async, err := c.WGStopSocks(id, int32(serverID))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"server": server, "async": async})

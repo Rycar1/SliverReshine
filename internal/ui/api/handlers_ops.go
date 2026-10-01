@@ -54,14 +54,14 @@ func (s *Server) handleFsList(w http.ResponseWriter, r *http.Request) {
 	if path == "" {
 		p, err := c.Pwd(id)
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			writeClientError(w, err)
 			return
 		}
 		path = p
 	}
 	dir, err := c.Ls(id, path)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, dir)
@@ -74,7 +74,7 @@ func (s *Server) handleFsPwd(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := c.Pwd(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"Path": path})
@@ -93,7 +93,7 @@ func (s *Server) handleFsCd(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := c.Cd(id, req.Path)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"Path": path})
@@ -124,7 +124,7 @@ func (s *Server) handleFsDownload(w http.ResponseWriter, r *http.Request) {
 
 	b64, name, err := c.Download(id, path)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 
@@ -204,7 +204,7 @@ func (s *Server) handleFsUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Upload(id, req.Path, data); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -222,7 +222,7 @@ func (s *Server) handleFsMkdir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Mkdir(id, req.Path); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -240,7 +240,7 @@ func (s *Server) handleFsRm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Rm(id, path, recursive); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -259,7 +259,7 @@ func (s *Server) handleFsMv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Mv(id, req.Src, req.Dst); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -274,7 +274,7 @@ func (s *Server) handleIfconfig(w http.ResponseWriter, r *http.Request) {
 	}
 	ifaces, err := c.Ifconfig(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"interfaces": ifaces})
@@ -287,7 +287,7 @@ func (s *Server) handlePs(w http.ResponseWriter, r *http.Request) {
 	}
 	procs, err := c.Ps(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"processes": procs})
@@ -306,7 +306,7 @@ func (s *Server) handleKillProcess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.KillProcess(id, req.PID, req.Force); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -319,7 +319,7 @@ func (s *Server) handleNetstat(w http.ResponseWriter, r *http.Request) {
 	}
 	entries, err := c.Netstat(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
@@ -332,7 +332,7 @@ func (s *Server) handleGetEnv(w http.ResponseWriter, r *http.Request) {
 	}
 	env, err := c.GetEnv(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"env": env})
@@ -351,7 +351,7 @@ func (s *Server) handleSetEnv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.SetEnv(id, req.Key, req.Value); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -364,7 +364,7 @@ func (s *Server) handleUnsetEnv(w http.ResponseWriter, r *http.Request) {
 	}
 	key := r.PathValue("key")
 	if err := c.UnsetEnv(id, key); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -388,7 +388,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := c.Execute(id, req.Path, req.Args)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -401,7 +401,7 @@ func (s *Server) handleScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := c.Screenshot(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"Data": data})
@@ -417,7 +417,7 @@ func (s *Server) handleRegSubKeys(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	keys, err := c.RegistryListSubKeys(id, q.Get("hive"), q.Get("path"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"keys": keys})
@@ -431,7 +431,7 @@ func (s *Server) handleRegValues(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	values, err := c.RegistryListValues(id, q.Get("hive"), q.Get("path"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"values": values})
@@ -445,7 +445,7 @@ func (s *Server) handleRegRead(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	result, err := c.RegistryRead(id, q.Get("hive"), q.Get("path"), q.Get("key"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -467,7 +467,7 @@ func (s *Server) handleRegWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RegistryWrite(id, req.Hive, req.Path, req.Key, req.Value, req.Type); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -495,7 +495,7 @@ func (s *Server) handleExecAssembly(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.ExecuteAssembly(id, data, req.Args, req.Process)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -522,7 +522,7 @@ func (s *Server) handleSideload(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.Sideload(id, data, req.ProcessName, req.Args, req.EntryPoint)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -549,7 +549,7 @@ func (s *Server) handleSpawnDll(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.SpawnDll(id, data, req.ProcessName, req.Args, req.EntryPoint)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -572,7 +572,7 @@ func (s *Server) handleMigrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Migrate(id, req.Pid, req.ProcName); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -591,7 +591,7 @@ func (s *Server) handleProcessDump(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.ProcessDump(id, req.Pid)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	// The minidump streams straight to the browser as a file download. Base64
@@ -617,7 +617,7 @@ func (s *Server) handleImpersonate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Impersonate(id, req.Username); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -637,7 +637,7 @@ func (s *Server) handleMakeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.MakeToken(id, req.Username, req.Password, req.Domain); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -649,7 +649,7 @@ func (s *Server) handleRevToSelf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RevToSelf(id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -667,7 +667,7 @@ func (s *Server) handleGetSystem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.GetSystem(id, req.HostingProcess); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -680,7 +680,7 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.Ping(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -697,7 +697,7 @@ func (s *Server) handleDeleteImplantBuild(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := c.DeleteImplantBuild(name); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -716,7 +716,7 @@ func (s *Server) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.Regenerate(req.ImplantName)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -729,7 +729,7 @@ func (s *Server) handleGetOperators(w http.ResponseWriter, r *http.Request) {
 	}
 	ops, err := c.GetOperators()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"operators": ops})
@@ -749,7 +749,7 @@ func (s *Server) handleRegCreateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RegistryCreateKey(id, req.Hive, req.Path, req.Key); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -769,7 +769,7 @@ func (s *Server) handleRegDeleteKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RegistryDeleteKey(id, req.Hive, req.Path, req.Key); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -784,7 +784,7 @@ func (s *Server) handlePortfwdList(w http.ResponseWriter, r *http.Request) {
 	}
 	pfm, err := c.PortForwards()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"forwards": pfm.List()})
@@ -811,12 +811,12 @@ func (s *Server) handlePortfwdStart(w http.ResponseWriter, r *http.Request) {
 	}
 	pfm, err := c.PortForwards()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	pf, err := pfm.Forward(req.SessionID, req.BindAddr, req.BindPort, req.RemotePort, req.RemoteHost)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -838,11 +838,11 @@ func (s *Server) handlePortfwdStop(w http.ResponseWriter, r *http.Request) {
 	}
 	pfm, err := c.PortForwards()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	if err := pfm.Stop(uint32(port)); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})

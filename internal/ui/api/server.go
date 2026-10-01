@@ -620,7 +620,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	client, err := sliver.Connect(cfg)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	s.SetClient(client)
@@ -649,7 +649,7 @@ func (s *Server) handleUseProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	client, err := sliver.Connect(cfg)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	s.SetClient(client)
@@ -663,7 +663,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	sessions, err := c.Sessions()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
@@ -676,7 +676,7 @@ func (s *Server) handleBeacons(w http.ResponseWriter, r *http.Request) {
 	}
 	beacons, err := c.Beacons()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"beacons": beacons})
@@ -689,7 +689,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	jobs, err := c.Jobs()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs})
@@ -702,7 +702,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	events, err := c.Events()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
@@ -719,7 +719,7 @@ func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.KillSession(id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -732,7 +732,7 @@ func (s *Server) handleBuilders(w http.ResponseWriter, r *http.Request) {
 	}
 	builds, err := c.ImplantBuilds()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"builders": builds})
@@ -750,7 +750,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := c.GenerateImplant(&req)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -790,7 +790,7 @@ func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
 	}
 	jobID, err := c.StartListener(req.Type, addr, port, req.TLS)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "job_id": jobID})
@@ -807,7 +807,7 @@ func (s *Server) handleStopListener(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.StopJob(uint32(id)); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})

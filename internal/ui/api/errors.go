@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 
 	"google.golang.org/grpc/status"
@@ -28,7 +29,38 @@ import (
 // a 500, because an unmapped error is more likely a real fault than a bad
 // request, and inventing a friendly status for it would hide the fault.
 
+// transportMarkers identify a failure to reach an upstream the console depends
+// on. They are checked FIRST, because several of them contain phrases the
+// not-found list would otherwise claim: "no such host" is a DNS failure, not a
+// 404, and reporting it as "the thing you asked for does not exist" sends the
+// operator looking for the wrong problem.
+//
+// These map to 502 rather than 503, and the distinction is not cosmetic. 503 is
+// what this console already returns when it has lost its sliver-server link, and
+// that is a state the operator must be told about loudly. A 502 says "an
+// upstream I depend on failed to answer", which is what an unreachable
+// process-identification service is -- a dependency problem, not a console
+// outage. Collapsing the two would make an optional service being down look like
+// the C2 itself going away.
+var transportMarkers = []string{
+	"connection refused",
+	"connection reset",
+	"connection error",
+	"no such host",
+	"dial tcp",
+	"transport:",
+	"i/o timeout",
+	"context deadline exceeded",
+	"unavailable",
+}
+
 // notFoundMarkers are the server's ways of saying a record does not exist.
+//
+// They are specific phrases rather than a bare "not found", because the bare
+// form also matches transport and filesystem messages and would turn those into
+// 404s. A phrase that is not listed here stays a 500, which is the safe
+// direction: an unrecognised error is more likely a real fault than a bad
+// request.
 var notFoundMarkers = []string{
 	"invalid loot id",
 	"invalid beacon id",
@@ -37,8 +69,27 @@ var notFoundMarkers = []string{
 	"invalid task id",
 	"invalid taskid",
 	"record not found",
-	"no such",
-	"not found",
+	"host not found",
+	"credential not found",
+	"session not found",
+	"beacon not found",
+	"implant build not found",
+	"no credentials supplied",
+	// "no traffic encoder named \"x\"" and "alias \"x\" is not installed" say
+	// the same thing in the server's other idiom: the named thing is absent.
+	"no traffic encoder named",
+	"no shellcode encoder named",
+	"is not installed",
+	"not installed",
+}
+
+// notFoundPatterns catch the server's other shape: a noun, an identifier, then
+// "not found". "<noun> <id> not found" cannot be listed as a phrase because the
+// identifier varies, and matching a bare "not found" would also claim transport
+// messages.
+var notFoundPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\b(session|beacon|host|implant|credential|loot|task|alias|profile|website|canary)\b[^.]{0,64}\bnot found\b`),
+	regexp.MustCompile(`\bno (session|beacon|host|implant|credential|loot|task|profile)\b[^.]{0,32}\bfound\b`),
 }
 
 // invalidMarkers are the server's ways of saying the request itself was wrong.
@@ -46,9 +97,32 @@ var invalidMarkers = []string{
 	"invalid argument",
 	"invalid request",
 	"invalid id",
+	"invalid name",
+	"invalid file",
+	"invalid compiler target",
+	"invalid output format",
+	"unsupported listener type",
+	"unsupported os",
+	"unsupported arch",
+	"unsupported format",
 	"must be",
-	"required",
+	"is required",
 	"cannot be empty",
+	"illegal base64",
+	"no profile supplied",
+	"no file supplied",
+	"no data supplied",
+}
+
+// notImplementedMarkers identify a feature the connected server build does not
+// have. That is not the caller's fault and not a console fault either, so it
+// gets 501 rather than 500 -- the operator needs to know the request was
+// understood and simply cannot be served here.
+var notImplementedMarkers = []string{
+	"is not supported by the connected sliver-server",
+	"not supported by the connected",
+	"unknown message type",
+	"unimplemented",
 }
 
 // httpStatusForError picks the HTTP status for an error from the sliver client.
@@ -83,8 +157,25 @@ func httpStatusForError(err error) int {
 	// The server grades a missing record as Internal in several handlers, so the
 	// message is consulted when the code does not settle it.
 	msg := strings.ToLower(err.Error())
+
+	// Reachability first: "no such host" must not read as "no such record".
+	for _, m := range transportMarkers {
+		if strings.Contains(msg, m) {
+			return http.StatusBadGateway
+		}
+	}
+	for _, m := range notImplementedMarkers {
+		if strings.Contains(msg, m) {
+			return http.StatusNotImplemented
+		}
+	}
 	for _, m := range notFoundMarkers {
 		if strings.Contains(msg, m) {
+			return http.StatusNotFound
+		}
+	}
+	for _, re := range notFoundPatterns {
+		if re.MatchString(msg) {
 			return http.StatusNotFound
 		}
 	}

@@ -38,7 +38,7 @@ func (s *Server) handleAVScan(w http.ResponseWriter, r *http.Request) {
 
 	procs, err := c.Ps(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 
@@ -61,7 +61,7 @@ func (s *Server) handleAVScan(w http.ResponseWriter, r *http.Request) {
 	client := sliver.NewAVLookupClient(req.URL, req.Database)
 	result, err := client.Lookup(r.Context(), sliver.BuildTasklistText(rows))
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		writeClientError(w, err)
 		return
 	}
 
@@ -136,7 +136,7 @@ func (s *Server) handleAVTest(w http.ResponseWriter, r *http.Request) {
 	probe := "\"映像名称\",\"PID\"\n\"HipsDaemon.exe\",\"1\"\n\"explorer.exe\",\"2\"\n"
 	result, err := client.Lookup(r.Context(), probe)
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

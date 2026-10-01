@@ -13,7 +13,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	}
 	hosts, err := c.Hosts()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
@@ -26,7 +26,7 @@ func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {
 	}
 	host, err := c.Host(r.PathValue("uuid"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	if host == nil {
@@ -42,7 +42,7 @@ func (s *Server) handleHostRm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.HostRm(r.PathValue("uuid")); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -54,7 +54,7 @@ func (s *Server) handleHostIOCRm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.HostIOCRm(r.PathValue("iocID")); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})

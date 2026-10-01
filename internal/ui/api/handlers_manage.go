@@ -21,7 +21,7 @@ func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RenameSession(r.PathValue("id"), req.Name); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -39,7 +39,7 @@ func (s *Server) handleRenameBeacon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RenameBeacon(r.PathValue("id"), req.Name); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -51,7 +51,7 @@ func (s *Server) handleRmBeacon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RmBeacon(r.PathValue("id")); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -64,7 +64,7 @@ func (s *Server) handleBeaconTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	tasks, err := c.BeaconTasks(r.PathValue("id"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tasks": tasks})
@@ -102,7 +102,7 @@ func (s *Server) handleReconfigure(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.ReconfigureSession(id, req.ReconnectInterval); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -115,7 +115,7 @@ func (s *Server) handleOpenSession(w http.ResponseWriter, r *http.Request) {
 	}
 	async, err := c.OpenSessionFromBeacon(r.PathValue("id"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "async": async})
@@ -127,7 +127,7 @@ func (s *Server) handleCloseSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.CloseSession(id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -139,7 +139,7 @@ func (s *Server) handleMonitorStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.MonitorStart(); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -151,7 +151,7 @@ func (s *Server) handleMonitorStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.MonitorStop(); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -164,7 +164,7 @@ func (s *Server) handleBeaconTaskContent(w http.ResponseWriter, r *http.Request)
 	}
 	task, err := c.BeaconTaskContent(r.PathValue("taskID"))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
@@ -179,7 +179,7 @@ func (s *Server) handleImplantProfiles(w http.ResponseWriter, r *http.Request) {
 	}
 	profiles, err := c.ImplantProfiles()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"profiles": profiles})
@@ -199,7 +199,7 @@ func (s *Server) handleSaveImplantProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := c.SaveImplantProfile(req.Name, &req.Config, req.IsBeacon); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -211,7 +211,7 @@ func (s *Server) handleDeleteImplantProfile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := c.DeleteImplantProfile(r.PathValue("name")); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -224,7 +224,7 @@ func (s *Server) handleCompiler(w http.ResponseWriter, r *http.Request) {
 	}
 	compiler, err := c.CompilerInfo()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, compiler)
@@ -257,7 +257,7 @@ func (s *Server) handleSocksStart(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := c.Socks().Start(req.SessionID, req.BindAddr, req.BindPort, req.Username, req.Password)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -279,7 +279,7 @@ func (s *Server) handleSocksStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Socks().Stop(id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -302,7 +302,7 @@ func (s *Server) handleLootAll(w http.ResponseWriter, r *http.Request) {
 		loot, err = c.LootAll()
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"loot": loot})
@@ -319,7 +319,7 @@ func (s *Server) handleLootAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := c.LootAdd(&req)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "id": id})

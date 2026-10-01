@@ -22,7 +22,7 @@ func (s *Server) handleMsf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.Msf(id, req.Payload, req.LHost, req.LPort, req.Encoder, req.Iterations); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -45,7 +45,7 @@ func (s *Server) handleMsfRemote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.MsfRemote(id, req.Payload, req.LHost, req.LPort, req.Encoder, req.Iterations, req.PID); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -70,7 +70,7 @@ func (s *Server) handleMsfStage(w http.ResponseWriter, r *http.Request) {
 	}
 	stager, err := c.MsfStage(req.Arch, req.Format, req.Port, req.Host, req.OS, req.Protocol, req.BadChars)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, stager)

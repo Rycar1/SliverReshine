@@ -23,7 +23,7 @@ func (s *Server) handleStartService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.StartService(id, req.ServiceName, req.Description, req.BinPath, req.Hostname, req.Arguments); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -42,7 +42,7 @@ func (s *Server) handleStopService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.StopService(id, req.ServiceName, req.Hostname); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -61,7 +61,7 @@ func (s *Server) handleRemoveService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := c.RemoveService(id, req.ServiceName, req.Hostname); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -96,7 +96,7 @@ func (s *Server) handleRunSSHCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := c.RunSSHCommand(id, req.Username, req.Hostname, req.Port, req.Command, req.Password, privKey)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -111,7 +111,7 @@ func (s *Server) handleListExtensions(w http.ResponseWriter, r *http.Request) {
 	}
 	names, err := c.ListExtensions(id)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	if names == nil {
@@ -144,7 +144,7 @@ func (s *Server) handleRegisterExtension(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := c.RegisterExtension(id, req.Name, req.OS, req.Init, data); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -175,7 +175,7 @@ func (s *Server) handleCallExtension(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := c.CallExtension(id, req.Name, req.Export, req.ServerStore, args)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

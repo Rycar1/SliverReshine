@@ -120,7 +120,7 @@ func (s *Server) handleMimikatzRun(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := c.MimikatzRun(target, run, uuid)
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

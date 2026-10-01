@@ -56,7 +56,12 @@ func (s *Server) handleBindStart(w http.ResponseWriter, r *http.Request) {
 
 	listener, err := c.DialBind(req.Host, req.Port)
 	if err != nil {
-		writeErr(w, http.StatusBadGateway, err.Error())
+		// A blanket 502 said "the upstream is broken" for every failure,
+		// including "host is required" -- where the request is what is wrong and
+		// nothing upstream was contacted. Deriving the status from the error
+		// makes a validation problem a 400 while a real failure to reach the
+		// target still reads as 502.
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, listener)

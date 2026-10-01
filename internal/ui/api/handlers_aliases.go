@@ -25,7 +25,7 @@ func (s *Server) handlePruneBeacons(w http.ResponseWriter, r *http.Request) {
 	}
 	pruned, err := c.PruneBeacons(req.Days)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "pruned": pruned})
@@ -38,7 +38,7 @@ func (s *Server) handlePruneSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	pruned, err := c.PruneSessions()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "pruned": pruned})
@@ -53,7 +53,7 @@ func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
 	}
 	aliases, err := sliver.ListAliases()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"aliases": aliases})
@@ -93,7 +93,7 @@ func (s *Server) handleAliasRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := sliver.RemoveAlias(name); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -121,7 +121,7 @@ func (s *Server) handleAliasRun(w http.ResponseWriter, r *http.Request) {
 	}
 	alias, result, err := c.RunAlias(id, name, req.Args, req.Process, req.Arch, req.Method, req.Class)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	result["success"] = true

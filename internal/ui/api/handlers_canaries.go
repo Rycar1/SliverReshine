@@ -13,7 +13,7 @@ func (s *Server) handleCanaries(w http.ResponseWriter, r *http.Request) {
 	}
 	canaries, err := c.Canaries()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeClientError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"canaries": canaries})

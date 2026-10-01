@@ -135,12 +135,24 @@ func (c *Client) Download(sessionID, path string) (string, string, error) {
 }
 
 // Upload writes data to a file on the session.
+// Upload writes data to path on the session.
+//
+// Overwrite is always set. Without it the implant refuses to write over an
+// existing file -- "exists, but the overwrite flag was not set" -- and the two
+// callers here both mean to replace: the credential harvest writes a payload to
+// a fixed name in the target's temp directory, so a second run against the same
+// host would fail every time, and a file-browser upload over an existing file
+// would fail the same way.
 func (c *Client) Upload(sessionID, path string, data []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	resp, err := c.RPC.Upload(ctx, &sliverpb.UploadReq{
 		Path: path,
 		Data: data,
+		// The console is the only writer and it always intends to replace what
+		// is there: a payload it chose itself, or a file the operator picked
+		// while looking at that directory.
+		Overwrite: true,
 		Request: &commonpb.Request{
 			SessionID: sessionID,
 		},

@@ -74,6 +74,23 @@ type SideloadResult struct {
 	Result string `json:"result"`
 }
 
+// Sideload converts a PE to shellcode on the server, injects it into a freshly
+// spawned process, and returns what that payload printed.
+//
+// Kill is set, and that is what produces the output. The implant only reads the
+// child's stdout on the way out:
+//
+//	if kill {
+//	    waitForCompletion(threadHandle)
+//	    cmd.Process.Kill()
+//	    return stdoutBuff.String() + stderrBuff.String(), nil
+//	}
+//	return "", nil
+//
+// Without it every injection reported an empty result, which the console showed
+// as "no output at all" -- a message that sends the operator looking at AV or a
+// wrong path instead of at the flag that threw the output away. The process is
+// killed after the payload finishes either way, so nothing is left running.
 func (c *Client) Sideload(sessionID string, data []byte, processName, args, entryPoint string) (*SideloadResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), opTimeoutExt)
 	defer cancel()
@@ -82,6 +99,7 @@ func (c *Client) Sideload(sessionID string, data []byte, processName, args, entr
 		ProcessName: processName,
 		Args:        []string{args},
 		EntryPoint:  entryPoint,
+		Kill:        true,
 		Request:     &commonpb.Request{SessionID: sessionID},
 	})
 	if err != nil {
@@ -102,6 +120,7 @@ func (c *Client) SpawnDll(sessionID string, data []byte, processName, args, entr
 		ProcessName: processName,
 		Args:        []string{args},
 		EntryPoint:  entryPoint,
+		Kill:        true,
 		Request:     &commonpb.Request{SessionID: sessionID},
 	})
 	if err != nil {

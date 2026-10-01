@@ -18,6 +18,14 @@
 # still succeeds and the console falls back to uploading mimikatz to the target's
 # temp directory — which works, it just leaves a file behind.
 #
+# NOTE: as of the memory-mode rework this blob is no longer required for the
+# in-memory path. That path sends the mimikatz *executable* to Sideload and lets
+# the server's own donut convert it, which is the only route Sliver actually
+# supports: SpawnDll wants a PE with an export table, and Sideload wants a PE it
+# can convert — neither accepts pre-converted shellcode. The blob is kept because
+# it is a cheap way to avoid the server-side conversion, but a build without it
+# still offers 内存加载.
+#
 # Usage
 # -----
 #     build\build-mimikatz-shellcode.ps1                     # uses donut from PATH

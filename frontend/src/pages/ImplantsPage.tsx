@@ -55,6 +55,33 @@ const FORMATS: Record<string, string[]> = {
   freebsd: ['exe', 'shared'],
 }
 
+/**
+ * Architectures each OS can produce shellcode for.
+ *
+ * Sliver enforces this per platform and the three rules differ, so a per-OS
+ * format list is not enough: it offered "windows/arm64 shellcode", which the
+ * server then refused with "windows shellcode format is only supported for
+ * amd64 and 386 architectures" -- after the operator had waited for a build
+ * that was never possible.
+ *
+ * An OS with no entry produces no shellcode at all.
+ */
+const SHELLCODE_ARCHES: Record<string, string[]> = {
+  windows: ['amd64', '386'],
+  linux: ['amd64', 'arm64'],
+  darwin: ['arm64'],
+}
+
+/** The formats actually buildable for one OS/arch pair. */
+function formatsFor(os: string, arch: string): string[] {
+  const base = FORMATS[os] || ['exe']
+  return base.filter((f) => {
+    if (f !== 'shellcode') return true
+    const arches = SHELLCODE_ARCHES[os]
+    return !!arches && arches.includes(arch)
+  })
+}
+
 // Sliver names the WireGuard listener job "wg" while the build form calls the
 // transport "wireguard"; the other transports share their job name.
 function listenerJobName(type: string): string {
@@ -170,7 +197,7 @@ export default function ImplantsPage() {
   }, [detectedC2, c2Host, c2Port])
 
   const currentOS = OS_ARCHES.find((o) => o.os === os)
-  const formatOptions = FORMATS[os] || ['exe']
+  const formatOptions = formatsFor(os, arch)
 
   const formatLabel = (f: string) =>
     f === 'exe'
@@ -385,7 +412,7 @@ export default function ImplantsPage() {
                 const next = e.target.value
                 setOs(next)
                 setArch(OS_ARCHES.find((o) => o.os === next)?.arches[0] || 'amd64')
-                const formats = FORMATS[next] || ['exe']
+                const formats = formatsFor(next, arch)
                 if (!formats.includes(format)) setFormat(formats[0])
               }}
             >
@@ -398,7 +425,19 @@ export default function ImplantsPage() {
           </div>
           <div className="field">
             <label>{t('implants.arch')}</label>
-            <select value={arch} onChange={(e) => setArch(e.target.value)}>
+              <select
+                value={arch}
+                onChange={(e) => {
+                  // The format has to follow the arch, not just the OS: shellcode
+                  // is offered for windows, linux and darwin but only builds on
+                  // some architectures of each, so switching arch must not leave
+                  // an unbuildable pair selected.
+                  const next = e.target.value
+                  setArch(next)
+                  const allowed = formatsFor(os, next)
+                  if (!allowed.includes(format)) setFormat(allowed[0])
+                }}
+              >
               {currentOS?.arches.map((a) => (
                 <option key={a} value={a}>
                   {a}

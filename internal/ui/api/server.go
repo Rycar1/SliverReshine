@@ -455,11 +455,16 @@ func withLogging(next http.Handler) http.Handler {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		op := "GET"
+		// One word, not two. This used to print a derived op and the method side
+		// by side, which rendered as "GET GET /api/info" for every read -- the
+		// derived value is already the method in that case. Printing the method
+		// once, and MUTATE in its place only for a write, says the same thing
+		// without the stutter.
+		op := r.Method
 		if r.Method != http.MethodGet && r.Method != http.MethodOptions {
-			op = "MUTATE"
+			op = "MUTATE " + r.Method
 		}
-		log.Printf("[api] %s %s %s -> %d (%s)", op, r.Method, r.URL.Path, rec.status, time.Since(start))
+		log.Printf("[api] %s %s -> %d (%s)", op, r.URL.Path, rec.status, time.Since(start))
 	})
 }
 

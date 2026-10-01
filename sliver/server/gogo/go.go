@@ -111,6 +111,7 @@ func getBuildTempDir() string {
 	}
 	return os.TempDir()
 }
+
 // GarbleCmd - Execute a go command
 func GarbleCmd(config GoConfig, cwd string, command []string) ([]byte, error) {
 	target := fmt.Sprintf("%s/%s", config.GOOS, config.GOARCH)
@@ -146,6 +147,22 @@ func GarbleCmd(config GoConfig, cwd string, command []string) ([]byte, error) {
 		fmt.Sprintf("TMP=%s", getBuildTempDir()),
 		fmt.Sprintf("TEMP=%s", getBuildTempDir()),
 		fmt.Sprintf("HOME=%s", getHomeDir()),
+		// c2tool: garble asks Go for its build cache location, and on Windows Go
+		// answers from %LocalAppData%. This environment is built from a fixed
+		// whitelist -- it REPLACES the process environment rather than adding to
+		// it -- so a variable that is not listed here simply does not exist for
+		// garble. Without this one, an obfuscated build dies with
+		//
+		//	%LocalAppData% is not defined
+		//
+		// and exits 1, which reaches the console as a bare "exit status 1"
+		// naming neither garble nor the variable. A non-obfuscated build never
+		// runs garble, which is why only the obfuscated variant failed.
+		//
+		// APPDATA is set for the same reason: garble consults it for its own
+		// cache on some paths. Both come from the same place HOME does.
+		fmt.Sprintf("LOCALAPPDATA=%s", getBuildTempDir()),
+		fmt.Sprintf("APPDATA=%s", getBuildTempDir()),
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -195,6 +212,11 @@ func GoCmd(config GoConfig, cwd string, command []string) ([]byte, error) {
 		fmt.Sprintf("TMP=%s", getBuildTempDir()),
 		fmt.Sprintf("TEMP=%s", getBuildTempDir()),
 		fmt.Sprintf("HOME=%s", getHomeDir()),
+		// c2tool: the same whitelist gap as the garble builder. The Go toolchain
+		// consults %LocalAppData% for its cache on Windows too, and a plain build
+		// that reaches that path fails the same opaque way.
+		fmt.Sprintf("LOCALAPPDATA=%s", getBuildTempDir()),
+		fmt.Sprintf("APPDATA=%s", getBuildTempDir()),
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

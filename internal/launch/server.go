@@ -158,6 +158,36 @@ func (s *Server) env() []string {
 		"TMP="+tmp,
 		"TEMP="+tmp,
 	)
+
+	// LOCALAPPDATA is set for the same reason as the temp variables, and its
+	// absence is what broke obfuscated builds.
+	//
+	// garble -- the tool Sliver runs when the operator ticks "obfuscate" -- asks
+	// Go for its build cache location, and Go answers from %LocalAppData% on
+	// Windows. When the daemon is started by a launcher that scrubs the
+	// environment, garble dies with
+	//
+	//	%LocalAppData% is not defined
+	//
+	// and exits 1, which reaches the console as a bare "exit status 1" naming
+	// neither garble nor the variable. A non-obfuscated build never touches that
+	// path, which is why only the obfuscated variant failed.
+	//
+	// The value is only filled in when it is missing, so an operator's real
+	// profile directory is left alone.
+	if os.Getenv("LOCALAPPDATA") == "" {
+		env = append(env, "LOCALAPPDATA="+tmp)
+	}
+	// Garble also consults the user profile for its own cache on some paths.
+	if os.Getenv("USERPROFILE") == "" {
+		env = append(env, "USERPROFILE="+s.opts.StateDir)
+	}
+	if os.Getenv("HOME") == "" {
+		env = append(env, "HOME="+s.opts.StateDir)
+	}
+	if os.Getenv("APPDATA") == "" {
+		env = append(env, "APPDATA="+tmp)
+	}
 	return env
 }
 

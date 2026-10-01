@@ -271,6 +271,12 @@ export interface GenerateResult {
   path?: string
   name?: string
   data?: string
+  // Set by the server when a build of this name already existed and was
+  // removed to make room for this one. Without it a rebuild is
+  // indistinguishable from a fresh build, which is how a replacement -- and,
+  // when the build failed, the loss of the build it replaced -- went
+  // unnoticed.
+  replaced?: boolean
 }
 
 export interface FileInfo {

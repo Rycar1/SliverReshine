@@ -131,6 +131,11 @@ export default function ImplantsPage() {
   const [debug, setDebug] = useState(false)
   const [evasion, setEvasion] = useState(false)
   const [deleting, setDeleting] = useState<{ kind: 'build' | 'profile'; name: string } | null>(null)
+  // Set when a build is submitted under a name that already exists. The
+  // replacement is confirmed explicitly rather than performed silently: the
+  // previous build of that name is removed, and an operator who did not expect
+  // that is exactly how the old behaviour lost a build without anyone noticing.
+  const [confirmReplace, setConfirmReplace] = useState(false)
   const [busy, setBusy] = useState(false)
   const [compiler, setCompiler] = useState<CompilerInfo | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
@@ -218,6 +223,14 @@ export default function ImplantsPage() {
     if (c2Port === '8888' && detectedC2.port) setC2Port(detectedC2.port)
   }, [detectedC2, c2Host, c2Port])
 
+  // The build this submission would replace, if any. `builds` is the list the
+  // server reports (api.builders()), so a name that is already in it will be
+  // refused by the server's unique constraint -- which is what makes an
+  // unannounced rebuild destructive rather than merely surprising. Derived from
+  // the live list rather than a one-off fetch so it stays right after a build,
+  // a delete, or another operator's change.
+  const existingBuild = useMemo(() => builds.find((b) => b.Name === name.trim()), [builds, name])
+
   const currentOS = OS_ARCHES.find((o) => o.os === os)
   const formatOptions = formatsFor(os, arch)
 
@@ -301,7 +314,9 @@ export default function ImplantsPage() {
     setMessage(t('profiles.loaded', { name: p.Name }))
   }
 
-  const generate = async () => {
+  // runGenerate is the submission itself. It is only ever reached from
+  // generate() below, which has already established whether the name is taken.
+  const runGenerate = async () => {
     setGenerating(true)
     setMessage('')
     try {
@@ -311,7 +326,11 @@ export default function ImplantsPage() {
         triggerDownload(res.name || name, base64ToBytes(res.data))
       }
       setMessage(
-        res.success ? t('implants.generated', { msg: res.message }) : t('implants.failed', { msg: res.message }),
+        res.success
+          ? res.replaced
+            ? t('implants.replacedGenerated', { msg: res.message })
+            : t('implants.generated', { msg: res.message })
+          : t('implants.failed', { msg: res.message }),
       )
       load()
     } catch (e) {
@@ -319,6 +338,19 @@ export default function ImplantsPage() {
     } finally {
       setGenerating(false)
     }
+  }
+
+  // Submitting a build whose name already exists replaces that build: the
+  // server stores build names uniquely, so the previous one has to be removed
+  // for the new one to be saved at all. Ask first -- the replacement is
+  // intended, but it must be intended by the operator, not inferred by the
+  // form. A name that is free submits straight away.
+  const generate = () => {
+    if (existingBuild) {
+      setConfirmReplace(true)
+      return
+    }
+    runGenerate()
   }
 
   const downloadBuild = async (b: ImplantBuild) => {
@@ -426,6 +458,23 @@ export default function ImplantsPage() {
             <label>{t('implants.name')}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
+          {existingBuild && (
+            <div
+              className="error-banner"
+              style={{
+                borderColor: 'var(--yellow)',
+                color: 'var(--yellow)',
+                background: 'var(--yellow-bg)',
+                gridColumn: '1 / -1',
+              }}
+            >
+              {t('implants.nameTaken', {
+                name: existingBuild.Name,
+                os: existingBuild.OS,
+                arch: existingBuild.Arch,
+              })}
+            </div>
+          )}
           <div className="field">
             <label>{t('implants.os')}</label>
             <select
@@ -703,6 +752,29 @@ export default function ImplantsPage() {
         onCancel={() => setDeleting(null)}
       >
         <p>{deleting ? t('implants.confirmDeleteBody', { name: deleting.name }) : ''}</p>
+      </ConfirmDialog>
+      {/* The replacement confirmation. Confirming removes the previous build of
+          this name, so it is stated plainly and the build that will be lost is
+          named -- the operator has to be able to tell what they are giving up
+          before they give it up. */}
+      <ConfirmDialog
+        open={confirmReplace}
+        title={t('implants.confirmReplace')}
+        busy={generating}
+        confirmLabel={t('implants.confirmReplaceAction')}
+        onConfirm={() => {
+          setConfirmReplace(false)
+          runGenerate()
+        }}
+        onCancel={() => setConfirmReplace(false)}
+      >
+        <p>
+          {t('implants.confirmReplaceBody', {
+            name: existingBuild?.Name || name,
+            os: existingBuild?.OS || os,
+            arch: existingBuild?.Arch || arch,
+          })}
+        </p>
       </ConfirmDialog>
     </div>
   )

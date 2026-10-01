@@ -510,32 +510,150 @@ func (c *Client) GenerateImplant(req *GenerateRequest) (map[string]any, error) {
 	}
 	cfg := buildImplantConfig(req, req.IsBeacon)
 
-	// Implant build names are unique in the server's database, so reusing a
-	// name fails with "UNIQUE constraint failed: implant_builds.name".
-	// Rebuilding a profile is a normal workflow (tweak a setting, build again),
-	// so replace the previous build of this name instead of erroring out. A
-	// failure here is not fatal: the name may simply be new.
-	if err := c.DeleteImplantBuild(req.Name); err != nil {
-		log.Printf("[implants] no prior build named %q to replace: %v", req.Name, err)
+	// A build name is unique in the server's database, and the server compiles
+	// the implant *before* it writes the build row -- so a Generate under a name
+	// that is already taken runs the whole toolchain and then fails at the very
+	// last step with "UNIQUE constraint failed: implant_builds.name".
+	//
+	// The old code deleted the previous build before generating. That is the
+	// only order in which a rebuild can be made to work at all, but it destroys
+	// the previous build before anything has shown the new one can be built: a
+	// garble failure, a missing cross-compiler or a bad setting then left the
+	// operator with no build at all, old or new.
+	//
+	// The delete therefore happens as late as this RPC surface allows. When the
+	// name is already taken the new build is attempted FIRST, with the previous
+	// build still in place:
+	//
+	//   - a failure for any other reason leaves the previous build untouched,
+	//     and its error is returned as-is;
+	//   - a failure *because* the name is taken has already compiled the
+	//     payload -- that is what the server's ordering guarantees -- so the
+	//     name can now be freed and the build retried.
+	//
+	// A rebuild therefore compiles twice. That is the price of not destroying
+	// the previous build on the strength of a build that has not been proven to
+	// work. The one window left is the retry failing after the name was freed,
+	// and that retry is the same request that compiled a moment earlier.
+	//
+	// Building under a temporary name and renaming it afterwards would avoid
+	// both the second compile and that window, but the server exposes no RPC
+	// that renames a build or re-saves one: SaveImplantBuild is reached only
+	// from Generate, and from GenerateExternalSaveBuild, which is restricted to
+	// an assigned external builder. A build left under a temporary name would
+	// be one the operator could not find under the name they asked for, so the
+	// ordering above is the best the available RPCs allow.
+	prior, err := c.implantBuildExists(req.Name)
+	if err != nil {
+		// Not being able to list the builds is not a reason to refuse to build,
+		// and it is not a reason to delete anything either. Treat the name as
+		// unknown: the build is still attempted, and a collision then surfaces
+		// as the server's own error with nothing removed.
+		log.Printf("[implants] could not list builds before generating %q: %v", req.Name, err)
+		prior = false
 	}
 
+	resp, err := c.runGenerate(req.Name, cfg)
+	if err != nil {
+		if !prior || !isDuplicateBuildName(err) {
+			// Nothing has been deleted, so a previous build of this name -- if
+			// there is one -- is still on the server.
+			return nil, err
+		}
+		// The name is taken and the payload compiled. Free the name, then build
+		// the replacement.
+		if delErr := c.DeleteImplantBuild(req.Name); delErr != nil {
+			// Not fatal on its own: the build below is the real answer, and it
+			// reports the collision again if the name is in fact still taken.
+			log.Printf("[implants] could not remove build %q before replacing it: %v", req.Name, delErr)
+		}
+		resp, err = c.runGenerate(req.Name, cfg)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"the previous build %q was removed to free the name, but the replacement failed to build: %w",
+				req.Name, err)
+		}
+		return implantBuildResponse(resp, cfg, req, true), nil
+	}
+	return implantBuildResponse(resp, cfg, req, false), nil
+}
+
+// runGenerate issues one Generate RPC under the console's build deadline.
+func (c *Client) runGenerate(name string, cfg *clientpb.ImplantConfig) (*clientpb.Generate, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	resp, err := c.RPC.Generate(ctx, &clientpb.GenerateReq{Config: cfg, Name: req.Name})
+	return c.RPC.Generate(ctx, &clientpb.GenerateReq{Config: cfg, Name: name})
+}
+
+// implantBuildExists reports whether the server already holds a build with this
+// name. It is a plain read: it decides how a failed build is interpreted, not
+// what happens on the server.
+func (c *Client) implantBuildExists(name string) (bool, error) {
+	builds, err := c.ImplantBuilds()
 	if err != nil {
-		return nil, err
+		return false, err
 	}
+	for _, b := range builds {
+		if b.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// isDuplicateBuildName reports whether a failed Generate was refused because a
+// build of that name already exists.
+//
+// This refusal is the signal that makes the replacement above safe: the server
+// writes the build row after the compiler has run, so reaching it means the
+// payload itself built. The error message is the only channel the RPC offers
+// for it, so the match covers the three database backends Sliver can be
+// configured with (SQLite, Postgres, MySQL). The match is deliberately narrow
+// -- the table name is required as well as the duplicate marker -- because a
+// false positive would free a name that was never actually taken, while a
+// false negative only falls back to reporting the collision.
+func isDuplicateBuildName(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "implant_build") {
+		return false
+	}
+	for _, marker := range []string{
+		"unique constraint failed", // sqlite
+		"duplicate key",            // postgres
+		"duplicate entry",          // mysql
+	} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// implantBuildResponse renders the API body for a build that succeeded.
+//
+// `replaced` is what lets the console tell the operator that a previous build
+// of this name was removed. Without it a replacement looks exactly like a
+// fresh build, which is how a rebuild -- and, when one failed, the loss of the
+// build it replaced -- went unnoticed.
+func implantBuildResponse(resp *clientpb.Generate, cfg *clientpb.ImplantConfig, req *GenerateRequest, replaced bool) map[string]any {
 	var data string
-	if resp.File != nil {
+	name := req.Name
+	if resp.GetFile() != nil {
 		data = base64.StdEncoding.EncodeToString(resp.File.Data)
+		if built := ensureImplantExt(resp.File.Name, cfg); built != "" {
+			name = built
+		}
 	}
-	name := ensureImplantExt(resp.File.Name, cfg)
 	return map[string]any{
-		"success": true,
-		"message": fmt.Sprintf("built %s (%s/%s)", name, req.OS, req.Arch),
-		"name":    name,
-		"data":    data,
-	}, nil
+		"success":  true,
+		"message":  fmt.Sprintf("built %s (%s/%s)", name, req.OS, req.Arch),
+		"name":     name,
+		"data":     data,
+		"replaced": replaced,
+	}
 }
 
 // KillSession sends a kill command to the implant.

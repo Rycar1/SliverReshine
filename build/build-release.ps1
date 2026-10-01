@@ -40,15 +40,31 @@ param(
 
     [switch]$SkipFrontend,
 
-    [switch]$SkipServerEmbed
+    [switch]$SkipServerEmbed,
+
+    # Pack the launcher with UPX and name the archive accordingly.
+    #
+    # The README has always advertised a *-upx.zip alongside the *-plain.zip, and
+    # the v0.1 release shipped both -- but this script only ever produced one
+    # archive, under a name that matched neither. Anyone rebuilding from source
+    # got an artifact whose name did not match the documentation, and no way to
+    # produce the packed variant at all.
+    [switch]$Upx,
+
+    # Path to upx.exe. Defaults to a copy in tools\upx\ or one on PATH.
+    [string]$UpxPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $dist = Join-Path $root 'dist'
+# The variant is part of the name because the two archives are different
+# artifacts: an operator picking one from a release page needs to know which
+# they are getting, and "c2tool-linux-amd64.zip" cannot say.
+$variant = if ($Upx) { 'upx' } else { 'plain' }
 $stage = Join-Path $dist "c2tool-$GOOS-$GOARCH"
-$zip = Join-Path $dist "c2tool-$GOOS-$GOARCH.zip"
+$zip = Join-Path $dist "c2tool-$GOOS-$GOARCH-$variant.zip"
 
 function Step($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }
 
@@ -107,6 +123,12 @@ if (-not $SkipFrontend) {
     if (Test-Path $webDist) { Remove-Item -Recurse -Force "$webDist\*" }
     else { New-Item -ItemType Directory -Force -Path $webDist | Out-Null }
     Copy-Item -Recurse -Force (Join-Path $root 'frontend\dist\*') $webDist
+
+    # .gitkeep is the only file in this directory that git tracks, and the wipe
+    # above removes it along with the previous build's output. Restoring it keeps
+    # a release run from leaving the worktree dirty with a deleted file -- which
+    # a CI clean-tree check reads as a build failure unrelated to the build.
+    New-Item -ItemType File -Path (Join-Path $webDist '.gitkeep') -Force | Out-Null
 }
 
 # --- 2. server payload -------------------------------------------------------
@@ -214,6 +236,52 @@ if (Test-Path $shellcodeBlob) {
 
 & go build -tags $buildTags -trimpath -o $binPath ./cmd/c2tool
 if ($LASTEXITCODE -ne 0) { throw 'launcher build failed' }
+
+# --- 3b. optional UPX packing ------------------------------------------------
+if ($Upx) {
+    Step 'packing with upx'
+
+    if (-not $UpxPath) {
+        $candidates = @(
+            (Join-Path $root 'tools\upx\upx.exe'),
+            (Join-Path $root 'tools\upx.exe'),
+            (Join-Path $PSScriptRoot 'upx.exe')
+        )
+        foreach ($c in $candidates) {
+            if (Test-Path $c) { $UpxPath = $c; break }
+        }
+    }
+    if (-not $UpxPath) {
+        $onPath = Get-Command upx.exe, upx -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($onPath) { $UpxPath = $onPath.Source }
+    }
+    if (-not $UpxPath -or -not (Test-Path $UpxPath)) {
+        throw 'upx was not found. Put upx.exe in tools\upx\ or pass -UpxPath. Get it from https://github.com/upx/upx/releases. Without it, build the plain variant.'
+    }
+
+    $before = (Get-Item $binPath).Length
+    # --best is slow but this is a one-off release step. The launcher is mostly
+    # the gzipped server payload, which UPX cannot compress further, so the win
+    # is on the Go code around it.
+    & $UpxPath --best --lzma -q --force $binPath
+    if ($LASTEXITCODE -ne 0) { throw "upx failed with $LASTEXITCODE" }
+    $after = (Get-Item $binPath).Length
+
+    Write-Host ("    {0:N1} MB -> {1:N1} MB ({2:N0}%)" -f ($before / 1MB), ($after / 1MB), (100 * $after / $before))
+
+    # A packed binary is only useful if it still runs, and UPX corrupts a
+    # binary often enough that shipping one unchecked is not worth the disk it
+    # saves. --help answers without touching any state, so this is a safe
+    # liveness check rather than a functional one.
+    $probe = & $binPath --help 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "the packed launcher does not run (exit $LASTEXITCODE); rebuild without -Upx"
+    }
+    if ($probe -notmatch 'Usage of') {
+        throw 'the packed launcher ran but printed no usage text'
+    }
+    Write-Host '    packed launcher responds to --help'
+}
 
 # --- 4. package --------------------------------------------------------------
 #

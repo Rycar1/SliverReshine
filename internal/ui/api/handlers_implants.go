@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/base64"
 	"net/http"
+
+	"c2tool/internal/ui/sliver"
 )
 
 // --- Backdoor ---
@@ -90,6 +92,18 @@ func (s *Server) handleShellcodeRDI(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid data_b64")
 		return
 	}
+	// Reject input the converter cannot survive, before it reaches the server.
+	//
+	// The RDI converter parses a PE and indexes into it. Given a blob shorter
+	// than a DOS header it used to panic inside the sliver-server process, which
+	// killed the daemon and every session with it -- reachable here with a
+	// three-byte body, because this handler only checked that the field was
+	// present and decodable. A malformed request has to be answered, not
+	// obeyed.
+	if problem := sliver.ValidatePEPayload(data); problem != "" {
+		writeErr(w, http.StatusBadRequest, problem)
+		return
+	}
 	result, err := c.ShellcodeRDI(data, req.FunctionName, req.Arguments)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -137,11 +151,11 @@ func (s *Server) handlePsExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Hostname     string `json:"hostname"`
-		ProfileName  string `json:"profile_name"`
-		ServiceName  string `json:"service_name"`
-		ServiceDesc  string `json:"service_desc"`
-		BinPath      string `json:"bin_path"`
+		Hostname    string `json:"hostname"`
+		ProfileName string `json:"profile_name"`
+		ServiceName string `json:"service_name"`
+		ServiceDesc string `json:"service_desc"`
+		BinPath     string `json:"bin_path"`
 	}
 	if !decodeBody(w, r, &req) {
 		return

@@ -179,6 +179,10 @@ func (s *Server) TunnelData(stream rpcpb.SliverRPC_TunnelDataServer) error {
 						if ok {
 							tunnelLog.Debugf("Tunnel %d: Resending cached msg: %d", tunnel.ID, tunnelData.Ack)
 							session := core.Sessions.Get(tunnel.SessionID)
+							if session == nil {
+								tunnelLog.Warnf("Tunnel %d: session gone, dropping work", tunnel.ID)
+								return
+							}
 							data, err := proto.Marshal(origtunnelData)
 							if err != nil {
 								// {{if .Config.Debug}}
@@ -205,6 +209,10 @@ func (s *Server) TunnelData(stream rpcpb.SliverRPC_TunnelDataServer) error {
 
 			go func() {
 				session := core.Sessions.Get(tunnel.SessionID)
+				if session == nil {
+					tunnelLog.Warnf("Tunnel %d: session gone, dropping work", tunnel.ID)
+					return
+				}
 				for data := range tunnel.ToImplant {
 					tunnelLog.Debugf("Tunnel %d: To implant %d byte(s), seq: %d", tunnel.ID, len(data), tunnel.ToImplantSequence)
 					tunnelData := sliverpb.TunnelData{

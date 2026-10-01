@@ -56,7 +56,17 @@ func (rpc *Server) Backdoor(ctx context.Context, req *clientpb.BackdoorReq) (*cl
 	}
 
 	resp := &clientpb.Backdoor{}
+	// A session ID that is not in the table yields nil, and dereferencing it
+	// below took the whole server down: a call to this RPC with a stale or
+	// mistyped ID panicked with "invalid memory address or nil pointer
+	// dereference" and sliver-server exited, killing every other client in
+	// flight and leaving the console reporting the server unreachable.
+	//
+	// Returning an error costs one round trip and keeps the daemon up.
 	session := core.Sessions.Get(req.Request.SessionID)
+	if session == nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid session ID")
+	}
 	if session.OS != "windows" {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("%s is currently not supported", session.OS))
 	}

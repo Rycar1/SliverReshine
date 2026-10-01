@@ -994,11 +994,32 @@ func ror(val uint32, rBits uint32, maxBits uint32) uint32 {
 	return ((val & exp) >> (rBits % maxBits)) | (val << (maxBits - (rBits % maxBits)) & exp)
 }
 
+// is64BitDLL reports whether a PE is 64-bit.
+//
+// It validates before it indexes. The slices below used to run unguarded, so a
+// blob shorter than a DOS header -- or one whose e_lfanew points past the end of
+// the buffer -- panicked with "slice bounds out of range" and took the whole
+// sliver-server process down, along with every session in flight.
+//
+// That is reachable from the console's POST /api/shellcode/rdi, which only
+// checked that the payload was present and base64-decodable: a three-byte body
+// was enough to kill the daemon. A malformed input is a bad request, not a
+// reason to stop serving.
 func is64BitDLL(dllBytes []byte) bool {
 	machineIA64 := uint16(512)
 	machineAMD64 := uint16(34404)
 
+	// A DOS header is 64 bytes, and e_lfanew (at 0x3c) points at the PE header.
+	const dosHeaderLen = 64
+	if len(dllBytes) < dosHeaderLen {
+		return false
+	}
 	headerOffset := binary.LittleEndian.Uint32(dllBytes[60:64])
+	// The machine field sits 4 bytes into the PE header, so the header has to
+	// have room for those 6 bytes from its own start.
+	if uint64(headerOffset)+6 > uint64(len(dllBytes)) {
+		return false
+	}
 	machine := binary.LittleEndian.Uint16(dllBytes[headerOffset+4 : headerOffset+4+2])
 
 	// 64 bit

@@ -783,7 +783,10 @@ func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
 		case "dns":
 			port = 53
 		case "wireguard":
-			port = 53
+			// 51820 is the WireGuard convention. This said 53, which is the DNS
+			// port copied from the case above -- so a caller that omitted the
+			// port got a wireguard listener on the DNS port.
+			port = 51820
 		default:
 			port = 80
 		}

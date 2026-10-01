@@ -145,10 +145,10 @@ func (c *Client) Jobs() ([]JobView, error) {
 			domains = []string{}
 		}
 		out = append(out, JobView{
-			ID:      j.ID,
-			Name:    j.Name,
-			Type:    j.Protocol,
-			Port:    j.Port,
+			ID:          j.ID,
+			Name:        j.Name,
+			Type:        j.Protocol,
+			Port:        j.Port,
 			Domains:     domains,
 			Description: j.Description,
 		})
@@ -184,8 +184,15 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool) (uin
 		}
 		return resp.JobID, nil
 	case "dns":
+		// The port has to be sent. This branch used to pass only Domains, so the
+		// server fell back to its own default and every DNS listener bound port
+		// 53 regardless of what the operator asked for -- while the API answered
+		// {"success":true}. A listener on the wrong port does not error; it just
+		// never receives anything, which is the worst way to fail.
 		resp, err := c.RPC.StartDNSListener(ctx, &clientpb.DNSListenerReq{
 			Domains: []string{addr},
+			Host:    addr,
+			Port:    port,
 		})
 		if err != nil {
 			return 0, err
@@ -287,9 +294,9 @@ func sessionToView(s *clientpb.Session) SessionView {
 		LastCheckin:   unixTimeString(s.LastCheckin),
 		ActiveC2:      s.ActiveC2,
 		// Sliver v1.15.16 的 clientpb.Session 无 Locale 字段，留空
-		Locale:        "",
-		AgentVersion:  s.Version,
-		IsDead:        s.IsDead,
+		Locale:       "",
+		AgentVersion: s.Version,
+		IsDead:       s.IsDead,
 		// Sliver v1.15.16 无 IsInteractive 字段，用 !IsDead 作为近似
 		IsInteractive: !s.IsDead,
 	}

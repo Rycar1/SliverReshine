@@ -151,6 +151,53 @@ Every path that spawns a program therefore has to decode. After this change:
 `execRawOn` is called in exactly one place, the code page probe itself, which
 must not recurse into decoding.
 
+## Shipping the PowerShell fix needs a server rebuild, not just a launcher rebuild
+
+Worth writing down, because it is easy to get wrong and the wrong build looks
+fine.
+
+The implant source is **embedded into the server binary**:
+`sliver/implant/implant.go` declares `//go:embed sliver/**`, and
+`sliver/server/generate/binaries.go` walks that embedded tree to lay down the
+source it compiles a payload from. So `shell_windows.go` reaches a payload through
+this chain:
+
+```
+shell_windows.go  ->  implant.FS (go:embed)  ->  sliver-server  ->  payload-*.gz  ->  c2tool launcher
+```
+
+Each arrow is a build step. Editing the file and rebuilding only the launcher
+produces a launcher that still contains the old server, and therefore still
+produces payloads with the old flags -- with nothing reporting an error, which is
+the same shape as every other defect in this project.
+
+The other two fixes do **not** need any of that. The codec and the shell-copy path
+fix both live in `internal/ui`, which is console-side, so they take effect for an
+already-running session as soon as the console is rebuilt:
+
+| Fix | Side | Needs a new payload? |
+|---|---|---|
+| Console codec (encoding) | console | no |
+| `remoteBase` (shell-copy path) | console | no |
+| `wsMsgFatal` (reconnect loop) | console | no |
+| PowerShell flags | **implant** | **yes** |
+
+## Verifying a build
+
+`build/verify-artifact.sh <archive>` runs the archive end to end: extracts it,
+starts the console and its embedded server against an isolated home under `/tmp`,
+checks the auth gate, exercises the API (including `/api/oneliner/all`), then kills
+everything and removes the work directory.
+
+It is worth running for two reasons that are easy to miss:
+
+- **`unzip` must preserve the exec bit.** A launcher that arrives non-executable is
+  a build that "succeeded".
+- **UPX-packed builds must be probed.** Packing rewrites the binary's loader; a
+  broken result still unpacks, still reports the right size, and only fails when
+  run. The Windows packer cannot probe a Linux binary, so that check is skipped at
+  build time and has to happen here.
+
 ## Not verified
 
 - **Windows 8.1.** No access to that platform. The PowerShell fix is reasoned
@@ -159,7 +206,15 @@ must not recurse into decoding.
   silent there, the fallback in `StartInteractive` is the next place to look — it
   only triggers on a spawn *error*, and a shell that starts but never speaks
   produces neither an error nor output.
-- **A real target for the codec.** The codec is unit-tested at every split point
-  with GBK fixtures, but has not been exercised against a live Windows session.
+- **A live Windows session.** The codec is unit-tested at every split point with GBK
+  fixtures, and the release archives are verified end to end on Linux (startup,
+  auth, API, the new route), but no console has yet decoded a real Windows shell's
+  output. The split-point test is the strongest evidence available without a target.
 - **Non-GBK code pages end to end.** 437, 850, 852, 866 and 1252 are wired up and
   covered by the decoder table, but only 936 has byte-level fixtures.
+- **`/api/oneliner/all` with a real listener.** The route, its validation and its
+  per-platform error reporting are verified against a running console, but no HTTP
+  listener was started, so no stage was actually built and published. The
+  distinct-path fix is covered by unit tests (and was confirmed by reverting it),
+  and the response shape shows the two paths, but the full two-build path is
+  unexercised.

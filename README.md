@@ -74,6 +74,22 @@ build\build-release.ps1 -ServerDir .\build\out -GOOS windows -GOARCH amd64
 
 产物在 `dist/`。
 
+**改动植入端（`sliver/implant/**`）时，必须先重跑第 1 步。** 植入体源码是
+`//go:embed` 进服务端二进制的，只重打包启动器会得到一个仍然内含旧服务端的
+启动器 —— 它生成的载荷也是旧的，而且**不会报任何错**。控制台侧改动
+（`internal/ui/**`）不受影响。
+
+验证产物（Linux，需 WSL）：
+
+```bash
+build/verify-artifact.sh dist/c2tool-linux-amd64-upx.zip
+```
+
+它会解包、启动控制台与内嵌服务端、验证鉴权门与 API（含 `/api/oneliner/all`），
+然后杀掉全部进程并清理。UPX 包尤其要跑：打包会重写加载器，坏掉的产物仍然能解压、
+大小也对，只有运行才会暴露；而 Windows 上打包时无法探测 Linux 产物，这个检查会被跳过。
+
+
 ---
 
 ## 两个版本的区别

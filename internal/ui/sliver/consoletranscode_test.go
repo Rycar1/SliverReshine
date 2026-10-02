@@ -2,6 +2,7 @@ package sliver
 
 import (
 	"bytes"
+	"sync"
 	"testing"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -221,4 +222,45 @@ func TestCodecFlushesHeldBytesOnClose(t *testing.T) {
 	if len(flushed) == 0 {
 		t.Fatal("FlushDecode dropped the held bytes; the message would lose its tail")
 	}
+}
+
+// The terminal drives Decode and Encode from two goroutines at once: the output
+// pump decodes implant bytes while the input loop encodes keystrokes. The codec
+// is safe there only because the directions share no mutable state, and that is a
+// property nobody notices breaking until a race detector runs.
+//
+// This drives both directions concurrently with multi-byte text, so a shared
+// buffer or a shared transformer shows up as a data race under -race rather than
+// as corrupted output in the field. It is not a correctness oracle -- the
+// split-point tests are -- it is the thing that fails loudly if the two
+// directions are ever coupled.
+func TestCodecIsSafeForConcurrentUse(t *testing.T) {
+	codec := newTestCodec(936)
+	if codec == nil {
+		t.Fatal("no decoder for code page 936")
+	}
+
+	const rounds = 200
+	var wg sync.WaitGroup
+
+	// Output direction.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		gbk := []byte{0xB0, 0xE6, 0xB1, 0xBE}
+		for i := 0; i < rounds; i++ {
+			codec.Decode(gbk[:i%len(gbk)+1])
+		}
+	}()
+
+	// Input direction.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < rounds; i++ {
+			codec.Encode([]byte("版本"[:i%len("版本")+1]))
+		}
+	}()
+
+	wg.Wait()
 }

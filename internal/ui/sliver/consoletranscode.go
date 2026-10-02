@@ -40,14 +40,23 @@ import (
 // and which ones would depend on where the boundary landed: a bug that appears
 // as "the output is sometimes wrong" and resists reproduction. The codec
 // therefore holds an incomplete trailing sequence until the rest arrives.
+//
+// # Concurrency
+//
+// Decode and Encode are called from different goroutines: the terminal's
+// tunnel-to-browser pump decodes, and the browser-to-tunnel input loop encodes.
+// That is safe because the two directions share no mutable state -- each has its
+// own transformer and its own pending buffer -- but the safety is structural
+// rather than enforced. Anything added here that both directions touch (a shared
+// counter, a shared buffer, a lazily-built decoder) needs a mutex, and
+// TestCodecIsSafeForConcurrentUse is what will notice.
 type ConsoleCodec struct {
 	codePage uint32
 
-	dec transform.Transformer
-	enc transform.Transformer
-
-	// pendingDec and pendingEnc hold the bytes of an incomplete multi-byte
-	// character that the next call is expected to finish.
+	// dec/enc and their pending buffers belong to one direction each. Do not
+	// move a field between the groups or share one across both.
+	dec        transform.Transformer
+	enc        transform.Transformer
 	pendingDec []byte
 	pendingEnc []byte
 }

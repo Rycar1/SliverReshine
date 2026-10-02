@@ -8,6 +8,11 @@
 build/shellcode_loader/*.exe
 build/shellcode_loader/*.bin
 /dist/
+
+# Server binaries produced by build/build-server.ps1 and consumed by
+# build/build-release.ps1 via -Server. They are ~300 MB each and reproducible
+# from the tree, so they are an intermediate rather than an artifact.
+/_servers/
 /build/out/
 /build/assets/
 /build/damaged-backup/

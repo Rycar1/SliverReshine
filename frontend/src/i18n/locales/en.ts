@@ -95,7 +95,23 @@ export default {
     total: 'total',
     noData: 'No data to chart'
   },
-  common: {
+  oneliner: {
+    title: 'One-liner delivery',
+    hint: 'Pick a listener and get a command that gets a session. The callback address, the fetch URL and the port are all derived from the listener, so they cannot disagree.',
+    listener: 'Listener',
+    platform: 'Target platform',
+    host: 'Callback host',
+    hostPlaceholder: 'Empty uses the listener address',
+    generate: 'Generate one-liner',
+    building: 'Building the stage…',
+    command: 'Run this on the target',
+    fetchUrl: 'Fetch URL',
+    callback: 'Callback',
+    builtAs: 'Stage name',
+    alternatives: 'Other delivery methods ({{count}}, same URL)',
+    noListeners: 'No listener can serve a stage yet. Start an HTTP listener above — only the HTTP family can host files.',
+    pickListener: 'Pick a listener first',
+  },  common: {
     refresh: 'Rescan',
     loading: 'Loading...',
     back: 'Back',

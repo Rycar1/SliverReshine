@@ -56,7 +56,7 @@ func TestStartListenerPassesTheDNSPort(t *testing.T) {
 	stub := &listenerStub{}
 	c := &Client{RPC: stub}
 
-	if _, err := c.StartListener("dns", "c2.example.com", 9053, false); err != nil {
+	if _, err := c.StartListener("dns", "c2.example.com", 9053, false, "", ""); err != nil {
 		t.Fatalf("StartListener: %v", err)
 	}
 	if stub.dnsReq == nil {
@@ -90,7 +90,7 @@ func TestStartListenerPassesPortsForEveryTransport(t *testing.T) {
 	for _, tc := range cases {
 		stub := &listenerStub{}
 		c := &Client{RPC: stub}
-		if _, err := c.StartListener(tc.kind, "127.0.0.1", tc.port, false); err != nil {
+		if _, err := c.StartListener(tc.kind, "127.0.0.1", tc.port, false, "", ""); err != nil {
 			t.Errorf("%s: StartListener: %v", tc.kind, err)
 			continue
 		}
@@ -104,7 +104,7 @@ func TestStartListenerPassesPortsForEveryTransport(t *testing.T) {
 // silently turned into a default listener.
 func TestStartListenerRejectsAnUnknownTransport(t *testing.T) {
 	c := &Client{RPC: &listenerStub{}}
-	if _, err := c.StartListener("carrier-pigeon", "127.0.0.1", 1, false); err == nil {
+	if _, err := c.StartListener("carrier-pigeon", "127.0.0.1", 1, false, "", ""); err == nil {
 		t.Error("an unknown transport was accepted")
 	}
 }

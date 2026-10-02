@@ -75,6 +75,8 @@ var notFoundMarkers = []string{
 	"beacon not found",
 	"implant build not found",
 	"no credentials supplied",
+	// One-liner wording for a listener that does not exist.
+	"no listener with job id",
 	// "no traffic encoder named \"x\"" and "alias \"x\" is not installed" say
 	// the same thing in the server's other idiom: the named thing is absent.
 	"no traffic encoder named",
@@ -110,6 +112,13 @@ var invalidMarkers = []string{
 	"cannot be empty",
 	"illegal base64",
 	"no profile supplied",
+	// A delivery method that does not match the requested platform, and a
+	// listener type that cannot serve a stage: both are the caller asking for
+	// something that cannot work, not the console failing.
+	"is for windows, but the target is",
+	"is for linux, but the target is",
+	"cannot serve a stage",
+	"was not started by this console",
 	"no file supplied",
 	"no data supplied",
 }

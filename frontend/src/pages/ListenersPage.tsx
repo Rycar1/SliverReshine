@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
+import OneLinerPanel from '../components/common/OneLinerPanel'
 import type { BindListener, Job } from '../lib/types'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import ContextMenu from '../components/common/ContextMenu'
@@ -175,6 +176,12 @@ export default function ListenersPage() {
           </div>
         </div>
       </div>
+
+      {/* One-liner delivery sits directly under the listener form because that
+          is the order it is used in: start a listener, then ask for a command.
+          It is a separate card rather than part of the form because it has its
+          own inputs and its own result. */}
+      <OneLinerPanel />
 
       {/* Forward (bind) listeners. Deliberately its own card rather than one
           more option in the protocol dropdown above: this is the opposite

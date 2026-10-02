@@ -95,7 +95,23 @@ export default {
     total: '总计',
     noData: '暂无数据可展示'
   },
-  common: {
+  oneliner: {
+    title: '一键上线',
+    hint: '选一个监听器，直接拿到一条能上线的命令。C2 地址、下载地址与端口都从监听器推导，三者不会对不上。',
+    listener: '监听器',
+    platform: '目标系统',
+    host: '回连地址',
+    hostPlaceholder: '留空则用监听器自身地址',
+    generate: '生成一行命令',
+    building: '正在构建载荷…',
+    command: '在目标机上执行这一行',
+    fetchUrl: '下载地址',
+    callback: '回连地址',
+    builtAs: '载荷名',
+    alternatives: '其它下载方式（{{count}} 种，同一个地址）',
+    noListeners: '还没有可用的监听器。先在上面起一个 HTTP 监听器 —— 只有 HTTP 家族能托管载荷。',
+    pickListener: '请先选择一个监听器',
+  },  common: {
     refresh: '重新扫描',
     loading: '加载中...',
     back: '返回',

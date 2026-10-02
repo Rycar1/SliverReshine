@@ -45,6 +45,39 @@ type Client struct {
 	// spawn; see exec.go for why the two RPCs are not interchangeable.
 	osMu    sync.Mutex
 	osCache map[string]string
+
+	// listenerSites records which website each HTTP listener this console started
+	// serves, keyed by job ID.
+	//
+	// It exists because Sliver does not tell us: a Job carries a name, a port and
+	// a free-text description, and no field for the website it was bound to. A
+	// stage published to one website is invisible to a listener serving another,
+	// so the delivery URL 404s while everything reports success -- the listener
+	// is up, the content is published, and the fetch fails.
+	//
+	// Only listeners started here are recorded. One started elsewhere (a previous
+	// run, the server CLI) has no entry, and the one-liner says so rather than
+	// guessing a name that would silently not match.
+	lsMu  sync.Mutex
+	lsMap map[uint32]string
+}
+
+// rememberListenerSite records which website a listener serves.
+func (c *Client) rememberListenerSite(jobID uint32, website string) {
+	c.lsMu.Lock()
+	defer c.lsMu.Unlock()
+	if c.lsMap == nil {
+		c.lsMap = map[uint32]string{}
+	}
+	c.lsMap[jobID] = website
+}
+
+// listenerSite returns the website a listener serves and whether it is known.
+func (c *Client) listenerSite(jobID uint32) (string, bool) {
+	c.lsMu.Lock()
+	defer c.lsMu.Unlock()
+	site, ok := c.lsMap[jobID]
+	return site, ok
 }
 
 // PortForwards lazily creates and returns the port-forward manager.

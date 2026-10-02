@@ -157,7 +157,14 @@ func (c *Client) Jobs() ([]JobView, error) {
 }
 
 // StartListener starts a new listener (mTLS, HTTP(S), DNS, WireGuard).
-func (c *Client) StartListener(jobType, addr string, port uint32, tls bool) (uint32, error) {
+// StartListener starts a listener.
+//
+// website and domain are only meaningful for http/https: the first is what lets
+// the listener serve files published by WebDelivery, and the second is what the
+// implant's callback URIs are built from. Both were missing, which made a
+// UI-created HTTP listener incapable of serving a stage -- the file was
+// published, the listener reported success, and every fetch returned 404.
+func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, website, domain string) (uint32, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	switch jobType {
@@ -174,6 +181,13 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool) (uin
 		req := &clientpb.HTTPListenerReq{
 			Host: addr,
 			Port: port,
+			// Website is what makes this listener able to serve hosted content.
+			// Without it Sliver accepts the listener and then answers every
+			// request for a published file with 404 -- which is how a stage
+			// delivery ended up pointing at a URL that never worked while the
+			// API reported success at every step.
+			Website: website,
+			Domain:  domain,
 		}
 		if jobType == "https" || tls {
 			req.Secure = true
@@ -182,6 +196,11 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool) (uin
 		if err != nil {
 			return 0, err
 		}
+		// Recorded so a later one-liner publishes to the same website this
+		// listener serves. Without it the stage goes to whatever default the
+		// delivery code picks, the listener cannot see it, and the fetch 404s
+		// with every step reporting success.
+		c.rememberListenerSite(resp.JobID, website)
 		return resp.JobID, nil
 	case "dns":
 		// The port has to be sent. This branch used to pass only Domains, so the

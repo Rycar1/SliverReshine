@@ -732,6 +732,48 @@ export interface TopologyEdge {
 }
 
 /** One fetch-and-run template the backend can render a one-liner for. */
+/** One listener that can serve a stage, with whether it is eligible. */
+export interface OneLinerTarget {
+  job_id: number
+  name: string
+  port: number
+  domains: string[]
+  can_stage: boolean
+}
+
+/** One command template for a stage that has already been published. */
+export interface OneLinerAlternative {
+  delivery: string
+  label: string
+  /** The platform the template is written for; "" when it works on several. */
+  platform: string
+  command: string
+}
+
+/** What the operator asked for. */
+export interface OneLinerRequest {
+  job_id: number
+  platform: string
+  /** The address the target can reach. Empty falls back to the listener's own. */
+  host?: string
+  name?: string
+  obfuscate?: boolean
+  evasion?: boolean
+  delivery?: string
+}
+
+/** The command that gets a session, plus what it points at. */
+export interface OneLinerResult {
+  command: string
+  url: string
+  platform: string
+  delivery: string
+  c2_url: string
+  job_id: number
+  staged_as: string
+  warning: string
+  alternatives: OneLinerAlternative[]
+}
 export interface WebDeliveryFormatInfo {
   id: string
   platform: string

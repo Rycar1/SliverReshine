@@ -194,6 +194,9 @@ func (s *Server) apiRoutes() []route {
 		// WebDelivery: publish a stage and hand back the one-liner that fetches it.
 		{"GET", "/api/webdelivery/formats", s.handleWebDeliveryFormats},
 		{"POST", "/api/webdelivery", s.handleWebDelivery},
+		// One-liner: turn a running listener into a command that gets a session.
+		{"GET", "/api/oneliner/targets", s.handleOneLinerTargets},
+		{"POST", "/api/oneliner", s.handleOneLiner},
 		{"GET", "/api/sessions/{id}/pivots/listeners", s.handlePivotListeners},
 		{"POST", "/api/sessions/{id}/pivots/listeners", s.handlePivotStartListener},
 		{"DELETE", "/api/sessions/{id}/pivots/listeners/{pivotID}", s.handlePivotStopListener},
@@ -766,6 +769,13 @@ func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
 		Addr string `json:"addr"`
 		Port int    `json:"port"`
 		TLS  bool   `json:"tls"`
+		// Website lets an HTTP listener serve files published by WebDelivery.
+		// It was not accepted here at all, so the field was silently dropped:
+		// the listener started, reported success, and answered 404 for every
+		// published path.
+		Website string `json:"website"`
+		// Domain is what the implant's callback URIs are built from.
+		Domain string `json:"domain"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid request body")
@@ -791,7 +801,15 @@ func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
 			port = 80
 		}
 	}
-	jobID, err := c.StartListener(req.Type, addr, port, req.TLS)
+	// An HTTP listener needs a website to serve staged content. Defaulting it
+	// here rather than requiring the operator to know the concept means
+	// "start a listener, then ask for a one-liner" produces matching names
+	// without either step having to know about the other.
+	website := req.Website
+	if website == "" && (req.Type == "http" || req.Type == "https") {
+		website = defaultDeliverySite
+	}
+	jobID, err := c.StartListener(req.Type, addr, port, req.TLS, website, req.Domain)
 	if err != nil {
 		writeClientError(w, err)
 		return

@@ -189,6 +189,14 @@
   },
   {
     "method": "GET",
+    "pattern": "/api/oneliner/targets"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/oneliner"
+  },
+  {
+    "method": "GET",
     "pattern": "/api/sessions/{id}/pivots/listeners"
   },
   {

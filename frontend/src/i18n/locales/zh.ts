@@ -558,7 +558,12 @@ export default {
     connectedMsg: '[*] 已连接到会话终端，输入 "exit" 退出。\r\n',
     disconnectedMsg: '\r\n[*] 已断开连接。',
     reconnecting: '\r\n[*] 连接已断开，正在重连…\r\n',
-    errorMsg: '\r\n[!] 连接错误。\r\n'
+    errorMsg: '\r\n[!] 连接错误。\r\n',
+    shell: 'Shell',
+    shellDefault: '默认（由植入端选择）',
+    shellHint: '默认 shell 起不来时可以换一个',
+    shellCustom: '自定义路径',
+    shellApply: '重连'
   },
   detail: {
     title: '会话',

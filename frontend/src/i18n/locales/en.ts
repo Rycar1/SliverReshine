@@ -560,7 +560,12 @@ export default {
     connectedMsg: '[*] Connected to session terminal. Type "exit" to quit.\r\n',
     disconnectedMsg: '\r\n[*] Disconnected.',
     reconnecting: '\r\n[*] Connection lost. Reconnecting…\r\n',
-    errorMsg: '\r\n[!] Connection error.\r\n'
+    errorMsg: '\r\n[!] Connection error.\r\n',
+    shell: 'Shell',
+    shellDefault: 'Default (implant chooses)',
+    shellHint: 'Try another if the default will not start',
+    shellCustom: 'Custom path',
+    shellApply: 'Reconnect'
   },
   detail: {
     title: 'Session',

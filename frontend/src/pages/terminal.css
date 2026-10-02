@@ -36,3 +36,23 @@
     min-height: 220px;
   }
 }
+
+/* Shell picker in the terminal toolbar. Inline with the badge so it reads as a
+   property of this terminal rather than a page-level setting -- it applies to
+   the connection being viewed, and switching it reconnects only this one. */
+.terminal-shell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim, #8b93a7);
+}
+
+.terminal-shell select {
+  background: var(--surface-2, #16161a);
+  color: inherit;
+  border: 1px solid var(--border, #2a2a33);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font: inherit;
+}

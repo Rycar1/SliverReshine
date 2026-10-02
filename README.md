@@ -337,6 +337,27 @@ ssh -L 8080:127.0.0.1:8080 user@host
 - **darwin / freebsd 载荷**：没有对应主机，仅验证了能构建。
 
 `build/shellcode_loader/` 提供两个用来做上述验证的小工具（含使用注意）。
+### Windows 终端的实现与限制
+
+Windows 上的「终端」**不是 PTY**，而是把 `cmd.exe` / `powershell.exe` 当
+**无控制台子进程**跑，交换匿名管道。这不是缺陷，是 Sliver 的设计取舍，但它
+决定了一类行为：
+
+| 现象 | 原因 |
+|---|---|
+| `vim` / `top` 按 80×24 渲染，宽终端里错位 | 无 PTY，尺寸无法传达（Windows 上没有可 resize 的对象） |
+| Ctrl+C 不产生中断 | 无控制台进程组可送信号 |
+| 程序关掉颜色/进度条 | 检测到 stdout 不是终端 |
+| PowerShell 可能不出提示符 | 无控制台 + 管道环境下 `[Console]` API 行为与交互式不同 |
+
+**终端页可以切换 shell**（默认 / `cmd` / `powershell` / `pwsh` / `sh` / `bash`，
+或填绝对路径）。这是排查这类问题最直接的对照实验：默认 shell 不出提示符时，
+换成 `cmd` 就能确认是不是 PowerShell 的问题。未列出的名字会被拒绝；绝对路径
+放行（便携 PowerShell、SysWOW64、加固镜像都属真实场景）。
+
+**shell 启动失败现在会报错。** 植入端本来就回传了 `Response.Err`，但控制台把它
+丢弃了 —— 症状是一个永远不出现内容、也不报错的黑色终端，与「靶机只是没输出」
+无法区分。现在原因会直接显示在终端里。
 ### 构建服务端需要先获取资产
 
 `sliver/server/assets/fs/` 下的 `*.zip` 与各平台工具链目录**未入库**（上游 gitignore，合计约 626 MB）。

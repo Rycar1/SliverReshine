@@ -61,7 +61,13 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 			// x/net/websocket defaults to text frames; the frontend reads raw
 			// binary frames (ArrayBuffer), so force binary on both directions.
 			ws.PayloadType = websocket.BinaryFrame
-			s.runTerminal(ws, c, id)
+			// The shell is chosen per connection rather than per session, so a
+			// hanging terminal can be retried with a different program without
+			// touching the session. Validated against a small allowlist: the
+			// value is interpolated into an exec on the target, and "any path"
+			// would turn a convenience into a remote-execution primitive for
+			// anyone who can reach the console.
+			s.runTerminal(ws, c, id, shellPathFor(r.URL.Query().Get("shell")))
 		},
 	}.ServeHTTP(w, r)
 }
@@ -90,6 +96,59 @@ func sameOriginHandshake(config *websocket.Config, r *http.Request) error {
 		return fmt.Errorf("cross-origin websocket refused")
 	}
 	return nil
+}
+
+// shellShortcuts maps the names an operator can put in the terminal URL onto the
+// paths an implant can execute.
+//
+// A name is offered rather than a bare path because the useful choice is "don't
+// use PowerShell", not "use C:\Windows\System32\cmd.exe" -- the operator should
+// not have to know the layout of a Windows install to work around a shell that
+// will not start.
+var shellShortcuts = map[string]string{
+	"cmd":        "C:\\Windows\\System32\\cmd.exe",
+	"powershell": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+	"pwsh":       "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+	"sh":         "/bin/sh",
+	"bash":       "/bin/bash",
+}
+
+// shellPathFor turns the ?shell= query value into a path the implant will run,
+// or "" to let the implant choose.
+//
+// An unrecognised name is refused rather than passed through. The value ends up
+// in an exec on a remote host, and while the console already offers that ability
+// through its exec and sideload endpoints, a query string that silently becomes
+// "run this program on the target" is a worse interface than one that only
+// accepts what it advertises. An absolute path is still allowed, because a shell
+// outside the usual locations is a real case -- portable PowerShell, SysWOW64,
+// a hardened image -- and refusing it would push the operator back to guessing.
+func shellPathFor(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	if p, ok := shellShortcuts[strings.ToLower(name)]; ok {
+		return p
+	}
+	if isAbsolutePath(name) {
+		return name
+	}
+	return ""
+}
+
+// isAbsolutePath reports whether p is rooted, on either platform, so a relative
+// path cannot be resolved against whatever the implant's working directory
+// happens to be.
+func isAbsolutePath(p string) bool {
+	if strings.HasPrefix(p, "/") {
+		return true
+	}
+	if len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/') {
+		return true
+	}
+	// UNC: \\server\share
+	return strings.HasPrefix(p, "\\\\")
 }
 
 // maxWSFramePayload caps an incoming client frame so a corrupt header cannot
@@ -165,7 +224,14 @@ func (r *wsFrameReader) skip(n int64) error {
 	return nil
 }
 
-func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID string) {
+// runTerminal bridges one browser terminal to one implant shell.
+//
+// shellPath is the program to run on the target, taken from the WebSocket query
+// string. Empty means the implant picks its default. It is exposed because the
+// default is not always the one that works: a Windows target whose PowerShell
+// never becomes interactive leaves the operator with a blank terminal and no way
+// to try cmd.exe, which is both the workaround and the diagnosis.
+func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, shellPath string) {
 	defer ws.Close()
 
 	tm, err := sliver.NewTunnelManager(c)
@@ -192,7 +258,7 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID str
 		}
 	}
 
-	tunnel, err := tm.StartShell(sessionID, enablePTY)
+	tunnel, err := tm.StartShell(sessionID, shellPath, enablePTY)
 	if err != nil {
 		_ = writeWS(ws, wsMsgClose, []byte("failed to start shell: "+err.Error()))
 		return
@@ -249,7 +315,28 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID str
 				Cols int `json:"cols"`
 				Rows int `json:"rows"`
 			}
-			_ = json.Unmarshal(payload, &dims)
+			if err := json.Unmarshal(payload, &dims); err != nil {
+				// A malformed resize is not worth closing the terminal over; the
+				// shell still works at whatever size it already had.
+				continue
+			}
+			// Forward it. This used to parse the frame and drop it, so a remote
+			// shell never learned the window size and full-screen programs laid
+			// themselves out for 80x24.
+			//
+			// Clamped to what the wire type holds before the conversion -- a
+			// negative or oversized value would otherwise wrap on the uint16
+			// cast and resize the terminal to nonsense.
+			if dims.Rows <= 0 || dims.Cols <= 0 {
+				continue
+			}
+			if dims.Rows > 0xffff {
+				dims.Rows = 0xffff
+			}
+			if dims.Cols > 0xffff {
+				dims.Cols = 0xffff
+			}
+			_ = tm.ResizeShell(sessionID, tunnel.ID, uint16(dims.Rows), uint16(dims.Cols))
 		case wsMsgClose:
 			_, _ = tunnel.Write([]byte("exit\n"))
 			return

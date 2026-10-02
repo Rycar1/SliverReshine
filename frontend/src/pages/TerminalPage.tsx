@@ -20,6 +20,12 @@ export default function TerminalPage() {
   const wsRef = useRef<WebSocket | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const { t } = useTranslation()
+  // Which shell to ask the implant for. Empty means "let the implant choose",
+  // which is the behaviour that existed before this control. It is offered
+  // because the default is not always the one that works -- a Windows target
+  // whose PowerShell never becomes interactive gives a blank terminal, and the
+  // only way to tell that from a quiet host is to try cmd.exe instead.
+  const [shell, setShell] = useState('')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -86,7 +92,11 @@ export default function TerminalPage() {
     const connect = () => {
       if (stopped) return
       reconnectScheduled = false
-      const ws = new WebSocket(wsUrl(`/ws/sessions/${id}/terminal`))
+      // The shell rides on the query string because it is chosen per connection,
+      // not per session: switching shells reconnects without disturbing the
+      // session or any other terminal open on it.
+      const q = shell ? `?shell=${encodeURIComponent(shell)}` : '' 
+      const ws = new WebSocket(wsUrl(`/ws/sessions/${id}/terminal${q}`))
       ws.binaryType = 'arraybuffer'
       wsRef.current = ws
       ws.onopen = () => {
@@ -138,7 +148,9 @@ export default function TerminalPage() {
       if (wsRef.current) wsRef.current.close()
       term.dispose()
     }
-  }, [id])
+    // Reconnecting on a shell change is what makes the selector useful: the
+    // effect tears down the old socket and opens a new one with the new value.
+  }, [id, shell])
 
   return (
     <div className="page page-terminal">
@@ -148,6 +160,21 @@ export default function TerminalPage() {
           <div className="page-sub">{t('terminal.session', { id })}</div>
         </div>
         <div className="toolbar">
+          <label className="terminal-shell">
+            <span>{t('terminal.shell')}</span>
+            <select
+              value={shell}
+              onChange={(e) => setShell(e.target.value)}
+              title={t('terminal.shellHint')}
+            >
+              <option value="">{t('terminal.shellDefault')}</option>
+              <option value="cmd">cmd</option>
+              <option value="powershell">powershell</option>
+              <option value="pwsh">pwsh</option>
+              <option value="sh">sh</option>
+              <option value="bash">bash</option>
+            </select>
+          </label>
           <span className={`badge ${connected ? 'green' : 'red'}`}>
             {connected ? t('terminal.connected') : t('terminal.disconnected')}
           </span>

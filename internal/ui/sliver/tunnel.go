@@ -145,8 +145,16 @@ func (tm *TunnelManager) CreateTunnel(sessionID string) (*TunnelIO, error) {
 }
 
 // StartShell creates a tunnel and binds a shell to it for the given session.
+//
 // enablePTY is only valid on linux/darwin sessions.
-func (tm *TunnelManager) StartShell(sessionID string, enablePTY bool) (*TunnelIO, error) {
+//
+// shellPath selects the program to run on the target. Empty means "let the
+// implant choose", which is what every caller used to get because the field was
+// never set. Upstream's own client exposes the same thing as --shell-path, and
+// not exposing it here meant an operator whose default shell would not start had
+// no way to try the other one -- the single most useful comparison when a
+// terminal opens and then says nothing.
+func (tm *TunnelManager) StartShell(sessionID, shellPath string, enablePTY bool) (*TunnelIO, error) {
 	tunnel, err := tm.CreateTunnel(sessionID)
 	if err != nil {
 		return nil, err
@@ -155,6 +163,7 @@ func (tm *TunnelManager) StartShell(sessionID string, enablePTY bool) (*TunnelIO
 	defer cancel()
 	shell, err := tm.client.RPC.Shell(ctx, &sliverpb.ShellReq{
 		EnablePTY: enablePTY,
+		Path:      shellPath,
 		TunnelID:  tunnel.ID,
 		Request: &commonpb.Request{
 			SessionID: sessionID,
@@ -206,6 +215,32 @@ func (tm *TunnelManager) closeAll() {
 // maxTunnelBuffer bounds the read buffer so a stalled consumer cannot grow it
 // without limit. Output beyond the cap is dropped (preferred to blocking the
 // shared tunnel stream for all tunnels).
+// ResizeShell tells the implant that the terminal changed size.
+//
+// The console has always received the browser's resize frames and thrown them
+// away -- the message type is parsed and then dropped -- so a remote shell never
+// learned the window size. Programs that care (vim, top, less, anything drawing
+// a full screen) laid themselves out for the default 80x24 and the output was
+// visibly wrong in a wide terminal.
+//
+// Only unix targets can act on it: Windows has no PTY in this implementation, and
+// the implant's resize handler is built for the pty package. Sending it anyway is
+// harmless -- the handler type-asserts and ignores what it cannot resize -- but
+// saying so here keeps the next reader from expecting Windows to reflow.
+func (tm *TunnelManager) ResizeShell(sessionID string, tunnelID uint64, rows, cols uint16) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := tm.client.RPC.ShellResize(ctx, &sliverpb.ShellResizeReq{
+		Rows:     uint32(rows),
+		Cols:     uint32(cols),
+		TunnelID: tunnelID,
+		Request: &commonpb.Request{
+			SessionID: sessionID,
+		},
+	})
+	return err
+}
+
 const maxTunnelBuffer = 8 << 20
 
 // push appends implant data to the read buffer and wakes blocked readers.

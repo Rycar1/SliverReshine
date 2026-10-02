@@ -291,22 +291,36 @@ if ($Upx) {
     # packaging step, so no archive was produced. Relax the preference and
     # judge the binary by its exit code and its output, not by which stream it
     # chose to write to.
-    $probeEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $probe = (& $binPath --help 2>&1 | Out-String)
-        $probeExit = $LASTEXITCODE
+    # The probe can only run when the target IS the host. Trying to execute a
+    # linux binary on Windows does not fail with a useful exit code: PowerShell
+    # tries to open the file as a document and throws "Cannot run a document in
+    # the middle of a pipeline" from inside this script, aborting the build
+    # before packaging -- so a perfectly good binary produced no archive at all.
+    #
+    # That is worse than skipping the check, because it reports a launcher
+    # problem when the real situation is that the launcher targets another OS.
+    $hostOs = if ($env:OS -eq 'Windows_NT') { 'windows' } elseif ($IsMacOS) { 'darwin' } else { 'linux' }
+    if ($GOOS -ne $hostOs) {
+        Write-Host "    skipping the --help probe: target is $GOOS, this host is $hostOs"
     }
-    finally {
-        $ErrorActionPreference = $probeEap
+    else {
+        $probeEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $probe = (& $binPath --help 2>&1 | Out-String)
+            $probeExit = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $probeEap
+        }
+        if ($probeExit -ne 0) {
+            throw "the packed launcher does not run (exit $probeExit); rebuild without -Upx"
+        }
+        if ($probe -notmatch 'Usage of') {
+            throw 'the packed launcher ran but printed no usage text'
+        }
+        Write-Host '    packed launcher responds to --help'
     }
-    if ($probeExit -ne 0) {
-        throw "the packed launcher does not run (exit $probeExit); rebuild without -Upx"
-    }
-    if ($probe -notmatch 'Usage of') {
-        throw 'the packed launcher ran but printed no usage text'
-    }
-    Write-Host '    packed launcher responds to --help'
 }
 
 # --- 4. package --------------------------------------------------------------

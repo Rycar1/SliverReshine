@@ -82,8 +82,23 @@ Release 里每个平台提供两个包：
 
 | 包 | 说明 |
 |---|---|
-| `*-plain.zip` | 未加壳。**推荐日常使用。** |
+| `*-plain.zip` | 未加壳。**推荐。** |
 | `*-upx.zip` | 用 [UPX](https://upx.github.io/) 加壳。 |
+
+**关于 `-upx` 包的实测结论（与预期相反）：**
+
+启动器内嵌的服务端载荷约 217 MB，**已经是 gzip 压缩过的**，UPX 和 zip 都
+压不动它。UPX 只能压到那一小段 Go 代码，而 zip 本来也会压那段。实测：
+
+```
+plain zip : 239,209,636 字节
+upx   zip : 239,227,416 字节   ← 反而大 18 KB
+```
+
+即每平台多花约 194 秒打包时间，换来一个**略大**的包，外加一层杀软特征
+（加壳本身常被启发式判为可疑），且每次启动都要在内存里自解压。
+
+所以 **`-upx` 分支不推荐使用**，保留它只为兼容和验证。
 
 
 
@@ -129,6 +144,11 @@ Release 里每个平台提供两个包：
 | `protobuf/clientpb/client.proto` | `DialBindReq` / `DialBind` |
 | `protobuf/rpcpb/services.proto` | `rpc DialBind(...)` |
 | `protobuf/**/*.pb.go` | 用 protoc 29.3 重新生成 |
+| `server/rpc/rpc-backdoor.go` | **修复** — `core.Sessions.Get` 返回 nil 后解引用，导致 server 进程崩溃 |
+| `server/rpc/rpc-tunnel.go` | **修复** — 同上的 nil 解引用（缓存重发、ToImplant 发送两处） |
+| `server/rpc/rpc-beacons.go` | **修复** — `GetBeacon` 对不存在的 ID 返回 `ErrDatabaseFailure`，改为 `ErrInvalidBeaconID` |
+| `server/generate/srdi.go` | **修复** — `is64BitDLL` 切片无长度检查，3 字节输入即可 panic |
+| `server/gogo/go.go` | **修复** — garble 环境白名单缺 `LOCALAPPDATA`，导致混淆构建必失败 |
 
 ---
 
@@ -291,7 +311,32 @@ ssh -L 8080:127.0.0.1:8080 user@host
 | bind 不支持并发会话 | 会话期间监听端口关闭 |
 | 权限维持探测留痕 | 扫描会在目标上产生约 18 个进程创建事件 |
 | 服务端资产需下载 | 见下 |
+| DNS / WireGuard 回连未验证 | 需管理员权限；见下 |
+| darwin / freebsd 载荷未运行 | 无对应主机 |
+| windows/386 shellcode 未验证 | 需 32 位宿主；见下 |
 
+### 验证到什么程度
+
+本仓库的测试分两层，二者的结论不能互相代替：
+
+| 层次 | 覆盖 | 说明了什么 |
+|---|---|---|
+| 路由扫描 | 183/183 条 API | 接线、鉴权、参数校验、错误码正确，无崩溃 |
+| 载荷回连 | 真实生成并执行 | 载荷能建立会话 |
+
+**已实测回连**：`windows/amd64` 的 exe 与 shellcode（mtls / http / https），
+`windows/386` exe，混淆与免杀开关，beacon，`linux/amd64` exe（WSL 内）。
+
+**未验证**：
+
+- **DNS 与 WireGuard 监听器**：两者都需要高于当前测试会话的权限（DNS 需要接管
+  域名解析，WireGuard 需要访问仅管理员可读的设备管道），因此仅验证了监听器
+  创建成功，**未验证端到端回连**。
+- **`windows/386` shellcode**：64 位进程不能执行 32 位代码，因此需要一个 32 位
+  宿主才能验证。这不是「测出来坏了」，而是**没法在这里测**。
+- **darwin / freebsd 载荷**：没有对应主机，仅验证了能构建。
+
+`build/shellcode_loader/` 提供两个用来做上述验证的小工具（含使用注意）。
 ### 构建服务端需要先获取资产
 
 `sliver/server/assets/fs/` 下的 `*.zip` 与各平台工具链目录**未入库**（上游 gitignore，合计约 626 MB）。

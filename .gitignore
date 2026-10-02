@@ -1,6 +1,12 @@
 # Build artifacts
 /c2tool
 /c2tool.exe
+
+# The shellcode loader and its probe are built locally by whoever needs them.
+# The sources are the deliverable; the binaries are throwaway artefacts that
+# execute arbitrary code and have no business in the history.
+build/shellcode_loader/*.exe
+build/shellcode_loader/*.bin
 /dist/
 /build/out/
 /build/assets/

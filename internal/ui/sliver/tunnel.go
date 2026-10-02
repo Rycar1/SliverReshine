@@ -3,6 +3,7 @@ package sliver
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -152,7 +153,7 @@ func (tm *TunnelManager) StartShell(sessionID string, enablePTY bool) (*TunnelIO
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	_, err = tm.client.RPC.Shell(ctx, &sliverpb.ShellReq{
+	shell, err := tm.client.RPC.Shell(ctx, &sliverpb.ShellReq{
 		EnablePTY: enablePTY,
 		TunnelID:  tunnel.ID,
 		Request: &commonpb.Request{
@@ -163,6 +164,22 @@ func (tm *TunnelManager) StartShell(sessionID string, enablePTY bool) (*TunnelIO
 		tunnel.close()
 		return nil, err
 	}
+
+	// The implant reports its own failure in Response.Err, and this used to be
+	// discarded -- the return value was assigned to "_" and only the gRPC error
+	// was checked. That error is nil whenever the call itself succeeded, which it
+	// does even when no shell was ever spawned.
+	//
+	// The result was the worst shape a failure can take: a shell that could not
+	// start produced no error anywhere. The tunnel was registered, the WebSocket
+	// stayed open, the browser printed its own "connected" banner, and the
+	// operator watched a blank terminal that would never produce output -- with
+	// nothing to distinguish it from a target that was simply quiet.
+	if errMsg := shell.GetResponse().GetErr(); errMsg != "" {
+		tunnel.close()
+		return nil, fmt.Errorf("the implant could not start a shell: %s", errMsg)
+	}
+
 	return tunnel, nil
 }
 

@@ -26,6 +26,16 @@ export default function TerminalPage() {
   // whose PowerShell never becomes interactive gives a blank terminal, and the
   // only way to tell that from a quiet host is to try cmd.exe instead.
   const [shell, setShell] = useState('')
+  // Which terminal implementation to use. They trade interaction against the
+  // number of assumptions made about the target, so the choice belongs to the
+  // operator:
+  //
+  //   shell       a real shell over a tunnel (default, best interaction)
+  //   shell-copy  the same shell copied to a temp directory first, for hosts
+  //               whose policy allows execution from temp but not System32
+  //   exec        no shell at all -- each line is run directly. Loses pipes,
+  //               redirection and builtins, but works where no shell exists
+  const [mode, setMode] = useState('shell')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -95,7 +105,11 @@ export default function TerminalPage() {
       // The shell rides on the query string because it is chosen per connection,
       // not per session: switching shells reconnects without disturbing the
       // session or any other terminal open on it.
-      const q = shell ? `?shell=${encodeURIComponent(shell)}` : '' 
+      const params = new URLSearchParams()
+      if (mode && mode !== 'shell') params.set('mode', mode)
+      if (shell) params.set('shell', shell)
+      const qs = params.toString()
+      const q = qs ? `?${qs}` : '' 
       const ws = new WebSocket(wsUrl(`/ws/sessions/${id}/terminal${q}`))
       ws.binaryType = 'arraybuffer'
       wsRef.current = ws
@@ -160,6 +174,18 @@ export default function TerminalPage() {
           <div className="page-sub">{t('terminal.session', { id })}</div>
         </div>
         <div className="toolbar">
+          <label className="terminal-shell">
+            <span>{t('terminal.mode')}</span>
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              title={t('terminal.modeHint')}
+            >
+              <option value="shell">{t('terminal.modeShell')}</option>
+              <option value="shell-copy">{t('terminal.modeShellCopy')}</option>
+              <option value="exec">{t('terminal.modeExec')}</option>
+            </select>
+          </label>
           <label className="terminal-shell">
             <span>{t('terminal.shell')}</span>
             <select

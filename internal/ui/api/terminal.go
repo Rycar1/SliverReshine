@@ -67,7 +67,9 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 			// value is interpolated into an exec on the target, and "any path"
 			// would turn a convenience into a remote-execution primitive for
 			// anyone who can reach the console.
-			s.runTerminal(ws, c, id, shellPathFor(r.URL.Query().Get("shell")))
+			mode := sliver.NormalizeTerminalMode(r.URL.Query().Get("mode"))
+			shell := shellPathFor(r.URL.Query().Get("shell"))
+			s.runTerminal(ws, c, id, shell, mode)
 		},
 	}.ServeHTTP(w, r)
 }
@@ -231,7 +233,15 @@ func (r *wsFrameReader) skip(n int64) error {
 // default is not always the one that works: a Windows target whose PowerShell
 // never becomes interactive leaves the operator with a blank terminal and no way
 // to try cmd.exe, which is both the workaround and the diagnosis.
-func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, shellPath string) {
+func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, shellPath, mode string) {
+	// exec mode uses no tunnel at all, so it never reaches the shell path below.
+	// Dispatching here rather than in the WebSocket handler keeps the two modes
+	// behind one entry point, which is where an operator expects the choice to
+	// be applied.
+	if mode == sliver.TerminalModeExec {
+		s.runExecTerminal(ws, c, sessionID)
+		return
+	}
 	defer ws.Close()
 
 	tm, err := sliver.NewTunnelManager(c)
@@ -256,6 +266,18 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 				break
 			}
 		}
+	}
+
+	// shell-copy stages a shell in the target's temp directory and runs that
+	// instead. It survives path-based policy (execution allowed from temp but
+	// not from System32) and read-only system volumes, at the cost of one
+	// upload and a leftover file on the target.
+	if mode == sliver.TerminalModeShellCopy {
+		staged, ok := s.stageShellForCopyMode(ws, c, sessionID, shellPath)
+		if !ok {
+			return
+		}
+		shellPath = staged
 	}
 
 	tunnel, err := tm.StartShell(sessionID, shellPath, enablePTY)

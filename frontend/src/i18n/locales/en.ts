@@ -565,7 +565,12 @@ export default {
     shellDefault: 'Default (implant chooses)',
     shellHint: 'Try another if the default will not start',
     shellCustom: 'Custom path',
-    shellApply: 'Reconnect'
+    shellApply: 'Reconnect',
+    mode: 'Mode',
+    modeShell: 'Shell (default)',
+    modeShellCopy: 'Shell copy (runs from temp)',
+    modeExec: 'Compat (no shell)',
+    modeHint: 'Try these when the default shell will not start; use compat in a minimal container'
   },
   detail: {
     title: 'Session',

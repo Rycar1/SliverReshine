@@ -563,7 +563,12 @@ export default {
     shellDefault: '默认（由植入端选择）',
     shellHint: '默认 shell 起不来时可以换一个',
     shellCustom: '自定义路径',
-    shellApply: '重连'
+    shellApply: '重连',
+    mode: '模式',
+    modeShell: 'Shell（默认）',
+    modeShellCopy: 'Shell 副本（复制到临时目录）',
+    modeExec: '兼容模式（不用 shell）',
+    modeHint: '默认 shell 起不来时，换下面两种；精简容器用兼容模式'
   },
   detail: {
     title: '会话',

@@ -428,6 +428,14 @@ export interface PortForward {
   Host: string
   Port: number
   SessionID: string
+  /**
+   * The most recent per-connection failure, absent when there has not been one.
+   *
+   * A forward can be listed while every connection through it fails. Without
+   * this field the table showed a healthy row and the only evidence of the
+   * problem was a browser tab that never loaded.
+   */
+  LastConnErr?: string
 }
 
 export interface BeaconTask {

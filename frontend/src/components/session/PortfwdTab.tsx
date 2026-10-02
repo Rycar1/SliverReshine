@@ -169,13 +169,14 @@ export default function PortfwdTab({ sessionId }: { sessionId: string }) {
               <th>{t('portfwd.local')}</th>
               <th>{t('portfwd.remote')}</th>
               <th>{t('portfwd.session')}</th>
+              <th>{t('portfwd.status')}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {forwards.length === 0 && (
               <tr>
-                <td colSpan={4} className="empty">
+                <td colSpan={5} className="empty">
                   {t('portfwd.empty')}
                 </td>
               </tr>
@@ -185,6 +186,13 @@ export default function PortfwdTab({ sessionId }: { sessionId: string }) {
                 <td className="mono">{`${f.LocalAddr}:${f.LocalPort}`}</td>
                 <td className="mono">{`${f.Host}:${f.Port}`}</td>
                 <td className="mono">{f.SessionID.slice(0, 12)}</td>
+                <td className="mono" title={f.LastConnErr ?? undefined}>
+                  {f.LastConnErr ? (
+                    <span className="text-danger">{t('portfwd.failing')}</span>
+                  ) : (
+                    t('portfwd.listening')
+                  )}
+                </td>
                 <td>
                   <button type="button" className="btn sm danger" onClick={() => stop(f.LocalPort)}>
                     {t('portfwd.stop')}

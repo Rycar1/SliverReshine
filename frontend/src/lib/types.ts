@@ -782,6 +782,26 @@ export interface OneLinerResult {
   warning: string
   alternatives: OneLinerAlternative[]
 }
+
+/**
+ * One platform's result from a multi-platform build.
+ *
+ * Unlike OneLinerResult this carries a per-platform error, because building for
+ * several platforms is not all-or-nothing: a Windows build failing says nothing
+ * about the Linux one, and the operator should keep whichever succeeded.
+ */
+export interface MultiOneLinerResult {
+  command: string
+  platform: string
+  url: string
+  delivery: string
+  staged_as: string
+  /** Where the stage was published; differs per platform by design. */
+  path: string
+  alternatives: OneLinerAlternative[]
+  /** Set when this platform could not be built. Empty on success. */
+  error?: string
+}
 export interface WebDeliveryFormatInfo {
   id: string
   platform: string

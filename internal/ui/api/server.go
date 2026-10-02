@@ -197,6 +197,10 @@ func (s *Server) apiRoutes() []route {
 		// One-liner: turn a running listener into a command that gets a session.
 		{"GET", "/api/oneliner/targets", s.handleOneLinerTargets},
 		{"POST", "/api/oneliner", s.handleOneLiner},
+		// Builds for several platforms at once. Separate from /api/oneliner
+		// because it is materially more expensive -- one implant build per
+		// platform -- and a caller should have to ask for that.
+		{"POST", "/api/oneliner/all", s.handleOneLinerAll},
 		{"GET", "/api/sessions/{id}/pivots/listeners", s.handlePivotListeners},
 		{"POST", "/api/sessions/{id}/pivots/listeners", s.handlePivotStartListener},
 		{"DELETE", "/api/sessions/{id}/pivots/listeners/{pivotID}", s.handlePivotStopListener},

@@ -35,6 +35,7 @@ import type {
 	OneLinerRequest,
 	OneLinerResult,
 	OneLinerTarget,
+	MultiOneLinerResult,
   WebDeliveryResult,
   SSHCommandResult,
   CallExtensionResult,
@@ -1029,6 +1030,18 @@ export const api = {
 	 */
 	oneLiner: (req: OneLinerRequest) =>
 		request<OneLinerResult>('/oneliner', {
+			method: 'POST',
+			body: JSON.stringify(req),
+		}),
+
+	/**
+	 * Build a stage for several platforms in one request.
+	 *
+	 * One implant build per platform, so this is materially slower than
+	 * oneLiner; ask for it only when the commands are needed together.
+	 */
+	oneLinerAll: (req: Omit<OneLinerRequest, 'platform'> & { platforms?: string[] }) =>
+		request<{ results: MultiOneLinerResult[] }>('/oneliner/all', {
 			method: 'POST',
 			body: JSON.stringify(req),
 		}),

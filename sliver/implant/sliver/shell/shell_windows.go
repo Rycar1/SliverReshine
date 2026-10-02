@@ -39,31 +39,36 @@ var (
 	//
 	//   -NoLogo  suppresses the banner, which some builds write slowly enough
 	//            that the terminal looks dead for seconds.
-	//   -NoExit  keeps the shell alive after -Command finishes. Without it the
-	//            command runs and PowerShell exits, so the terminal closes as
-	//            soon as it opens.
+	//   -NoExit  keeps the shell alive. Without it a shell that reads one line
+	//            and finishes exits immediately, so the terminal closes as soon
+	//            as it opens.
 	//   Bypass   avoids a policy prompt that a piped, console-less process
 	//            cannot answer -- it would simply block forever.
-	//   try/catch
-	//            [Console]::OutputEncoding is a property setter, and in some
-	//            older PowerShell builds it throws when the console handle is a
-	//            pipe. An uncaught exception inside -Command is a plausible way
-	//            for an older host to end up not interactive at all, and
-	//            swallowing it costs nothing: the output encoding stays at the
-	//            default, so only the glyphs suffer.
 	//
-	// The try/catch is defensive, not diagnosed. It was added after a Windows 8
-	// target produced no terminal output while Windows 10 worked, and the flag
-	// set was the only difference between this and the cmd.exe that was never
-	// tried.
+	// There used to be a fourth: a -Command prologue that set
+	// [Console]::OutputEncoding to UTF-8, wrapped in try/catch because the setter
+	// throws in some builds when the console handle is a pipe. It was added after
+	// a Windows 8 target produced no terminal output at all while Windows 10
+	// worked, and the comment recording that never claimed to have diagnosed it.
+	//
+	// It is gone because it was both the suspect and unnecessary.
+	//
+	// The suspect: assigning [Console]::OutputEncoding recreates the console
+	// output stream. With no console -- which is exactly this case, a piped
+	// process started with CREATE_NO_WINDOW -- that is a documented way to lose
+	// output entirely, and a Windows 8.1 target is still reported silent with the
+	// prologue present.
+	//
+	// Unnecessary: the console now transcodes the target's OEM code page itself
+	// (see ConsoleCodec), so a shell does not have to be talked into emitting
+	// UTF-8. Leaving the prologue in would actively fight that: PowerShell would
+	// emit UTF-8 while the console decoded it as GBK, turning readable text into
+	// mojibake in the opposite direction.
 	powerShell = []string{
 		"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 		"-NoLogo",
 		"-NoExit",
 		"-ExecutionPolicy", "Bypass",
-		"-Command",
-		"try { [Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8 } catch { }; " +
-			"try { $OutputEncoding = [Text.UTF8Encoding]::UTF8 } catch { }",
 	}
 )
 

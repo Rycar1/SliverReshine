@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"c2tool/internal/ui/sliver"
 )
@@ -66,4 +68,56 @@ func (s *Server) handleOneLinerTargets(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"targets": targets})
+}
+
+// handleOneLinerAll builds a stage for several platforms in one request.
+//
+// The per-listener button needs the Windows and the Linux command together, and
+// that is two implant builds. Asking for them one at a time from the browser
+// would mean two round trips, two sequential build waits, and a half-populated
+// dialog in between -- and if the second failed the operator would be left
+// looking at a Windows command with no indication that Linux was still coming or
+// had already failed.
+//
+// Platforms are taken from the body rather than hardcoded, but default to
+// Windows and Linux, which is what the button offers.
+func (s *Server) handleOneLinerAll(w http.ResponseWriter, r *http.Request) {
+	c := s.requireClient(w)
+	if c == nil {
+		return
+	}
+
+	var req struct {
+		sliver.OneLinerRequest
+		Platforms []string `json:"platforms"`
+	}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if req.JobID == 0 {
+		writeErr(w, http.StatusBadRequest, "job_id is required")
+		return
+	}
+
+	// An unknown platform name is refused before any build starts, so a typo
+	// does not cost two implant builds and then report nothing usable.
+	var platforms []sliver.OneLinerPlatform
+	for _, p := range req.Platforms {
+		candidate := sliver.OneLinerPlatform(strings.ToLower(strings.TrimSpace(p)))
+		switch candidate {
+		case sliver.OneLinerWindows, sliver.OneLinerLinux, sliver.OneLinerDarwin:
+			platforms = append(platforms, candidate)
+		default:
+			writeErr(w, http.StatusBadRequest, "unsupported platform "+strconv.Quote(p))
+			return
+		}
+	}
+
+	results := c.OneLinerAll(req.OneLinerRequest, platforms)
+
+	// Partial success is the normal failure shape here, so the response is always
+	// 200 with per-platform errors: the frontend renders whatever succeeded and
+	// shows why the rest did not. Failing the whole request would hide a working
+	// command behind a non-2xx.
+	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }

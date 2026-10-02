@@ -358,6 +358,34 @@ Windows 与 Linux 各一套模板，另有 certutil / BITS / Python 等备选，
 
 只有 HTTP 家族的监听器能托管载荷（mTLS / DNS / WireGuard 无法用命令行抓取），
 所以面板只列出可用的那些。
+
+**监听器列表每行也有「上线命令」按钮**，直接为该监听器生成 Windows + Linux 两条
+命令，不用再回到面板下拉选。两个平台**各自发布到不同路径**
+（`/stage-windows.woff` / `/stage-linux.woff`）—— Sliver 默认路径是单个名字，
+两条都发到同一路径时第二个会**静默覆盖**第一个，你拿到的两条命令里有一条会跑到
+另一个平台的载荷上去。
+
+两个构建并发进行（耗时约等于一个），失败**逐平台报告**：Windows 构失败不影响
+拿 Linux 的命令。
+### Windows 终端的编码
+
+Windows 上无控制台的 shell 按**控制台代码页**（中文系统是 936）读写，浏览器用
+UTF-8。**这两个方向都要转码**，否则：
+
+- 输出：`Microsoft Windows [版本 6.3.9600]` 变成 `[汾 6.3.9600]` —— 文本被**破坏**，
+  不是难看而已（GBK 字节按 UTF-8 解出来的字符无法还原）
+- 输入：你输入中文路径，shell 收到两三个无关字符，于是「文件名不存在」
+
+转码在控制台侧完成（`ConsoleCodec`），**流式**处理：GBK 是多字节编码，而 tunnel 的
+读取边界可能落在字符中间，逐块解码会破坏这些字符，且**坏哪些取决于读边界落在哪** ——
+属于「有时输出是错的」这类极难复现的问题。
+
+**不逐字符回显是刻意的。** 无控制台的 `cmd.exe` 不回显按键，但**会回显读到的整行**，
+所以再加本地回显会得到 `C:\>whoamiwhoami` —— 看起来像另一条命令。真正的修法是
+PTY（ConPTY，Windows 10 1809+），Windows 8.1 没有。
+
+详细分析见 [`docs/windows-terminal-encoding.md`](docs/windows-terminal-encoding.md)。
+
 ### Windows 终端的实现与限制
 
 Windows 上的「终端」**不是 PTY**，而是把 `cmd.exe` / `powershell.exe` 当
@@ -370,6 +398,7 @@ Windows 上的「终端」**不是 PTY**，而是把 `cmd.exe` / `powershell.exe
 | Ctrl+C 不产生中断 | 无控制台进程组可送信号 |
 | 程序关掉颜色/进度条 | 检测到 stdout 不是终端 |
 | PowerShell 可能不出提示符 | 无控制台 + 管道环境下 `[Console]` API 行为与交互式不同 |
+| 输入时不回显，按回车才整行出现 | 无控制台，shell 不逐字符回显；它只在读到整行后回显一次 |
 
 **终端页有三种模式**，按「对目标做的假设」从多到少排列：
 

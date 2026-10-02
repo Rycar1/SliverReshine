@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { wsUrl } from '../lib/api'
-import { encodeFrame, decodeFrame, WS_MSG_DATA, WS_MSG_RESIZE, WS_MSG_CLOSE } from '../lib/terminal'
+import { encodeFrame, decodeFrame, WS_MSG_DATA, WS_MSG_RESIZE, WS_MSG_CLOSE, WS_MSG_FATAL } from '../lib/terminal'
 import './pages.css'
 import './terminal.css'
 
@@ -68,6 +68,9 @@ export default function TerminalPage() {
     let stopped = false
     let attempts = 0
     let reconnectScheduled = false
+    // Set when the server reported a fatal end. The socket close that follows
+    // must not be read as a dropped connection, or the terminal reopens.
+    let finished = false
     let reconnectTimer: number | undefined
 
     const sendResize = () => {
@@ -90,7 +93,7 @@ export default function TerminalPage() {
     }
 
     const scheduleReconnect = () => {
-      if (stopped || reconnectScheduled) return
+      if (stopped || finished || reconnectScheduled) return
       reconnectScheduled = true
       setConnected(false)
       const delay = Math.min(RECONNECT_BASE_MS * 2 ** attempts, RECONNECT_MAX_MS)
@@ -100,7 +103,7 @@ export default function TerminalPage() {
     }
 
     const connect = () => {
-      if (stopped) return
+      if (stopped || finished) return
       reconnectScheduled = false
       // The shell rides on the query string because it is chosen per connection,
       // not per session: switching shells reconnects without disturbing the
@@ -126,6 +129,16 @@ export default function TerminalPage() {
         if (!frame) return
         if (frame.type === WS_MSG_DATA) {
           term.write(frame.payload)
+        } else if (frame.type === WS_MSG_FATAL) {
+          // The server said this terminal cannot continue. Print why, mark the
+          // terminal as finished and stop: reconnecting would re-send the same
+          // request and fail the same way.
+          if (frame.payload.length > 0) {
+            term.writeln(new TextDecoder().decode(frame.payload))
+          }
+          term.writeln(t('terminal.endedMsg'))
+          finished = true
+          setConnected(false)
         } else if (frame.type === WS_MSG_CLOSE) {
           if (frame.payload.length > 0) {
             term.writeln(new TextDecoder().decode(frame.payload))
@@ -134,7 +147,7 @@ export default function TerminalPage() {
         }
       }
       ws.onclose = () => {
-        if (stopped) return
+        if (stopped || finished) return
         scheduleReconnect()
       }
       ws.onerror = () => {
@@ -162,9 +175,12 @@ export default function TerminalPage() {
       if (wsRef.current) wsRef.current.close()
       term.dispose()
     }
-    // Reconnecting on a shell change is what makes the selector useful: the
-    // effect tears down the old socket and opens a new one with the new value.
-  }, [id, shell])
+    // `mode` belongs here as much as `shell` does. Both are sent as query
+    // parameters on connect, so changing the mode has to open a new socket; it
+    // was missing from the list, which meant selecting shell-copy or exec left
+    // the running shell connection in place and the choice had no effect until
+    // something else forced a reconnect.
+  }, [id, shell, mode])
 
   return (
     <div className="page page-terminal">

@@ -97,7 +97,10 @@ func (s *Server) runExecTerminal(ws *websocket.Conn, c *sliver.Client, sessionID
 					}
 					res := c.RunExecLine(sessionID, cmdLine, &cwd)
 					if sliver.IsExecExit(res) {
-						_ = writeWS(ws, wsMsgClose, []byte("[*] exit\r\n"))
+						// Fatal: the operator asked to leave. Sending a plain close made
+						// the browser treat "exit" as a dropped connection and reopen the
+						// terminal, so the only way out was to close the tab.
+						_ = writeWS(ws, wsMsgFatal, []byte("[*] exit\r\n"))
 						return
 					}
 					_ = writeWS(ws, wsMsgData, []byte(formatExecResult(res)))
@@ -191,10 +194,17 @@ func (s *Server) stageShellForCopyMode(ws *websocket.Conn, c *sliver.Client, ses
 			"[*] copied %s -> %s (%d bytes)\r\n\r\n", res.Source, res.Path, res.Bytes)))
 		return res.Path, true
 	case err := <-failed:
-		_ = writeWS(ws, wsMsgClose, []byte("shell-copy failed: "+err.Error()))
+		// Fatal, not retryable: this failure comes from the target refusing the
+		// upload, and a reconnect re-runs the same upload against the same
+		// target. Reporting it as a plain close is what produced an endless
+		// reconnect loop that re-attempted a copy which could never succeed.
+		_ = writeWS(ws, wsMsgFatal, []byte("shell-copy failed: "+err.Error()))
 		return "", false
 	case <-time.After(3 * time.Minute):
-		_ = writeWS(ws, wsMsgClose, []byte("shell-copy timed out while staging the shell"))
+		// Fatal as well. A timeout is not obviously deterministic, but it has
+		// already consumed three minutes; retrying silently restarts that clock
+		// and leaves the operator with a terminal that never resolves.
+		_ = writeWS(ws, wsMsgFatal, []byte("shell-copy timed out while staging the shell"))
 		return "", false
 	}
 }

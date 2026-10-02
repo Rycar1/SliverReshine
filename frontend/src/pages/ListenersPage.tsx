@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
 import OneLinerPanel from '../components/common/OneLinerPanel'
+import OneLinerDialog from '../components/common/OneLinerDialog'
 import type { BindListener, Job } from '../lib/types'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import ContextMenu from '../components/common/ContextMenu'
@@ -19,6 +20,9 @@ export default function ListenersPage() {
   const [stopping, setStopping] = useState<Job | null>(null)
   const [busy, setBusy] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; job: Job } | null>(null)
+  // The listener whose staging commands are being shown. The row is the
+  // selection, so this is a Job rather than an id.
+  const [commandFor, setCommandFor] = useState<Job | null>(null)
   // Forward (bind) listeners. They are tracked separately from `jobs` because
   // they are the opposite direction: the server dials out, so there is no local
   // port and no protocol to choose — only a target to reach.
@@ -57,6 +61,14 @@ export default function ListenersPage() {
     const nothingLoaded =
       jobsRes.status === 'rejected' && bindsRes.status === 'rejected'
     setError(nothingLoaded && failure ? (failure as Error).message : '')
+  }
+
+  // canStage mirrors the server's JobServesStage. It is only used to decide
+  // whether the button is enabled, so a mismatch shows as a clear error from the
+  // dialog rather than silently producing a command that cannot work.
+  const canStage = (j: Job) => {
+    const name = (j.Name || '').toLowerCase()
+    return name === 'http' || name === 'https'
   }
 
   useEffect(() => {
@@ -284,11 +296,22 @@ export default function ListenersPage() {
                 </td>
                 <td className="mono">{j.Port}</td>
                 <td className="mono">{j.Domains?.join(', ') || '-'}</td>
-                <td>
-                  <button type="button" className="btn sm danger" onClick={() => setStopping(j)}>
-                    {t('listeners.stop')}
-                  </button>
-                </td>
+				<td>
+					{/* Only the HTTP family can serve a stage, so the button is offered for
+					    those and disabled for the rest rather than failing after a click. */}
+					<button
+						type="button"
+						className="btn sm"
+						disabled={!canStage(j)}
+						title={canStage(j) ? t('oneliner.rowButtonHint') : t('oneliner.notStageable', { name: j.Name })}
+						onClick={() => setCommandFor(j)}
+					>
+						{t('oneliner.rowButton')}
+					</button>{' '}
+					<button type="button" className="btn sm danger" onClick={() => setStopping(j)}>
+						{t('listeners.stop')}
+					</button>
+				</td>
               </tr>
             ))}
           </tbody>
@@ -299,13 +322,17 @@ export default function ListenersPage() {
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
-          items={[
-            {
-              label: t('listeners.stop'),
-              danger: true,
-              onSelect: () => setStopping(menu.job),
-            },
-          ]}
+			items={[
+				{
+					label: t('oneliner.rowButton'),
+					onSelect: () => setCommandFor(menu.job),
+				},
+				{
+					label: t('listeners.stop'),
+					danger: true,
+					onSelect: () => setStopping(menu.job),
+				},
+			]}
         />
       )}
       <ConfirmDialog
@@ -322,7 +349,12 @@ export default function ListenersPage() {
             ? t('jobs.confirmStopBody', { name: stopping.Name || stopping.Protocol, id: stopping.ID })
             : ''}
         </p>
-      </ConfirmDialog>
-    </div>
+		</ConfirmDialog>
+
+		{/* Mounted once and driven by which row was clicked, rather than one
+		    dialog per row: the table re-renders every 3 seconds, and a dialog per
+		    row would rebuild all of them on each poll. */}
+		<OneLinerDialog job={commandFor} onClose={() => setCommandFor(null)} />
+		</div>
   )
 }

@@ -111,7 +111,18 @@ export default {
     alternatives: 'Other delivery methods ({{count}}, same URL)',
     noListeners: 'No listener can serve a stage yet. Start an HTTP listener above — only the HTTP family can host files.',
     pickListener: 'Pick a listener first',
-  },  common: {
+    rowButton: 'Staging command',
+    rowButtonHint: 'Get the Windows and Linux one-liners for this listener',
+    notStageable: 'A {{name}} listener cannot serve a stage. Only the HTTP family can host files.',
+    dialogTitle: 'Staging commands',
+    dialogHint:
+      'Builds an implant for each platform and publishes it to this listener. Two builds run at once, so this takes about as long as one.',
+    dialogGenerate: 'Build Windows and Linux commands',
+    dialogBuilding: 'Building the stages\u2026 this can take a minute.',
+    dialogDetails: 'Fetch URLs',
+    dialogRebuild: 'Rebuild',
+  },
+  common: {
     refresh: 'Rescan',
     loading: 'Loading...',
     back: 'Back',
@@ -577,6 +588,7 @@ export default {
     disconnectedMsg: '\r\n[*] Disconnected.',
     reconnecting: '\r\n[*] Connection lost. Reconnecting…\r\n',
     errorMsg: '\r\n[!] Connection error.\r\n',
+    endedMsg: '\r\n[*] This terminal has ended.',
     shell: 'Shell',
     shellDefault: 'Default (implant chooses)',
     shellHint: 'Try another if the default will not start',

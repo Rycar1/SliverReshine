@@ -196,6 +196,10 @@
     "pattern": "/api/oneliner"
   },
   {
+    "method": "POST",
+    "pattern": "/api/oneliner/all"
+  },
+  {
     "method": "GET",
     "pattern": "/api/sessions/{id}/pivots/listeners"
   },

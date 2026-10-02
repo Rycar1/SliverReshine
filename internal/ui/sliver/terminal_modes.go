@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -112,7 +111,7 @@ func (c *Client) StageShellForSession(sessionID, shellPath string) (*TempShellRe
 			continue
 		}
 
-		dst := joinRemote(tempDir, filepath.Base(src))
+		dst := joinRemote(tempDir, remoteBase(src))
 		if err := c.Upload(sessionID, dst, data); err != nil {
 			tried = append(tried, fmt.Sprintf("%s -> %s (%v)", src, dst, err))
 			continue
@@ -206,6 +205,31 @@ func joinRemote(dir, name string) string {
 		return strings.TrimRight(dir, `\/`) + `\` + name
 	}
 	return path.Join(dir, name)
+}
+
+// remoteBase returns the last element of a path as the TARGET would read it.
+//
+// This is filepath.Base's twin, and it exists for the same reason joinRemote
+// exists: filepath.Base applies the *console's* separator rules. On a Linux
+// console it sees no separator at all in `C:\Windows\System32\cmd.exe`,
+// because backslash is an ordinary filename character there, and returns the
+// whole string. The upload target then became:
+//
+//	C:\Users\Rycar\AppData\Local\Temp\C:\Windows\System32\cmd.exe
+//
+// which the implant refuses with "The filename, directory name, or volume label
+// syntax is incorrect" -- the shell-copy mode failed for every candidate, on
+// every Windows target, whenever the console ran on Linux or macOS.
+//
+// Both separators are honoured rather than just the target's: the path comes
+// from the candidate list, so a console on Windows copying to a unix target
+// must still split on "/". Taking the last element after either separator is
+// correct in both directions, and a name containing neither is returned as is.
+func remoteBase(p string) string {
+	if i := strings.LastIndexAny(p, `\/`); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 // sessionInfo is the small slice of session metadata this file needs.

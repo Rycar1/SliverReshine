@@ -208,6 +208,67 @@ func TestJoinRemoteUsesTheTargetSeparator(t *testing.T) {
 	}
 }
 
+// remoteBase is what turns a shell path into an upload filename, and it must
+// not consult the console's separator rules.
+//
+// filepath.Base was used here. On a Linux console it finds no separator in
+// `C:\Windows\System32\cmd.exe` -- backslash is an ordinary filename
+// character there -- and returns the path unchanged, so the upload destination
+// became `<temp>\C:\Windows\System32\cmd.exe` and the implant rejected every
+// candidate. shell-copy was therefore broken for every Windows target whenever
+// the console ran on Linux or macOS, which is the normal deployment.
+//
+// The test asserts the property, not the platform: these expectations hold on
+// any host, which is the whole point. A regression to filepath.Base passes on a
+// Windows console and fails here, so CI on either OS catches it.
+func TestRemoteBaseIgnoresTheConsoleSeparator(t *testing.T) {
+	cases := map[string]string{
+		// Windows paths, as the candidate list writes them.
+		`C:\Windows\System32\cmd.exe`:                               "cmd.exe",
+		`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`: "powershell.exe",
+		`C:\Windows\SysWOW64\cmd.exe`:                               "cmd.exe",
+		// Unix paths, including the ones a Windows console would have to split.
+		"/bin/sh":       "sh",
+		"/usr/bin/bash": "bash",
+		"/busybox":      "busybox",
+		// Mixed, which is what a cross-platform candidate list can produce.
+		`C:\Tools/sh.exe`: "sh.exe",
+		// A bare name has no separator to strip.
+		"cmd.exe": "cmd.exe",
+	}
+
+	for in, want := range cases {
+		if got := remoteBase(in); got != want {
+			t.Errorf("remoteBase(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The two halves have to agree: whatever remoteBase returns, joining it onto a
+// temp directory must produce a path with exactly one separator between them.
+// This is the property the implant's CreateFile enforces, stated directly.
+func TestRemoteBaseFeedsJoinRemoteCleanly(t *testing.T) {
+	cases := []struct {
+		src, tempDir, want string
+	}{
+		{`C:\Windows\System32\cmd.exe`, `C:\Users\x\AppData\Local\Temp`, `C:\Users\x\AppData\Local\Temp\cmd.exe`},
+		{`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, `C:\Windows\Temp`, `C:\Windows\Temp\powershell.exe`},
+		{"/bin/sh", "/tmp", "/tmp/sh"},
+	}
+
+	for _, c := range cases {
+		got := joinRemote(c.tempDir, remoteBase(c.src))
+		if got != c.want {
+			t.Errorf("joinRemote(%q, remoteBase(%q)) = %q, want %q", c.tempDir, c.src, got, c.want)
+		}
+		// The bug produced a path with a drive letter after a separator, which is
+		// exactly what the implant reports as a syntax error.
+		if strings.Contains(strings.TrimPrefix(got, c.tempDir), `:\`) {
+			t.Errorf("staged path embeds a second absolute path: %q", got)
+		}
+	}
+}
+
 // The candidate list decides what gets copied. An explicit request has to win,
 // or the operator's choice is silently ignored.
 func TestShellCandidatesForRespectsAnExplicitRequest(t *testing.T) {

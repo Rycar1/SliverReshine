@@ -17,6 +17,19 @@ const (
 	wsMsgData   = uint8(0x01)
 	wsMsgResize = uint8(0x02)
 	wsMsgClose  = uint8(0x03)
+
+	// wsMsgFatal ends the terminal for good: the server decided it cannot
+	// continue and reconnecting would reproduce the same failure.
+	//
+	// wsMsgClose and wsMsgFatal are not interchangeable, and collapsing them
+	// into one type is what made the browser loop. The client treats a close as
+	// "the connection dropped, try again", which is right for a session that
+	// went away and wrong for a terminal the server refused to open at all: a
+	// failed shell-copy was retried every few seconds forever, re-running the
+	// same upload that had just failed, while the operator watched a terminal
+	// that appeared to be reconnecting to something. The operator typing "exit"
+	// took the same path, so leaving a terminal also reconnected it.
+	wsMsgFatal = uint8(0x04)
 )
 
 // handleTerminalWS upgrades the HTTP connection to a WebSocket and bridges it
@@ -246,6 +259,9 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 
 	tm, err := sliver.NewTunnelManager(c)
 	if err != nil {
+		// Retryable: this is the console failing to establish its gRPC stream to
+		// the server, which is often transient (the server is restarting, or
+		// briefly busy). Reconnecting is the right response.
 		_ = writeWS(ws, wsMsgClose, []byte("failed to open tunnel stream: "+err.Error()))
 		return
 	}
@@ -282,9 +298,43 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 
 	tunnel, err := tm.StartShell(sessionID, shellPath, enablePTY)
 	if err != nil {
-		_ = writeWS(ws, wsMsgClose, []byte("failed to start shell: "+err.Error()))
+		// Deterministic: the target refused this shell. Reconnecting re-sends the
+		// identical request and fails identically, so the terminal ends here
+		// instead of starting a retry loop.
+		_ = writeWS(ws, wsMsgFatal, []byte("failed to start shell: "+err.Error()))
 		return
 	}
+
+	// The console codec transcodes between the target's OEM code page and UTF-8.
+	//
+	// A Windows shell spawned without a console writes its OEM code page -- 936
+	// on a Chinese install -- while the browser reads UTF-8, so passing the bytes
+	// through is what produced "Microsoft Windows [汾 6.3.9600]" from
+	// "Microsoft Windows [版本 6.3.9600]". Exec mode already decoded its output;
+	// the shell tunnel did not, so the same target read correctly in one mode and
+	// as mojibake in the other. It is nil for a target that needs no transcoding,
+	// and every method tolerates that.
+	codec := c.NewConsoleCodec(sessionID)
+
+	// No local echo, deliberately.
+	//
+	// Typing looks dead until Enter, which is worth explaining because the
+	// obvious fix is wrong. A console-less cmd.exe does not echo keystrokes --
+	// there is no console to do it -- but it DOES echo the completed line once it
+	// reads it, right after the prompt. Echoing locally as well therefore prints
+	// the command twice on one line:
+	//
+	//	C:\>whoamiwhoami
+	//
+	// which reads as a different command than the one that ran. Leaving the echo
+	// to the shell is the lesser evil, and it is what the operator sees today.
+	//
+	// The real fix is a console, not an echo: ConPTY gives Windows a PTY and
+	// Windows 10 1809+ has it. Windows 8.1 does not, and neither does anything
+	// older, so on those targets the shell reads from a pipe and the choice is
+	// between a delayed echo and a doubled one.
+	//
+	// A unix session is unaffected: its PTY echoes as the operator types.
 
 	// Tunnel -> WS: forward implant output to the browser.
 	go func() {
@@ -292,8 +342,11 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 		for {
 			n, err := tunnel.Read(buf)
 			if n > 0 {
-				if werr := writeWS(ws, wsMsgData, buf[:n]); werr != nil {
-					return
+				out := codec.Decode(buf[:n])
+				if len(out) > 0 {
+					if werr := writeWS(ws, wsMsgData, out); werr != nil {
+						return
+					}
 				}
 			}
 			if err != nil {
@@ -367,7 +420,12 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 				if windowsSession {
 					payload = translateBackspace(normalizeCRLF(payload))
 				}
-				_, _ = tunnel.Write(payload)
+				// UTF-8 from the browser into the target's code page. Without
+				// this a non-ASCII character is sent as UTF-8 bytes that the
+				// shell reads as two or three unrelated OEM characters, so a
+				// path or a filename the operator typed correctly names
+				// something that does not exist.
+				_, _ = tunnel.Write(codec.Encode(payload))
 			}
 		}
 	}

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go (fmt / vet / build / test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # 只校验自有包；sliver/ 是内置 fork，格式风格随上游，不纳入门禁。
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l ./cmd ./internal ./tools ./web)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::以下文件未通过 gofmt，请运行 gofmt -w："
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./internal/... ./cmd/... ./web/... ./tools/...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -count=1 ./internal/... ./tools/...
+
+  frontend:
+    name: Frontend (tsc / vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      - name: typecheck
+        run: npx tsc --noEmit
+
+      - name: unit tests
+        run: npm test

@@ -15,7 +15,9 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -197,6 +199,12 @@ func Save(home string, cfg Config) error {
 // decode parses the file strictly: an unknown key is a typo, and a typo in a
 // settings file that controls the listen address and the login is worth failing
 // on rather than ignoring.
+// Strictness covers trailing content too. DisallowUnknownFields governs only the
+// keys inside the object it decodes, so a stray brace after the object, or a
+// second JSON document, was silently accepted: the first document was applied and
+// everything after it discarded with no error. An operator editing this file could
+// therefore break it and be told nothing is wrong -- the exact outcome this
+// function exists to prevent.
 func decode(raw []byte) (Config, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
@@ -204,6 +212,15 @@ func decode(raw []byte) (Config, error) {
 	cfg := Default()
 	if err := dec.Decode(&cfg); err != nil {
 		return Config{}, err
+	}
+
+	// Anything left must be whitespace. A second Decode returns io.EOF when the
+	// input is exhausted, which is the only acceptable outcome.
+	if err := dec.Decode(new(json.RawMessage)); err != io.EOF {
+		if err == nil {
+			return Config{}, errors.New("settings file contains more than one JSON document")
+		}
+		return Config{}, fmt.Errorf("unexpected content after the settings object: %w", err)
 	}
 	return cfg, nil
 }

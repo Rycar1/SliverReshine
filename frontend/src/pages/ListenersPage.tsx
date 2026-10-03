@@ -63,10 +63,12 @@ export default function ListenersPage() {
     setError(nothingLoaded && failure ? (failure as Error).message : '')
   }
 
-  // canStage mirrors the server's JobServesStage. It is only used to decide
-  // whether the button is enabled, so a mismatch shows as a clear error from the
-  // dialog rather than silently producing a command that cannot work.
+  // canStage decides whether the staging button is offered. The server ships the
+  // authoritative flag on every job (JobView.CanStage); the local name check is
+  // only a fallback for an older server that does not send it yet, so the two
+  // cannot disagree about a listener the operator is looking at.
   const canStage = (j: Job) => {
+    if (typeof j.CanStage === 'boolean') return j.CanStage
     const name = (j.Name || '').toLowerCase()
     return name === 'http' || name === 'https'
   }
@@ -298,7 +300,9 @@ export default function ListenersPage() {
                 <td className="mono">{j.Domains?.join(', ') || '-'}</td>
 				<td>
 					{/* Only the HTTP family can serve a stage, so the button is offered for
-					    those and disabled for the rest rather than failing after a click. */}
+					    those and disabled for the rest rather than failing after a click.
+					    The reason is printed inline as well as in the tooltip: a greyed
+					    button whose only explanation needs a hover reads as broken. */}
 					<button
 						type="button"
 						className="btn sm"
@@ -308,6 +312,11 @@ export default function ListenersPage() {
 					>
 						{t('oneliner.rowButton')}
 					</button>{' '}
+					{!canStage(j) && (
+						<span className="page-sub" style={{ marginRight: 6 }}>
+							{t('listeners.stageNeedsHttp')}
+						</span>
+					)}
 					<button type="button" className="btn sm danger" onClick={() => setStopping(j)}>
 						{t('listeners.stop')}
 					</button>
@@ -325,6 +334,10 @@ export default function ListenersPage() {
 			items={[
 				{
 					label: t('oneliner.rowButton'),
+					// Same gate as the row button, and the same visible reason, so the
+					// context menu cannot offer a command the server would refuse.
+					disabled: !canStage(menu.job),
+					hint: canStage(menu.job) ? undefined : t('listeners.stageNeedsHttp'),
 					onSelect: () => setCommandFor(menu.job),
 				},
 				{

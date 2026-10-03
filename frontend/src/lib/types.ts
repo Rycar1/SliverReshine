@@ -136,6 +136,9 @@ export interface Job {
   // The server's human-readable line for the job. A forward (bind) listener
   // puts its target in here, because it has no local port to identify it.
   Description?: string
+  // CanStage is the server's verdict on whether this listener can host a
+  // stage. Only the HTTP family can; the flag is authoritative.
+  CanStage?: boolean
 }
 
 // BindListener is a forward listener: the server dials a port the implant is

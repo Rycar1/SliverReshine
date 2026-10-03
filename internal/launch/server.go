@@ -767,12 +767,17 @@ func checkGeneratedProfile(target string, waitErr error, output string) error {
 	return nil
 }
 
-// Stop terminates the daemon process.
+// Stop terminates the daemon and everything it forked.
+//
+// It kills the daemon's process group rather than the single pid: the daemon
+// leads its own group (see setSysProcAttr) and its children inherit it, so the
+// group kill is what actually frees the gRPC port. Killing only the leader left
+// the listener bound and made a finished shutdown look like it had not worked.
 func (s *Server) Stop() {
-	if s == nil || s.cmd == nil || s.cmd.Process == nil {
+	if s == nil || s.cmd == nil {
 		return
 	}
-	_ = s.cmd.Process.Kill()
+	terminateProcess(s.cmd)
 }
 
 // PID returns the daemon process id, or 0 when not running.

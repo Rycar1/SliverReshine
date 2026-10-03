@@ -1272,21 +1272,45 @@ func getEnvHandler(data []byte, resp RPCResponse) {
 		envVars = make([]*commonpb.EnvVar, 1)
 		envVars[0] = &commonpb.EnvVar{
 			Key:   envReq.Name,
-			Value: os.Getenv(envReq.Name),
+			Value: printableUTF8(os.Getenv(envReq.Name)),
 		}
 	} else {
 		envVars = make([]*commonpb.EnvVar, len(variables))
 		for i, e := range variables {
 			pair := strings.SplitN(e, "=", 2)
+			// An entry with no "=" is possible on Linux, and indexing pair[1]
+			// on one panics the handler. The empty value is what a shell
+			// reports for that variable anyway.
+			value := ""
+			if len(pair) > 1 {
+				value = pair[1]
+			}
 			envVars[i] = &commonpb.EnvVar{
-				Key:   pair[0],
-				Value: pair[1],
+				Key:   printableUTF8(pair[0]),
+				Value: printableUTF8(value),
 			}
 		}
 	}
 	envInfo.Variables = envVars
 	data, err = proto.Marshal(&envInfo)
 	resp(data, err)
+}
+
+// printableUTF8 replaces the bytes that are not valid UTF-8 with the
+// replacement character.
+//
+// os.Environ hands back the raw bytes of the environment, and a protobuf string
+// field must be valid UTF-8. proto.Marshal reports "string field contains
+// invalid UTF-8" *after* it has appended the offending bytes, and this handler
+// sent the partial buffer on, so the operator got that message out of the
+// server's unmarshal instead of their environment -- with no hint about which
+// variable was at fault. Substituting the undecodable bytes keeps the rest of
+// the environment readable.
+func printableUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "\uFFFD")
 }
 
 func setEnvHandler(data []byte, resp RPCResponse) {

@@ -59,6 +59,10 @@ type JobView struct {
 	// local port to identify it and the target is the only thing that
 	// distinguishes one from another.
 	Description string `json:"Description"`
+	// CanStage mirrors JobServesStage: only the HTTP family can host a file that
+	// a command line can fetch. The server ships the flag so the listeners page
+	// does not have to re-derive the rule, and so it cannot drift from it.
+	CanStage bool `json:"CanStage"`
 }
 
 func unixTimeString(sec int64) string {
@@ -150,6 +154,7 @@ func (c *Client) Jobs() ([]JobView, error) {
 			Port:        j.Port,
 			Domains:     domains,
 			Description: j.Description,
+			CanStage:    JobServesStage(j.Name),
 		})
 	}
 	return out, nil

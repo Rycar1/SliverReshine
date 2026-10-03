@@ -73,6 +73,63 @@ func parseFlags() options {
 	return o
 }
 
+// signalChannel carries the interrupts that stop the launcher: the first one
+// starts the orderly shutdown, the second one skips the rest of it.
+//
+// It is one channel read by two receivers in turn, not two channels. A signal
+// is delivered to *every* channel registered for it, so a second channel
+// created next to signal.NotifyContext's received the first press as well: the
+// "second Ctrl-C" fast path fired on the first one, the grace period became
+// unreachable, and a single Ctrl-C left through forceQuitOnSignal. Reading the
+// presses in order from one channel keeps them distinct by construction.
+//
+// The buffer holds both presses, so an operator who hits Ctrl-C twice while a
+// slow step is running still gets the fast path instead of losing the second
+// press while the first is being handled.
+func signalChannel() chan os.Signal {
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	return sig
+}
+
+// beginShutdownOnFirstSignal starts the orderly shutdown when the first
+// interrupt arrives, and leaves every later one to forceQuitOnSignal.
+//
+// Splitting this out is what makes the two presses distinct: whoever reads the
+// channel first owns the press that begins the shutdown, and waitForForcedQuit
+// can only ever observe a later one.
+func beginShutdownOnFirstSignal(sig <-chan os.Signal, cancel context.CancelFunc) {
+	<-sig
+	cancel()
+}
+
+// waitForForcedQuit blocks until the shutdown has begun and the next interrupt
+// arrives, and reports the signal that ended it.
+//
+// It is split out of forceQuitOnSignal so the ordering can be tested without
+// os.Exit in the same function. The ordering is the whole point: the press that
+// starts the shutdown is consumed by beginShutdownOnFirstSignal, so the read
+// here is always a later one. Waiting before ctx.Done() would take that first
+// press instead and turn a single Ctrl-C into an immediate exit.
+func waitForForcedQuit(ctx context.Context, sig <-chan os.Signal) os.Signal {
+	<-ctx.Done()
+	return <-sig
+}
+
+// forceQuitOnSignal turns the next interrupt into an immediate exit.
+//
+// Shutdown is supposed to be bounded, but "supposed to" is not a guarantee an
+// operator can act on: this is what makes the second Ctrl-C work, and the
+// daemon is stopped first so the fast path does not leave it behind.
+func forceQuitOnSignal(ctx context.Context, sig <-chan os.Signal, srv *launch.Server) {
+	s := waitForForcedQuit(ctx, sig)
+	log.Printf("[c2tool] %v during shutdown; forcing exit", s)
+	if srv != nil {
+		srv.Stop()
+	}
+	os.Exit(0)
+}
+
 // run is main without the flag parsing: it provisions the state directory,
 // starts the embedded C2 server, serves the web console and blocks until the
 // process is asked to stop.
@@ -84,8 +141,15 @@ func run(o options) {
 	base := resolveHome(o.home)
 	settings, passOverride := provision(base, o)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	// The first Ctrl-C has to begin the orderly shutdown, and only the next one
+	// may skip it. Both presses are read from this one channel, in order: the
+	// goroutine below takes the first, forceQuitOnSignal takes whatever follows.
+	sig := signalChannel()
+	defer signal.Stop(sig)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go beginShutdownOnFirstSignal(sig, cancel)
 
 	// ---- embedded C2 server -------------------------------------------------
 	//
@@ -97,6 +161,31 @@ func run(o options) {
 	// against a process that no longer existed.
 	srv := startEmbeddedServer(ctx, base, settings)
 	defer srv.Stop()
+
+	// A second Ctrl-C has to kill the process, and a hard ceiling has to leave
+	// even when nobody presses anything again. Both are armed here, once the
+	// daemon exists, because both clean it up on the way out.
+	go forceQuitOnSignal(ctx, sig, srv)
+
+	// The ceiling: leave instead of sitting on "shutting down ..." forever.
+	// Stop runs first so the backstop does not orphan the daemon it exists to
+	// clean up.
+	shutdownDone := make(chan struct{})
+	defer close(shutdownDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-shutdownDone:
+			return
+		}
+		select {
+		case <-shutdownDone:
+		case <-time.After(forceExitGrace):
+			log.Printf("[c2tool] shutdown did not finish within %s; forcing exit", forceExitGrace)
+			srv.Stop()
+			os.Exit(0)
+		}
+	}()
 
 	// The launcher can move the daemon off a busy gRPC port, so everything
 	// after this point follows the port it actually bound.
@@ -131,7 +220,7 @@ func run(o options) {
 	settings.Addr = listener.Addr().String()
 
 	configureAuth(web, base, settings, passOverride, o.authFile)
-	serveConsole(ctx, stop, web, base, settings, listener)
+	serveConsole(ctx, cancel, web, base, settings, listener)
 }
 
 // resolveHome resolves the state directory and creates it.
@@ -395,9 +484,7 @@ func serveConsole(ctx context.Context, stop context.CancelFunc, web *api.Server,
 	<-ctx.Done()
 	log.Printf("[c2tool] shutting down ...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = httpSrv.Shutdown(shutdownCtx)
+	shutdownConsole(httpSrv)
 }
 
 // checkCleartextPolicy refuses to start when the operator has asked to be held

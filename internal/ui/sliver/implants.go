@@ -3,6 +3,7 @@ package sliver
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -72,20 +73,29 @@ func configToView(c *clientpb.ImplantConfig, name string) *ImplantConfigView {
 			URL string `json:"URL"`
 		}{URL: u.URL})
 	}
+	// BeaconInterval and BeaconJitter are nanoseconds on the wire, which is not
+	// what an operator types or reads. Sliver's own CLI divides them by 1e9
+	// before printing (client/command/generate/profiles.go), and this view is
+	// the same numbers for the same audience: passing them through raw showed a
+	// 60 second beacon as "60000000000s / 20000000000%". ReconnectInterval is
+	// nanoseconds too but is not exposed here -- the console drives the beacon
+	// and the session reconnect interval from one field, so it has nothing extra
+	// to say.
+	seconds := func(nanos int64) int64 { return nanos / int64(time.Second) }
 	return &ImplantConfigView{
 		Name:      name,
 		OS:        c.GOOS,
 		Arch:      c.GOARCH,
 		Format:    c.Format.String(),
-		Interval:  c.BeaconInterval,
-		Jitter:    c.BeaconJitter,
+		Interval:  seconds(c.BeaconInterval),
+		Jitter:    seconds(c.BeaconJitter),
 		Obfuscate: c.ObfuscateSymbols,
 		Debug:     c.Debug,
 		Evasion:   c.Evasion,
 		MaxErrors: c.MaxConnectionErrors,
 		IsBeacon:  c.IsBeacon,
-		BeaconInt: c.BeaconInterval,
-		BeaconJit: c.BeaconJitter,
+		BeaconInt: seconds(c.BeaconInterval),
+		BeaconJit: seconds(c.BeaconJitter),
 		C2:        c2,
 	}
 }

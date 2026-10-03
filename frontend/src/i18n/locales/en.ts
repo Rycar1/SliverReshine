@@ -292,6 +292,7 @@ export default {
     thProtocol: 'Protocol',
     thPort: 'Port',
     thDomains: 'Domains',
+    stageNeedsHttp: 'HTTP(S) listener only',
 
     // Forward (bind) listeners. The wording is careful about what a successful
     // start means: the dialer is running, not the session. A reverse listener
@@ -649,6 +650,7 @@ export default {
   services: {
     servicesTitle: 'Windows Services',
     servicesHint: 'Create, stop or remove a Windows service. Stop/remove act on the service name entered above.',
+    windowsOnly: 'Not available on this session: Windows services require a Windows target.',
     name: 'Service name',
     description: 'Description',
     binPath: 'Bin path',
@@ -672,6 +674,7 @@ export default {
     sshRun: 'Run',
     extTitle: 'Extensions',
     extHint: 'Register a Sliver extension archive (tar.gz) and call its exports.',
+    extUnsupported: 'Not available on this session: extensions require a Windows or macOS target.',
     extName: 'Name',
     extOs: 'OS',
     extInit: 'Init',

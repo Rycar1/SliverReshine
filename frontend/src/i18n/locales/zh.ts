@@ -291,6 +291,7 @@ export default {
     thProtocol: '协议',
     thPort: '端口',
     thDomains: '域名',
+    stageNeedsHttp: '仅 HTTP(S) 监听器可用',
 
     // 正向连接（bind）：服务端主动拨号到 implant 监听的端口，
     // 与反向监听方向相反，所以“没有会话”的含义也不同。
@@ -646,6 +647,7 @@ export default {
   services: {
     servicesTitle: 'Windows 服务',
     servicesHint: '创建、停止或删除 Windows 服务。停止/删除作用于上方输入的服务名。',
+    windowsOnly: '当前会话不可用：Windows 服务仅支持 Windows 目标。',
     name: '服务名',
     description: '描述',
     binPath: '可执行文件路径',
@@ -669,6 +671,7 @@ export default {
     sshRun: '执行',
     extTitle: '扩展',
     extHint: '注册 Sliver 扩展压缩包 (tar.gz) 并调用其导出函数。',
+    extUnsupported: '当前会话不可用：扩展仅支持 Windows 或 macOS 目标。',
     extName: '名称',
     extOs: '操作系统',
     extInit: '初始化',

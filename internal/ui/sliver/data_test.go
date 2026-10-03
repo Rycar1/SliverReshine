@@ -1,10 +1,14 @@
 package sliver
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
+	"github.com/bishopfox/sliver/protobuf/commonpb"
+	"github.com/bishopfox/sliver/protobuf/rpcpb"
+	"google.golang.org/grpc"
 )
 
 func TestUnixTimeString_Zero(t *testing.T) {
@@ -163,15 +167,19 @@ func TestEventToView_JobNoDomains(t *testing.T) {
 
 func TestConfigToView(t *testing.T) {
 	c := &clientpb.ImplantConfig{
-		GOOS:                "windows",
-		GOARCH:              "amd64",
-		Format:              clientpb.OutputFormat_EXECUTABLE,
-		Debug:               true,
-		Evasion:             false,
-		ObfuscateSymbols:    true,
-		IsBeacon:            false,
-		BeaconInterval:      60,
-		BeaconJitter:        20,
+		GOOS:             "windows",
+		GOARCH:           "amd64",
+		Format:           clientpb.OutputFormat_EXECUTABLE,
+		Debug:            true,
+		Evasion:          false,
+		ObfuscateSymbols: true,
+		IsBeacon:         false,
+		// Nanoseconds, because that is what the protobuf carries. The view is
+		// the seconds an operator reads; the raw values here are what produced
+		// "60000000000s / 20000000000%" in the table.
+		BeaconInterval:      int64(60 * time.Second),
+		BeaconJitter:        int64(20 * time.Second),
+		ReconnectInterval:   int64(45 * time.Second),
 		MaxConnectionErrors: 500,
 		C2: []*clientpb.ImplantC2{
 			{URL: "mtls://1.2.3.4:8888", Priority: 1},
@@ -198,10 +206,67 @@ func TestConfigToView(t *testing.T) {
 	if v.C2[0].URL != "mtls://1.2.3.4:8888" {
 		t.Errorf("C2[0] = %+v", v.C2[0])
 	}
+	// The intervals are seconds in the view, whatever the wire carried.
+	if v.Interval != 60 || v.Jitter != 20 {
+		t.Errorf("Interval/Jitter = %d/%d, want 60/20 (seconds)", v.Interval, v.Jitter)
+	}
+	if v.BeaconInt != 60 || v.BeaconJit != 20 {
+		t.Errorf("BeaconInterval/BeaconJitter = %d/%d, want 60/20 (seconds)", v.BeaconInt, v.BeaconJit)
+	}
 }
 
 func TestConfigToView_Nil(t *testing.T) {
 	if v := configToView(nil, ""); v != nil {
 		t.Errorf("expected nil, got %+v", v)
+	}
+}
+
+// jobsStub returns a fixed job list so the listener table's CanStage flag can be
+// pinned. That flag is what gates the "staging command" button on the listeners
+// page, so a wrong value is exactly the greyed-out button an operator reads as
+// "the feature is broken".
+type jobsStub struct {
+	rpcpb.SliverRPCClient
+
+	jobs *clientpb.Jobs
+}
+
+func (s *jobsStub) GetJobs(_ context.Context, _ *commonpb.Empty, _ ...grpc.CallOption) (*clientpb.Jobs, error) {
+	return s.jobs, nil
+}
+
+func TestJobsSetsCanStageFromTheListenerName(t *testing.T) {
+	c := &Client{RPC: &jobsStub{jobs: &clientpb.Jobs{Active: []*clientpb.Job{
+		{ID: 1, Name: "http", Protocol: "http", Port: 80},
+		{ID: 2, Name: "https", Protocol: "https", Port: 443},
+		{ID: 3, Name: "mtls", Protocol: "mtls", Port: 8888},
+		{ID: 4, Name: "dns", Protocol: "dns", Port: 53},
+		{ID: 5, Name: "wg", Protocol: "wg", Port: 51820},
+		{ID: 6, Name: "tcp-pivot", Protocol: "tcp-pivot", Port: 4444},
+		// The console's own gRPC listener is a job on the server. It must not
+		// reach the listeners page at all, let alone be offered a stage.
+		{ID: 7, Name: "grpc/mtls", Protocol: "grpc", Description: "client listener"},
+	}}}}
+
+	jobs, err := c.Jobs()
+	if err != nil {
+		t.Fatalf("Jobs: %v", err)
+	}
+	if len(jobs) != 6 {
+		t.Fatalf("Jobs returned %d rows, want 6 (the client listener must be filtered out)", len(jobs))
+	}
+
+	want := map[string]bool{
+		"http": true, "https": true,
+		"mtls": false, "dns": false, "wg": false, "tcp-pivot": false,
+	}
+	for _, j := range jobs {
+		w, ok := want[j.Name]
+		if !ok {
+			t.Fatalf("unexpected job %q reached the listeners page", j.Name)
+		}
+		if j.CanStage != w {
+			t.Errorf("job %q CanStage = %v, want %v", j.Name, j.CanStage, w)
+		}
 	}
 }

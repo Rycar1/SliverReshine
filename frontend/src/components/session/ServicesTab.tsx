@@ -36,18 +36,28 @@ export default function ServicesTab({ sessionId, os }: { sessionId: string; os: 
   const [callServerStore, setCallServerStore] = useState(false)
   const [callResult, setCallResult] = useState<CallExtensionResult | null>(null)
 
+  // The service and extension RPCs only exist in the Windows and (for
+  // extensions) macOS implants. Sliver's Linux implant has no handler for them,
+  // so the server answers "unknown message type" -- a 501. Asking anyway, which
+  // this tab used to do on every platform, painted that error over a Linux
+  // session's page the moment it opened. Gate both the request and the UI on the
+  // platform the session actually runs.
+  const windowsOnly = os === 'windows'
+  const extSupported = os === 'windows' || os === 'darwin'
+
   const loadExtensions = useCallback(async () => {
+    if (!extSupported) return
     try {
       const d = await api.listExtensions(sessionId)
       setExtNames(d.names || [])
     } catch (e) {
       setError((e as Error).message)
     }
-  }, [sessionId])
+  }, [sessionId, extSupported])
 
   useEffect(() => {
-    loadExtensions()
-  }, [loadExtensions])
+    if (extSupported) loadExtensions()
+  }, [loadExtensions, extSupported])
 
   const startService = async () => {
     setBusy(true)
@@ -163,6 +173,10 @@ export default function ServicesTab({ sessionId, os }: { sessionId: string; os: 
     <>
       <div className="card">
         <div className="card-title">{t('services.servicesTitle')}</div>
+        {!windowsOnly ? (
+          <p className="page-sub">{t('services.windowsOnly')}</p>
+        ) : (
+        <>
         <p className="page-sub" style={{ marginBottom: 12 }}>
           {t('services.servicesHint')}
         </p>
@@ -210,6 +224,8 @@ export default function ServicesTab({ sessionId, os }: { sessionId: string; os: 
             </>
           )}
         </div>
+        </>
+        )}
       </div>
 
       <div className="card">
@@ -273,6 +289,10 @@ export default function ServicesTab({ sessionId, os }: { sessionId: string; os: 
 
       <div className="card">
         <div className="card-title">{t('services.extTitle')}</div>
+        {!extSupported ? (
+          <p className="page-sub">{t('services.extUnsupported')}</p>
+        ) : (
+        <>
         <p className="page-sub" style={{ marginBottom: 12 }}>
           {t('services.extHint')}
         </p>
@@ -359,6 +379,8 @@ export default function ServicesTab({ sessionId, os }: { sessionId: string; os: 
             </div>
             <pre>{callResult.Output || '(no output)'}</pre>
           </div>
+        )}
+        </>
         )}
       </div>
 

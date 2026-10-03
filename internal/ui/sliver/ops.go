@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
@@ -175,6 +177,24 @@ func (c *Client) Netstat(sessionID string) ([]SockEntryView, error) {
 	return out, nil
 }
 
+// validUTF8 replaces bytes that are not valid UTF-8 with U+FFFD.
+//
+// An implant reads environment variables out of its own process block, where a
+// "string" is whatever bytes happen to be there: a Windows variable in the OEM
+// code page, or one set from a non-UTF-8 source, is not necessarily UTF-8.
+// Protobuf requires string fields to be valid UTF-8, so the implant's marshaller
+// fails the whole response with "string field contains invalid UTF-8" and the
+// operator gets that error instead of their environment. The implant now
+// sanitizes before sending; this is the console's half of the same guard, so an
+// implant built before that fix still produces a readable list rather than a
+// protobuf error.
+func validUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "\uFFFD")
+}
+
 // EnvView is the JSON shape for an environment variable.
 type EnvView struct {
 	Key   string `json:"Key"`
@@ -199,7 +219,7 @@ func (c *Client) GetEnv(sessionID string) ([]EnvView, error) {
 		if v == nil {
 			continue
 		}
-		out = append(out, EnvView{Key: v.Key, Value: v.Value})
+		out = append(out, EnvView{Key: validUTF8(v.Key), Value: validUTF8(v.Value)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil

@@ -442,7 +442,7 @@ func (c *Client) RunAlias(sessionID, name, args, process, arch, method, class st
 	}
 	isDLL := strings.EqualFold(filepath.Ext(binRel), ".dll")
 
-	ctx, cancel := rpcCtx(rpcLong)
+	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
 	request := &commonpb.Request{SessionID: sessionID}
 

@@ -70,7 +70,7 @@ func beaconRequest(beaconID string, timeout time.Duration) *commonpb.Request {
 // question rather than answering it: a previous run's task has a different ID,
 // so a stale result is not something that can be picked up.
 func (c *Client) BeaconIntegrity(beaconID string, wait time.Duration) (string, error) {
-	ctx, cancel := rpcCtx(wait)
+	ctx, cancel := c.rpcCtx(wait)
 	defer cancel()
 
 	resp, err := c.RPC.GetPrivs(ctx, &sliverpb.GetPrivsReq{

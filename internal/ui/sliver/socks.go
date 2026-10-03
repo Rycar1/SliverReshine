@@ -178,7 +178,7 @@ func (p *SocksProxy) acceptLoop() {
 }
 
 func (p *SocksProxy) handleConn(conn net.Conn) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := p.mgr.client.rpcCtx(rpcDefault)
 	defer cancel()
 	socks, err := p.mgr.client.RPC.CreateSocks(ctx, &sliverpb.Socks{SessionID: p.SessionID})
 	if err != nil {

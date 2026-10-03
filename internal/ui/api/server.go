@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -160,6 +161,21 @@ func (s *Server) requireClient(w http.ResponseWriter) *sliver.Client {
 	return c
 }
 
+// clientFor returns the console client for one request.
+//
+// It is requireClient plus the request: the client is wrapped in a view bound
+// to r.Context() (see sliver.Client.WithRequestContext) so every gRPC call the
+// handler makes inherits the request's deadline and is cancelled if the browser
+// disconnects. Handlers should use this rather than requireClient so a request
+// cannot leave work running on the server after nobody is listening.
+func (s *Server) clientFor(w http.ResponseWriter, r *http.Request) *sliver.Client {
+	c := s.requireClient(w)
+	if c == nil {
+		return nil
+	}
+	return c.WithRequestContext(r.Context())
+}
+
 // route is a single HTTP handler registration.
 type route struct {
 	method  string
@@ -180,7 +196,7 @@ type RoutePattern struct {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	for _, r := range s.apiRoutes() {
-		mux.HandleFunc(r.method+" "+r.pattern, r.handler)
+		mux.HandleFunc(r.method+" "+r.pattern, withRequestCeiling(r.handler))
 	}
 
 	mux.HandleFunc("/ws/sessions/{id}/terminal", s.handleTerminalWS)
@@ -201,6 +217,32 @@ func (s *Server) Routes() http.Handler {
 	// handler, so a new endpoint cannot forget it. Every route below the mux reads
 	// r.Body, and an unbounded read is a way for one client to exhaust the console.
 	return s.wrap(mux)
+}
+
+// apiRequestCeiling bounds one non-streaming API request end to end.
+//
+// The per-call budgets in internal/ui/sliver already bound each gRPC call; this
+// is the outer limit on the handler that makes them, so a handler that loops,
+// makes many calls, or blocks on something else cannot hold the connection
+// indefinitely. It is deliberately above the largest per-call budget (the
+// 10-minute process dump) so it never truncates work the call policy allows,
+// and it only ever covers /api: the terminal WebSocket and the static bundle
+// are registered outside apiRoutes and keep their long-lived connections.
+const apiRequestCeiling = 12 * time.Minute
+
+// withRequestCeiling gives a non-streaming handler a request context that is
+// bounded and cancelled with the connection.
+//
+// This is what turns "the browser went away" into "the work stops": handlers
+// pass r.Context() into sliver.Client (via clientFor), so cancelling here
+// cancels the gRPC call the handler is waiting on rather than leaving it to
+// finish on the server.
+func withRequestCeiling(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), apiRequestCeiling)
+		defer cancel()
+		next(w, r.WithContext(ctx))
+	}
 }
 
 // wrap applies the middleware chain to a mux.
@@ -359,6 +401,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"connected": false})
 		return
 	}
+	c = c.WithRequestContext(r.Context())
 	ver, err := c.Version()
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": err.Error()})
@@ -369,7 +412,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 
 // handleOverview aggregates top-level counts for the sidebar badges and dashboard.
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -483,7 +526,7 @@ func (s *Server) handleUseProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -492,7 +535,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBeacons(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -501,7 +544,7 @@ func (s *Server) handleBeacons(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -510,7 +553,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -527,7 +570,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -544,7 +587,7 @@ func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBuilders(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -553,7 +596,7 @@ func (s *Server) handleBuilders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -567,7 +610,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -621,7 +664,7 @@ func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStopListener(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

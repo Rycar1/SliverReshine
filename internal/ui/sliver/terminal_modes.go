@@ -239,7 +239,7 @@ type sessionInfo struct {
 
 // sessionInfo looks a session up by ID.
 func (c *Client) sessionInfo(sessionID string) (*sessionInfo, error) {
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := c.rpcCtx(rpcQuick)
 	defer cancel()
 	sessions, err := c.RPC.GetSessions(ctx, &commonpb.Empty{})
 	if err != nil {

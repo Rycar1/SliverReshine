@@ -9,7 +9,7 @@ import (
 // --- Prune ---
 
 func (s *Server) handlePruneBeacons(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -28,7 +28,7 @@ func (s *Server) handlePruneBeacons(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePruneSessions(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -39,7 +39,7 @@ func (s *Server) handlePruneSessions(w http.ResponseWriter, r *http.Request) {
 // --- Aliases ---
 
 func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -48,7 +48,7 @@ func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAliasInstall(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -71,7 +71,7 @@ func (s *Server) handleAliasInstall(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAliasRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

@@ -73,6 +73,24 @@ const (
 // Nothing here may call the server with a context that has no deadline: a
 // request that never returns holds an HTTP handler and its goroutine until the
 // browser gives up, and the console has no way to notice.
-func rpcCtx(d time.Duration) (context.Context, context.CancelFunc) {
+//
+// When the call serves an HTTP request, c is a request-scoped view (see
+// WithRequestContext) and d is a ceiling rather than the whole story: the
+// returned context is a child of the request's, so it is cancelled when the
+// browser disconnects, and its deadline is whichever arrives first, the
+// request's remaining budget or d. A caller with no request behind it gets the
+// same context.Background()-based deadline it always had.
+func (c *Client) rpcCtx(d time.Duration) (context.Context, context.CancelFunc) {
+	base := context.Background()
+	if c != nil && c.reqCtx != nil {
+		base = c.reqCtx
+	}
+	return context.WithTimeout(base, d)
+}
+
+// dialCtx bounds the one call that happens before a Client exists: the dial
+// itself. There is no request to inherit from, so it is the plain background
+// deadline.
+func dialCtx(d time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), d)
 }

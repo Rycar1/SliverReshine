@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Server) handleMonitorProviders(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -19,7 +19,7 @@ func (s *Server) handleMonitorProviders(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleMonitorAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -35,7 +35,7 @@ func (s *Server) handleMonitorAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMonitorRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -55,7 +55,7 @@ func (s *Server) handleMonitorRemove(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) handleC2Profiles(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -64,7 +64,7 @@ func (s *Server) handleC2Profiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleC2Profile(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -73,7 +73,7 @@ func (s *Server) handleC2Profile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleC2ProfileSave(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -96,7 +96,7 @@ func (s *Server) handleC2ProfileSave(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) handleTrafficEncoders(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -105,7 +105,7 @@ func (s *Server) handleTrafficEncoders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTrafficEncoderAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -127,7 +127,7 @@ func (s *Server) handleTrafficEncoderAdd(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleTrafficEncoderRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -143,7 +143,7 @@ func (s *Server) handleTrafficEncoderRemove(w http.ResponseWriter, r *http.Reque
 // ---------------------------------------------------------------------------
 
 func (s *Server) handleShellcodeEncoders(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -152,7 +152,7 @@ func (s *Server) handleShellcodeEncoders(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleShellcodeEncode(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

@@ -54,7 +54,7 @@ func dirToView(d *sliverpb.Ls) *DirView {
 
 // Ls lists a directory on the session.
 func (c *Client) Ls(sessionID, path string) (*DirView, error) {
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Ls(ctx, &sliverpb.LsReq{
 		Path: path,
@@ -73,7 +73,7 @@ func (c *Client) Ls(sessionID, path string) (*DirView, error) {
 
 // Pwd returns the current working directory of the session.
 func (c *Client) Pwd(sessionID string) (string, error) {
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Pwd(ctx, &sliverpb.PwdReq{
 		Request: &commonpb.Request{
@@ -91,7 +91,7 @@ func (c *Client) Pwd(sessionID string) (string, error) {
 
 // Cd changes the working directory on the session.
 func (c *Client) Cd(sessionID, path string) (string, error) {
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Cd(ctx, &sliverpb.CdReq{
 		Path: path,
@@ -110,7 +110,7 @@ func (c *Client) Cd(sessionID, path string) (string, error) {
 
 // Download reads a file from the session and returns its base64-encoded data.
 func (c *Client) Download(sessionID, path string) (string, string, error) {
-	ctx, cancel := rpcCtx(rpcLong)
+	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Download(ctx, &sliverpb.DownloadReq{
 		Path: path,
@@ -140,7 +140,7 @@ func (c *Client) Download(sessionID, path string) (string, string, error) {
 // host would fail every time, and a file-browser upload over an existing file
 // would fail the same way.
 func (c *Client) Upload(sessionID, path string, data []byte) error {
-	ctx, cancel := rpcCtx(rpcLong)
+	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Upload(ctx, &sliverpb.UploadReq{
 		Path: path,
@@ -164,7 +164,7 @@ func (c *Client) Upload(sessionID, path string, data []byte) error {
 
 // Mkdir creates a directory on the session.
 func (c *Client) Mkdir(sessionID, path string) error {
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Mkdir(ctx, &sliverpb.MkdirReq{
 		Path: path,
@@ -183,7 +183,7 @@ func (c *Client) Mkdir(sessionID, path string) error {
 
 // Rm removes a file or directory on the session.
 func (c *Client) Rm(sessionID, path string, recursive bool) error {
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Rm(ctx, &sliverpb.RmReq{
 		Path:      path,
@@ -204,7 +204,7 @@ func (c *Client) Rm(sessionID, path string, recursive bool) error {
 
 // Mv moves or renames a file on the session.
 func (c *Client) Mv(sessionID, src, dst string) error {
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Mv(ctx, &sliverpb.MvReq{
 		Src: src,

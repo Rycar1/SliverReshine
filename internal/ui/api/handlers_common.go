@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Server) sessionID(w http.ResponseWriter, r *http.Request) (string, *sliver.Client) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return "", nil
 	}

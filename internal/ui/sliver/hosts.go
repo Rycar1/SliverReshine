@@ -45,7 +45,7 @@ func hostToView(h *clientpb.Host) HostView {
 
 // Hosts lists all hosts tracked by the server.
 func (c *Client) Hosts() ([]HostView, error) {
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := c.rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.Hosts(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -63,7 +63,7 @@ func (c *Client) Hosts() ([]HostView, error) {
 
 // Host fetches a single host by its UUID.
 func (c *Client) Host(hostUUID string) (*HostView, error) {
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := c.rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.Host(ctx, &clientpb.Host{HostUUID: hostUUID})
 	if err != nil {
@@ -78,7 +78,7 @@ func (c *Client) Host(hostUUID string) (*HostView, error) {
 
 // HostRm removes a host and its IOCs from the server database.
 func (c *Client) HostRm(hostUUID string) error {
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := c.rpcCtx(rpcQuick)
 	defer cancel()
 	_, err := c.RPC.HostRm(ctx, &clientpb.Host{HostUUID: hostUUID})
 	return err
@@ -86,7 +86,7 @@ func (c *Client) HostRm(hostUUID string) error {
 
 // HostIOCRm removes a single IOC from the server database.
 func (c *Client) HostIOCRm(iocID string) error {
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := c.rpcCtx(rpcQuick)
 	defer cancel()
 	_, err := c.RPC.HostIOCRm(ctx, &clientpb.IOC{ID: iocID})
 	return err

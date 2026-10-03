@@ -198,7 +198,7 @@ func (pf *PortForward) handleConn(conn net.Conn) {
 		return
 	}
 
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := pf.mgr.client.rpcCtx(rpcDefault)
 	defer cancel()
 
 	// The reply is kept because the server's Portfwd handler does not route

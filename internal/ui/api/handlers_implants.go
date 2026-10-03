@@ -71,7 +71,7 @@ func (s *Server) handleHijackDLL(w http.ResponseWriter, r *http.Request) {
 // --- Shellcode RDI ---
 
 func (s *Server) handleShellcodeRDI(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

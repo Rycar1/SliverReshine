@@ -33,6 +33,18 @@ type Client struct {
 	RPC     rpcpb.SliverRPCClient
 	Profile string
 
+	// root is the console-wide client this one is a view of, or nil when this
+	// is that client. A view is created per HTTP request by
+	// WithRequestContext; it shares the connection and every piece of cached
+	// state with the root and differs only in reqCtx, so a request never gets
+	// its own port-forward manager or listener-to-website map.
+	root *Client
+
+	// reqCtx is the HTTP request this view is serving, if any. It bounds every
+	// gRPC call the view makes (see rpcCtx) and cancels them when the browser
+	// goes away. Nil on the console-wide client, which serves no single request.
+	reqCtx context.Context
+
 	pfMu  sync.Mutex
 	pfMgr *PortForwardManager
 
@@ -63,6 +75,10 @@ type Client struct {
 
 // rememberListenerSite records which website a listener serves.
 func (c *Client) rememberListenerSite(jobID uint32, website string) {
+	if c.root != nil {
+		c.root.rememberListenerSite(jobID, website)
+		return
+	}
 	c.lsMu.Lock()
 	defer c.lsMu.Unlock()
 	if c.lsMap == nil {
@@ -73,14 +89,51 @@ func (c *Client) rememberListenerSite(jobID uint32, website string) {
 
 // listenerSite returns the website a listener serves and whether it is known.
 func (c *Client) listenerSite(jobID uint32) (string, bool) {
+	if c.root != nil {
+		return c.root.listenerSite(jobID)
+	}
 	c.lsMu.Lock()
 	defer c.lsMu.Unlock()
 	site, ok := c.lsMap[jobID]
 	return site, ok
 }
 
+// WithRequestContext returns a view of the client bound to ctx, the context of
+// the HTTP request being served.
+//
+// The view shares the connection, the managers and every cache with the client
+// it came from -- it is the same console, seen from one request -- so nothing
+// request-shaped leaks into console-wide state. What it adds is inheritance:
+// the gRPC calls it makes are children of ctx, so a browser that disconnects
+// cancels the work instead of leaving it to run out its own budget, and a call
+// is capped at whatever is left of the request's budget rather than at the
+// method's full timeout.
+func (c *Client) WithRequestContext(ctx context.Context) *Client {
+	if c == nil || ctx == nil {
+		return c
+	}
+	return &Client{
+		conn:    c.conn,
+		RPC:     c.RPC,
+		Profile: c.Profile,
+		root:    c.rootClient(),
+		reqCtx:  ctx,
+	}
+}
+
+// rootClient returns the console-wide client this one is a view of.
+func (c *Client) rootClient() *Client {
+	if c.root != nil {
+		return c.root
+	}
+	return c
+}
+
 // PortForwards lazily creates and returns the port-forward manager.
 func (c *Client) PortForwards() (*PortForwardManager, error) {
+	if c.root != nil {
+		return c.root.PortForwards()
+	}
 	c.pfMu.Lock()
 	defer c.pfMu.Unlock()
 	if c.pfMgr == nil {
@@ -101,6 +154,9 @@ func (c *Client) PortForwards() (*PortForwardManager, error) {
 // running would pay a round trip and change the state it is reporting. The
 // topology view polls, which is exactly that case.
 func (c *Client) ExistingPortForwards() *PortForwardManager {
+	if c.root != nil {
+		return c.root.ExistingPortForwards()
+	}
 	c.pfMu.Lock()
 	defer c.pfMu.Unlock()
 	return c.pfMgr
@@ -109,6 +165,9 @@ func (c *Client) ExistingPortForwards() *PortForwardManager {
 // ExistingSocks returns the SOCKS manager only if it already exists. Same reason
 // as ExistingPortForwards: a read must not create what it is reporting.
 func (c *Client) ExistingSocks() *SocksManager {
+	if c.root != nil {
+		return c.root.ExistingSocks()
+	}
 	c.sMu.Lock()
 	defer c.sMu.Unlock()
 	return c.sMgr
@@ -116,6 +175,9 @@ func (c *Client) ExistingSocks() *SocksManager {
 
 // Socks lazily creates and returns the SOCKS5 proxy manager.
 func (c *Client) Socks() *SocksManager {
+	if c.root != nil {
+		return c.root.Socks()
+	}
 	c.sMu.Lock()
 	defer c.sMu.Unlock()
 	if c.sMgr == nil {
@@ -252,7 +314,7 @@ func Connect(cfg *ProfileConfig) (*Client, error) {
 	}
 	creds := credentials.NewTLS(tlsConfig)
 
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := dialCtx(rpcQuick)
 	defer cancel()
 
 	addr := fmt.Sprintf("%s:%d", cfg.LHost, cfg.LPort)
@@ -294,6 +356,10 @@ func rootOnlyVerify(caCertificate string, rawCerts [][]byte) error {
 
 // Close terminates the gRPC connection.
 func (c *Client) Close() {
+	if c.root != nil {
+		c.root.Close()
+		return
+	}
 	c.pfMu.Lock()
 	if c.pfMgr != nil {
 		c.pfMgr.Close()
@@ -313,7 +379,7 @@ func (c *Client) Close() {
 
 // Version queries the sliver-server version.
 func (c *Client) Version() (string, error) {
-	ctx, cancel := rpcCtx(rpcProbe)
+	ctx, cancel := c.rpcCtx(rpcProbe)
 	defer cancel()
 	ver, err := c.RPC.GetVersion(ctx, &commonpb.Empty{})
 	if err != nil {

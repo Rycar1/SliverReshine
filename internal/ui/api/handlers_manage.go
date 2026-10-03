@@ -10,7 +10,7 @@ import (
 // --- Session / Beacon management ---
 
 func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -28,7 +28,7 @@ func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRenameBeacon(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -46,7 +46,7 @@ func (s *Server) handleRenameBeacon(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRmBeacon(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -58,7 +58,7 @@ func (s *Server) handleRmBeacon(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBeaconTasks(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -67,7 +67,7 @@ func (s *Server) handleBeaconTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBeacon(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -105,7 +105,7 @@ func (s *Server) handleReconfigure(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOpenSession(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -126,7 +126,7 @@ func (s *Server) handleCloseSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMonitorStart(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -138,7 +138,7 @@ func (s *Server) handleMonitorStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMonitorStop(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -150,7 +150,7 @@ func (s *Server) handleMonitorStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBeaconTaskContent(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -161,7 +161,7 @@ func (s *Server) handleBeaconTaskContent(w http.ResponseWriter, r *http.Request)
 // --- Implant profiles ---
 
 func (s *Server) handleImplantProfiles(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -170,7 +170,7 @@ func (s *Server) handleImplantProfiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSaveImplantProfile(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -190,7 +190,7 @@ func (s *Server) handleSaveImplantProfile(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleDeleteImplantProfile(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -202,7 +202,7 @@ func (s *Server) handleDeleteImplantProfile(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleCompiler(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -213,7 +213,7 @@ func (s *Server) handleCompiler(w http.ResponseWriter, r *http.Request) {
 // --- SOCKS5 proxies ---
 
 func (s *Server) handleSocksList(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -221,7 +221,7 @@ func (s *Server) handleSocksList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSocksStart(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -245,7 +245,7 @@ func (s *Server) handleSocksStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSocksStop(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -264,7 +264,7 @@ func (s *Server) handleSocksStop(w http.ResponseWriter, r *http.Request) {
 // --- Loot ---
 
 func (s *Server) handleLootAll(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -289,7 +289,7 @@ func (s *Server) handleLootAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLootAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -302,7 +302,7 @@ func (s *Server) handleLootAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLootRename(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -320,7 +320,7 @@ func (s *Server) handleLootRename(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLootContent(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -334,7 +334,7 @@ func (s *Server) handleLootContent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLootRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

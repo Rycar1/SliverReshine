@@ -128,7 +128,7 @@ func (s *Server) handleMimikatzRun(w http.ResponseWriter, r *http.Request) {
 // on, is still worth mining. This path never touches a target and never writes
 // to the vault unless the caller asks: it is the reviewable half of the feature.
 func (s *Server) handleMimikatzParse(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

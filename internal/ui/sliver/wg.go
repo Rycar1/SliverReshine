@@ -51,7 +51,7 @@ func wgSocksToView(s *sliverpb.WGSocksServer) WGSocksServerView {
 
 // GenerateWGClientConfig generates a WireGuard client configuration on the server.
 func (c *Client) GenerateWGClientConfig() (*WGClientConfigView, error) {
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := c.rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.GenerateWGClientConfig(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -70,7 +70,7 @@ func (c *Client) GenerateWGClientConfig() (*WGClientConfigView, error) {
 
 // GenerateUniqueIP generates a unique WireGuard client IP.
 func (c *Client) GenerateUniqueIP() (string, error) {
-	ctx, cancel := rpcCtx(rpcQuick)
+	ctx, cancel := c.rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.GenerateUniqueIP(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -84,7 +84,7 @@ func (c *Client) GenerateUniqueIP() (string, error) {
 
 // WGForwarders lists the TCP forwarders of a session's WireGuard interface.
 func (c *Client) WGForwarders(sessionID string) ([]WGTCPForwarderView, error) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WGListForwarders(ctx, &sliverpb.WGTCPForwardersReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -104,7 +104,7 @@ func (c *Client) WGForwarders(sessionID string) ([]WGTCPForwarderView, error) {
 
 // WGStartPortForward starts a TCP port forward on a session's WireGuard interface.
 func (c *Client) WGStartPortForward(sessionID string, localPort int32, remoteAddress string) (WGTCPForwarderView, bool, error) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WGStartPortForward(ctx, &sliverpb.WGPortForwardStartReq{
 		LocalPort:     localPort,
@@ -122,7 +122,7 @@ func (c *Client) WGStartPortForward(sessionID string, localPort int32, remoteAdd
 
 // WGStopPortForward stops a TCP port forward on a session's WireGuard interface.
 func (c *Client) WGStopPortForward(sessionID string, id int32) (WGTCPForwarderView, bool, error) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WGStopPortForward(ctx, &sliverpb.WGPortForwardStopReq{
 		ID:      id,
@@ -139,7 +139,7 @@ func (c *Client) WGStopPortForward(sessionID string, id int32) (WGTCPForwarderVi
 
 // WGSocksServers lists the SOCKS5 servers of a session's WireGuard interface.
 func (c *Client) WGSocksServers(sessionID string) ([]WGSocksServerView, error) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WGListSocksServers(ctx, &sliverpb.WGSocksServersReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -159,7 +159,7 @@ func (c *Client) WGSocksServers(sessionID string) ([]WGSocksServerView, error) {
 
 // WGStartSocks starts a SOCKS5 server on a session's WireGuard interface.
 func (c *Client) WGStartSocks(sessionID string, port int32) (WGSocksServerView, bool, error) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WGStartSocks(ctx, &sliverpb.WGSocksStartReq{
 		Port:    port,
@@ -176,7 +176,7 @@ func (c *Client) WGStartSocks(sessionID string, port int32) (WGSocksServerView, 
 
 // WGStopSocks stops a SOCKS5 server on a session's WireGuard interface.
 func (c *Client) WGStopSocks(sessionID string, id int32) (WGSocksServerView, bool, error) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WGStopSocks(ctx, &sliverpb.WGSocksStopReq{
 		ID:      id,

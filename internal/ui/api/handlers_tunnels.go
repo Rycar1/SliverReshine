@@ -55,7 +55,7 @@ func (s *Server) handleRportFwdStop(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func (s *Server) handleCACertificates(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -64,7 +64,7 @@ func (s *Server) handleCACertificates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCertificates(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -102,7 +102,7 @@ func (s *Server) handleTunnelClose(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

@@ -24,7 +24,7 @@ import (
 const defaultDeliverySite = "webdelivery"
 
 func (s *Server) handleOneLiner(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -44,7 +44,7 @@ func (s *Server) handleOneLiner(w http.ResponseWriter, r *http.Request) {
 // one place keeps the frontend from re-deriving it and getting it wrong -- an
 // mTLS listener offered as a delivery target produces a command that cannot work.
 func (s *Server) handleOneLinerTargets(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -78,7 +78,7 @@ func (s *Server) handleOneLinerTargets(w http.ResponseWriter, r *http.Request) {
 // Platforms are taken from the body rather than hardcoded, but default to
 // Windows and Linux, which is what the button offers.
 func (s *Server) handleOneLinerAll(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

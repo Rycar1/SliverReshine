@@ -7,7 +7,7 @@ import (
 // --- Hosts / IOC management ---
 
 func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -24,7 +24,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -41,7 +41,7 @@ func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHostRm(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -53,7 +53,7 @@ func (s *Server) handleHostRm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHostIOCRm(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

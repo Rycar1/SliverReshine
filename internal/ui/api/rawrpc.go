@@ -146,7 +146,7 @@ func (s *Server) handleRPCMethods(w http.ResponseWriter, r *http.Request) {
 //
 //	{"ok":true,"messages":[{...},...],"count":N,"truncated":bool}
 func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

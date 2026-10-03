@@ -9,7 +9,7 @@ import (
 // --- WireGuard tunnels ---
 
 func (s *Server) handleWGClientConfig(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -18,7 +18,7 @@ func (s *Server) handleWGClientConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWGUniqueIP(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

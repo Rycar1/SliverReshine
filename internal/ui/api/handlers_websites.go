@@ -9,7 +9,7 @@ import (
 // --- Websites management ---
 
 func (s *Server) handleWebsites(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -18,7 +18,7 @@ func (s *Server) handleWebsites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWebsite(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -35,7 +35,7 @@ func (s *Server) handleWebsite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWebsiteAddContent(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -48,7 +48,7 @@ func (s *Server) handleWebsiteAddContent(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleWebsiteUpdateContent(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -61,7 +61,7 @@ func (s *Server) handleWebsiteUpdateContent(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleWebsiteRemoveContent(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -76,7 +76,7 @@ func (s *Server) handleWebsiteRemoveContent(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleWebsiteRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

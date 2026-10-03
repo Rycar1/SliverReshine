@@ -11,7 +11,7 @@ import (
 // is not a single Sliver call: it is assembled console-side from every source
 // that describes a relationship, so it takes no parameters.
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -20,7 +20,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePivotGraph(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

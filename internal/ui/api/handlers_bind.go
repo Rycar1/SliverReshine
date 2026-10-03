@@ -19,7 +19,7 @@ import (
 // so a dialer started by any client shows up here and stopping one is the same
 // operation as stopping any other job.
 func (s *Server) handleBindList(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -41,7 +41,7 @@ func (s *Server) handleBindList(w http.ResponseWriter, r *http.Request) {
 // hold the request open for an unbounded time on a target that is simply not
 // listening yet.
 func (s *Server) handleBindStart(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -73,7 +73,7 @@ func (s *Server) handleBindStart(w http.ResponseWriter, r *http.Request) {
 // has already been established — that is the ordinary session controls' job,
 // and conflating the two would make "stop retrying" close a working channel.
 func (s *Server) handleBindStop(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

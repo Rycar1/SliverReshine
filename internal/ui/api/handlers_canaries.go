@@ -7,7 +7,7 @@ import (
 // --- DNS canaries ---
 
 func (s *Server) handleCanaries(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

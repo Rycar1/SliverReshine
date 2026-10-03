@@ -44,7 +44,7 @@ func (c *Client) DialBind(host string, port uint32) (BindListenerView, error) {
 		return BindListenerView{}, errors.New("port must be between 1 and 65535")
 	}
 
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 
 	resp, err := c.RPC.DialBind(ctx, &clientpb.DialBindReq{Host: host, Port: port})

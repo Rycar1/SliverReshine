@@ -9,7 +9,7 @@ import (
 
 // StartService creates and starts a Windows service via the session.
 func (c *Client) StartService(sessionID, serviceName, description, binPath, hostname, arguments string) error {
-	ctx, cancel := rpcCtx(rpcSlow)
+	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.StartService(ctx, &sliverpb.StartServiceReq{
 		ServiceName:        serviceName,
@@ -30,7 +30,7 @@ func (c *Client) StartService(sessionID, serviceName, description, binPath, host
 
 // StopService stops a Windows service via the session.
 func (c *Client) StopService(sessionID, serviceName, hostname string) error {
-	ctx, cancel := rpcCtx(rpcSlow)
+	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.StopService(ctx, &sliverpb.StopServiceReq{
 		ServiceInfo: &sliverpb.ServiceInfoReq{
@@ -50,7 +50,7 @@ func (c *Client) StopService(sessionID, serviceName, hostname string) error {
 
 // RemoveService deletes a Windows service via the session.
 func (c *Client) RemoveService(sessionID, serviceName, hostname string) error {
-	ctx, cancel := rpcCtx(rpcSlow)
+	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.RemoveService(ctx, &sliverpb.RemoveServiceReq{
 		ServiceInfo: &sliverpb.ServiceInfoReq{
@@ -76,7 +76,7 @@ type SSHCommandResult struct {
 
 // RunSSHCommand runs a command over SSH from the session to another host.
 func (c *Client) RunSSHCommand(sessionID, username, hostname string, port uint32, command, password string, privKey []byte) (*SSHCommandResult, error) {
-	ctx, cancel := rpcCtx(rpcLong)
+	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.RunSSHCommand(ctx, &sliverpb.SSHCommandReq{
 		Username: username,
@@ -98,7 +98,7 @@ func (c *Client) RunSSHCommand(sessionID, username, hostname string, port uint32
 
 // RegisterExtension registers an extension on the session.
 func (c *Client) RegisterExtension(sessionID, name, os, init string, data []byte) error {
-	ctx, cancel := rpcCtx(rpcSlow)
+	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.RegisterExtension(ctx, &sliverpb.RegisterExtensionReq{
 		Name:    name,
@@ -118,7 +118,7 @@ func (c *Client) RegisterExtension(sessionID, name, os, init string, data []byte
 
 // ListExtensions lists extensions registered on the session.
 func (c *Client) ListExtensions(sessionID string) ([]string, error) {
-	ctx, cancel := rpcCtx(opTimeout)
+	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.ListExtensions(ctx, &sliverpb.ListExtensionsReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -140,7 +140,7 @@ type CallExtensionResult struct {
 
 // CallExtension calls an exported function of a registered extension.
 func (c *Client) CallExtension(sessionID, name, export string, serverStore bool, args []byte) (*CallExtensionResult, error) {
-	ctx, cancel := rpcCtx(rpcSlow)
+	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.CallExtension(ctx, &sliverpb.CallExtensionReq{
 		Name:        name,

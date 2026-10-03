@@ -16,7 +16,7 @@ type CanaryView struct {
 
 // Canaries lists the DNS canaries tracked by the server.
 func (c *Client) Canaries() ([]CanaryView, error) {
-	ctx, cancel := rpcCtx(rpcDefault)
+	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.Canaries(ctx, &commonpb.Empty{})
 	if err != nil {

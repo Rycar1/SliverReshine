@@ -15,7 +15,7 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteImplantBuild(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -32,7 +32,7 @@ func (s *Server) handleDeleteImplantBuild(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleRegenerate(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -47,7 +47,7 @@ func (s *Server) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetOperators(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -56,7 +56,7 @@ func (s *Server) handleGetOperators(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePortfwdList(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -65,7 +65,7 @@ func (s *Server) handlePortfwdList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePortfwdStart(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -97,7 +97,7 @@ func (s *Server) handlePortfwdStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePortfwdStop(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

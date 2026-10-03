@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Server) handleCreds(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -25,7 +25,7 @@ func (s *Server) handleCreds(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCredsAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -59,7 +59,7 @@ func (s *Server) handleCredsAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCredsRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -82,7 +82,7 @@ func (s *Server) handleCredsRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCredsUpdate(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -100,7 +100,7 @@ func (s *Server) handleCredsUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCredByID(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -109,7 +109,7 @@ func (s *Server) handleCredByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCredsSniff(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}
@@ -126,7 +126,7 @@ func (s *Server) handleCredsSniff(w http.ResponseWriter, r *http.Request) {
 // handleCredsByHashType serves both filtered variants: ?plaintext=1 narrows to
 
 func (s *Server) handleCredsByHashType(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

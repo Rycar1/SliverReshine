@@ -52,7 +52,7 @@ func (s *Server) handleMsfRemote(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMsfStage(w http.ResponseWriter, r *http.Request) {
-	c := s.requireClient(w)
+	c := s.clientFor(w, r)
 	if c == nil {
 		return
 	}

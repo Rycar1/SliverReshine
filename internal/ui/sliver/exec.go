@@ -52,6 +52,9 @@ const errUnknownMessageType = "unknown message type"
 // Replacing makes the map exactly the live set, which is the property the
 // comment above assumes when it says the answer cannot go stale.
 func (c *Client) sessionOS(sessionID string) (string, bool) {
+	if c.root != nil {
+		return c.root.sessionOS(sessionID)
+	}
 	c.osMu.Lock()
 	defer c.osMu.Unlock()
 
@@ -169,7 +172,7 @@ func (c *Client) execRawOn(sessionID, osName, path string, args []string, op tim
 // execWindows starts the process with HideWindow set, so no console window
 // appears on the target's desktop.
 func (c *Client) execWindows(sessionID, path string, args []string, op time.Duration) (*ExecResult, error) {
-	ctx, cancel := rpcCtx(op)
+	ctx, cancel := c.rpcCtx(op)
 	defer cancel()
 
 	resp, err := c.RPC.ExecuteWindows(ctx, &sliverpb.ExecuteWindowsReq{
@@ -189,7 +192,7 @@ func (c *Client) execWindows(sessionID, path string, args []string, op time.Dura
 // Windows it cannot suppress the console window -- see the note at the top of
 // this file.
 func (c *Client) execPlain(sessionID, path string, args []string, op time.Duration) (*ExecResult, error) {
-	ctx, cancel := rpcCtx(op)
+	ctx, cancel := c.rpcCtx(op)
 	defer cancel()
 
 	resp, err := c.RPC.Execute(ctx, &sliverpb.ExecuteReq{

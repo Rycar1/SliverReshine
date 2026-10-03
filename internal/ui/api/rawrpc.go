@@ -209,21 +209,32 @@ func (s *Server) handleRPCCall(c *sliver.Client, w http.ResponseWriter, r *http.
 	resp := results[0]
 
 	if !method.Streaming {
-		out, err := marshalProtoJSON(resp.Interface())
-		if err != nil {
-			writeClientError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+		writeUnaryRPCResult(w, resp)
 		return
 	}
+	writeStreamRPCResult(w, ctx, resp)
+}
 
+// writeUnaryRPCResult answers a non-streaming RPC with its marshalled response.
+func writeUnaryRPCResult(w http.ResponseWriter, resp reflect.Value) {
+	out, err := marshalProtoJSON(resp.Interface())
+	if err != nil {
+		writeClientError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": out})
+}
+
+// writeStreamRPCResult drains a streaming RPC and answers with every message it
+// produced.
+//
+// A failure after some messages arrived is reported as a failure, with the
+// partial list attached. The operator learns the stream was cut short and still
+// gets what did arrive -- more useful than either discarding it or answering
+// 200 as though the stream had ended on its own.
+func writeStreamRPCResult(w http.ResponseWriter, ctx context.Context, resp reflect.Value) {
 	messages, truncated, err := drainStream(ctx, resp)
 	if err != nil {
-		// A failure after some messages arrived is reported as a failure, with the
-		// partial list attached. The operator learns the stream was cut short and
-		// still gets what did arrive -- more useful than either discarding it or
-		// answering 200 as though the stream had ended on its own.
 		var partial *streamFailure
 		if errors.As(err, &partial) && len(partial.messages) > 0 {
 			writeJSON(w, http.StatusBadGateway, map[string]any{

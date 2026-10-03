@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"sort"
@@ -168,9 +170,16 @@ func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeout := 60 * time.Second
+	// The timeout is clamped. It was taken from the request body verbatim, so a
+	// caller could ask for a year and the handler would hold a context, a
+	// goroutine and an open response for that long -- and the HTTP server has no
+	// write timeout, so nothing else would cut it short either.
+	timeout := defaultRPCTimeout
 	if req.Timeout > 0 {
 		timeout = time.Duration(req.Timeout) * time.Second
+		if timeout > maxRPCTimeout {
+			timeout = maxRPCTimeout
+		}
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
@@ -210,6 +219,21 @@ func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
 
 	messages, truncated, err := drainStream(ctx, resp)
 	if err != nil {
+		// A failure after some messages arrived is reported as a failure, with the
+		// partial list attached. The operator learns the stream was cut short and
+		// still gets what did arrive -- more useful than either discarding it or
+		// answering 200 as though the stream had ended on its own.
+		var partial *streamFailure
+		if errors.As(err, &partial) && len(partial.messages) > 0 {
+			writeJSON(w, http.StatusBadGateway, map[string]any{
+				"ok":       false,
+				"error":    partial.Error(),
+				"messages": partial.messages,
+				"count":    len(partial.messages),
+				"partial":  true,
+			})
+			return
+		}
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -220,6 +244,27 @@ func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
 		"truncated": truncated,
 	})
 }
+
+// streamFailure carries the messages received before a streaming call failed.
+//
+// It exists so a partial read is reported as a partial read. Returning a bare
+// error would discard what did arrive; returning nil -- which is what the code
+// did -- claimed the stream ended normally.
+type streamFailure struct {
+	messages []any
+	cause    error
+}
+
+func (e *streamFailure) Error() string { return e.cause.Error() }
+func (e *streamFailure) Unwrap() error { return e.cause }
+
+// RPC timeouts. A request may ask for a shorter one; the cap stops it asking for
+// an arbitrarily long one, which would pin a context, a goroutine and an open
+// response for that whole time.
+const (
+	defaultRPCTimeout = 60 * time.Second
+	maxRPCTimeout     = 10 * time.Minute
+)
 
 // maxStreamMessages bounds how much a streaming call can buffer. Several
 // streams (events, beacons, the loot feed) never terminate on their own, so the
@@ -244,14 +289,26 @@ func drainStream(ctx context.Context, stream reflect.Value) ([]any, bool, error)
 			return messages, false, fmt.Errorf("unexpected Recv signature")
 		}
 		if errVal := out[1]; !errVal.IsNil() {
-			// io.EOF is the normal end of a finite stream.
-			if errVal.Interface().(error).Error() == "EOF" {
+			cause := errVal.Interface().(error)
+			// io.EOF is the normal end of a finite stream, so it is a clean stop.
+			// The string comparison is kept as a fallback because a wrapped EOF is
+			// still EOF, and errors.Is covers the wrapped cases.
+			if errors.Is(cause, io.EOF) || cause.Error() == "EOF" {
 				return messages, false, nil
 			}
-			if len(messages) > 0 {
-				return messages, false, nil
+			// A deadline or cancellation is this console's own doing, so what was
+			// received is a truncation rather than a failure: several streams
+			// (events, beacons, loot) never end on their own, and the timeout is
+			// the documented way to read a window of them.
+			if ctx.Err() != nil || errors.Is(cause, context.DeadlineExceeded) ||
+				errors.Is(cause, context.Canceled) {
+				return messages, len(messages) > 0, nil
 			}
-			return nil, false, errVal.Interface().(error)
+			// Anything else is a real failure. The partial messages go with it: this
+			// used to return (messages, false, nil), so the handler answered
+			// 200 {"ok":true} for a stream that died, and every message that would
+			// have followed was silently missing.
+			return messages, false, &streamFailure{messages: messages, cause: cause}
 		}
 		item, err := marshalProtoJSON(out[0].Interface())
 		if err != nil {

@@ -201,8 +201,24 @@ func InstallAlias(bundleB64 string) (*AliasView, error) {
 
 // safeAliasRelPath resolves a manifest file path into a safe relative path
 // that cannot escape the install directory.
+//
+// The paths come from alias.json inside a bundle, written by whoever authored the
+// alias rather than by the operator, so they are untrusted input.
+//
+// A Windows-style separator is normalised to '/' before anything else reads the
+// string. path.Clean and the component split below both understand only '/', so
+// `..\..\evil.exe` used to survive as a single component that is not equal to
+// `..`, and filepath.FromSlash left the backslashes alone -- so the caller's
+// filepath.Join then resolved them as separators and wrote outside the install
+// directory. Forward-slash traversal was already safe because path.Clean
+// collapses it; only the backslash form escaped.
+//
+// The two checks at the end cover what a component check cannot: a drive letter
+// or UNC prefix is an ordinary component to path.Clean, but filepath treats it as
+// a volume and it would replace the install directory entirely.
 func safeAliasRelPath(p string) (string, error) {
-	cleaned := path.Clean("/" + strings.TrimPrefix(p, "/"))
+	slashed := strings.ReplaceAll(p, `\`, "/")
+	cleaned := path.Clean("/" + strings.TrimPrefix(slashed, "/"))
 	cleaned = strings.TrimPrefix(cleaned, "/")
 	if cleaned == "" || cleaned == "." {
 		return "", errors.New("invalid alias artifact path")
@@ -213,7 +229,11 @@ func safeAliasRelPath(p string) (string, error) {
 			return "", errors.New("invalid alias artifact path")
 		}
 	}
-	return filepath.FromSlash(cleaned), nil
+	rel := filepath.FromSlash(cleaned)
+	if filepath.IsAbs(rel) || filepath.VolumeName(rel) != "" {
+		return "", fmt.Errorf("invalid alias artifact path %q: must be relative to the alias directory", p)
+	}
+	return rel, nil
 }
 
 // Decompression limits for an alias bundle.

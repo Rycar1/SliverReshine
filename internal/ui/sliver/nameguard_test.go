@@ -55,7 +55,7 @@ func TestValidateArtifactNameAcceptsRealNames(t *testing.T) {
 	// The values a real engagement produces: alias command names, profile names
 	// from the sliver-client TUI, and the IDs the artifact itself uses.
 	for _, name := range []string{
-		"c2tool",
+		"sliverreshine",
 		"operator",
 		"SharpHound",
 		"rubeus",

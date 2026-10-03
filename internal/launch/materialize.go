@@ -14,7 +14,7 @@ import (
 	"runtime"
 	"strings"
 
-	"c2tool/internal/embed"
+	"sliverreshine/internal/embed"
 )
 
 // MaterializeServer resolves the sliver-server binary to execute.
@@ -582,11 +582,11 @@ func findExternalServer() (string, error) {
 // differed per platform, which made "why is it running that server" hard to
 // answer.
 //
-// C2TOOL_HOME still overrides it, and a directory that cannot be written falls
+// SLIVERRESHINE_HOME still overrides it, and a directory that cannot be written falls
 // back to the OS cache rather than refusing to start: a launcher read from a
 // read-only medium still has to work.
 func launcherStateDir() (string, error) {
-	if dir := os.Getenv("C2TOOL_HOME"); dir != "" {
+	if dir := os.Getenv("SLIVERRESHINE_HOME"); dir != "" {
 		return filepath.Join(dir, "bin"), nil
 	}
 
@@ -603,13 +603,13 @@ func launcherStateDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(cache, "c2tool", "bin"), nil
+	return filepath.Join(cache, "sliverreshine", "bin"), nil
 }
 
 // HomeDir resolves the state directory the console uses, preferring one beside
 // the executable.
 //
-// The order is: C2TOOL_HOME, then <exe dir>/data, then ~/.c2tool. Placing the
+// The order is: SLIVERRESHINE_HOME, then <exe dir>/data, then ~/.sliverreshine. Placing the
 // state beside the binary is what makes a deployment relocatable — the whole
 // install is one directory that can be tarred up, copied to another host and
 // run — and it keeps the config, the login record and the loot together with
@@ -619,7 +619,7 @@ func launcherStateDir() (string, error) {
 // a binary that lives somewhere unwritable (a read-only mount, a system path)
 // still has to start.
 func HomeDir() (string, error) {
-	if v := os.Getenv("C2TOOL_HOME"); v != "" {
+	if v := os.Getenv("SLIVERRESHINE_HOME"); v != "" {
 		return v, nil
 	}
 	if base, ok := executableDir(); ok {
@@ -634,7 +634,7 @@ func HomeDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".c2tool"), nil
+	return filepath.Join(home, ".sliverreshine"), nil
 }
 
 // executableDir returns the directory the running binary lives in.

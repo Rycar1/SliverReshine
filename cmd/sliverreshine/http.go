@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"c2tool/internal/ui/api"
+	"sliverreshine/internal/ui/api"
 )
 
 // Shutdown deadlines for the console.
@@ -51,7 +51,7 @@ func shutdownConsole(srv *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), consoleShutdownGrace)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("[c2tool] console shutdown incomplete (%v); closing remaining connections", err)
+		log.Printf("[sliverreshine] console shutdown incomplete (%v); closing remaining connections", err)
 		_ = srv.Close()
 	}
 }

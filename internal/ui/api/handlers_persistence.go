@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // --- Persistence ---

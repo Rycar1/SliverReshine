@@ -1,20 +1,20 @@
-# c2tool end-to-end functional test harness.
+# sliverreshine end-to-end functional test harness.
 #
 # Drives the real HTTP API of a running console: generates payloads across the
 # full matrix, starts listeners, and exercises session operations. ASCII only
 # (PowerShell 5.1 reads a BOM-less script as ANSI).
 #
 # Usage:
-#   .\c2tool_e2e.ps1 -Base http://127.0.0.1:18180 -Cred "op:pass" -Phase generate
-#   .\c2tool_e2e.ps1 -Base ... -Cred ... -Phase listeners
-#   .\c2tool_e2e.ps1 -Base ... -Cred ... -Phase sessions -SessionId <id>
-#   .\c2tool_e2e.ps1 -Base ... -Cred ... -Phase matrix      # full payload matrix
+#   .\sliverreshine_e2e.ps1 -Base http://127.0.0.1:18180 -Cred "op:pass" -Phase generate
+#   .\sliverreshine_e2e.ps1 -Base ... -Cred ... -Phase listeners
+#   .\sliverreshine_e2e.ps1 -Base ... -Cred ... -Phase sessions -SessionId <id>
+#   .\sliverreshine_e2e.ps1 -Base ... -Cred ... -Phase matrix      # full payload matrix
 param(
     [string]$Base = 'http://127.0.0.1:18180',
     [string]$Cred = '',
     [string]$Phase = 'generate',
     [string]$SessionId = '',
-    [string]$OutDir = "$env:TEMP\c2tool-e2e",
+    [string]$OutDir = "$env:TEMP\sliverreshine-e2e",
     [int]$TimeoutSec = 600
 )
 
@@ -216,7 +216,7 @@ function Phase-Sessions {
     T 'mimikatz modules' { $r = Api -Path '/api/mimikatz/modules'; $o = $r | ConvertFrom-Json; if ($o.commands) { $true } else { $r.Substring(0, [Math]::Min(150, $r.Length)) } }
 }
 
-Write-Host "`nc2tool e2e :: phase=$Phase base=$Base" -ForegroundColor White
+Write-Host "`nsliverreshine e2e :: phase=$Phase base=$Base" -ForegroundColor White
 
 switch ($Phase) {
     'generate' { Phase-Generate }

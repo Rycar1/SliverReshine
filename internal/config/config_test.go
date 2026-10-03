@@ -204,7 +204,7 @@ func TestEnsureReadmeWritesOnceAndNeverOverwrites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readme was not written: %v", err)
 	}
-	if !strings.Contains(string(raw), "c2tool.json") {
+	if !strings.Contains(string(raw), "sliverreshine.json") {
 		t.Error("readme does not mention the settings file")
 	}
 

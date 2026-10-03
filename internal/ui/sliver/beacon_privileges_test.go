@@ -195,7 +195,7 @@ func TestBeaconIntegrityUsesAsyncAndBeaconID(t *testing.T) {
 func TestBeaconIntegrityDecodesTheProtobufResponse(t *testing.T) {
 	stub := &beaconStub{
 		nextTaskID:    "task-1",
-		privsResponse: &sliverpb.GetPrivs{ProcessIntegrity: "High", ProcessName: "c2tool.exe"},
+		privsResponse: &sliverpb.GetPrivs{ProcessIntegrity: "High", ProcessName: "sliverreshine.exe"},
 	}
 	c := &Client{RPC: stub}
 

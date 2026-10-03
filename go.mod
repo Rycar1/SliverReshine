@@ -1,4 +1,4 @@
-module c2tool
+module sliverreshine
 
 go 1.25.6
 

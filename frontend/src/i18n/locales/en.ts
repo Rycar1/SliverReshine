@@ -1,6 +1,6 @@
 export default {
   app: {
-    title: 'Sliver UI',
+    title: 'SliverReshine',
     connected: 'Connected v{{version}}',
     notConnected: 'Not connected',
     connecting: 'Connecting…',

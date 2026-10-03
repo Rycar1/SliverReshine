@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // buildAVRows is the filter the AV scan applies before anything leaves the

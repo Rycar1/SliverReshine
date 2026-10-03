@@ -113,12 +113,12 @@ describe('SettingsPage private key storage', () => {
     view.unmount()
   })
 
-  it('writes no c2tool.config entry at all', async () => {
+  it('writes no sliverreshine.config entry at all', async () => {
     const view = renderPage()
     await loadConfigFile()
 
-    expect(sessionStorage.getItem('c2tool.config')).toBeNull()
-    expect(localStorage.getItem('c2tool.config')).toBeNull()
+    expect(sessionStorage.getItem('sliverreshine.config')).toBeNull()
+    expect(localStorage.getItem('sliverreshine.config')).toBeNull()
 
     view.unmount()
   })
@@ -138,7 +138,7 @@ describe('SettingsPage private key storage', () => {
   it('does not restore a previously stored config on mount', async () => {
     // Seed the key the old implementation used. A hardened page must ignore it
     // rather than adopting it, or an upgrade would inherit the old exposure.
-    sessionStorage.setItem('c2tool.config', sampleConfigText)
+    sessionStorage.setItem('sliverreshine.config', sampleConfigText)
 
     const view = renderPage()
     await waitFor(() => expect(screen.getByText('Select Config File')).toBeInTheDocument())
@@ -182,7 +182,7 @@ describe('SettingsPage private key storage', () => {
     await waitFor(() => expect(screen.getByText('lab')).toBeInTheDocument())
 
     fireEvent.click(screen.getByText('lab'))
-    await waitFor(() => expect(localStorage.getItem('c2tool.activeProfile')).toBe('lab'))
+    await waitFor(() => expect(localStorage.getItem('sliverreshine.activeProfile')).toBe('lab'))
 
     view.unmount()
   })

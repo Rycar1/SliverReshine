@@ -1,4 +1,4 @@
-// Command c2tool ships a self-contained C2 console: it provisions a Sliver
+// Command sliverreshine ships a self-contained C2 console: it provisions a Sliver
 // server from an embedded payload, supervises it, and serves the web interface
 // that talks to it over gRPC.
 //
@@ -28,10 +28,10 @@ import (
 	"syscall"
 	"time"
 
-	"c2tool/internal/config"
-	"c2tool/internal/launch"
-	"c2tool/internal/ui/api"
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/config"
+	"sliverreshine/internal/launch"
+	"sliverreshine/internal/ui/api"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // options is the command line as parsed, before anything has been read from
@@ -59,7 +59,7 @@ func main() {
 func parseFlags() options {
 	var o options
 	flag.StringVar(&o.addr, "addr", "", "HTTP listen address for the web console (overrides the settings file)")
-	flag.StringVar(&o.home, "home", "", "base directory for state and profiles (default: <exe dir>/data, then ~/.c2tool)")
+	flag.StringVar(&o.home, "home", "", "base directory for state and profiles (default: <exe dir>/data, then ~/.sliverreshine)")
 	flag.StringVar(&o.operator, "operator", "", "operator name recorded in the generated profile")
 	flag.StringVar(&o.mpHost, "mp-host", "", "host the embedded Sliver gRPC listener binds to")
 	flag.IntVar(&o.mpPort, "mp-port", 0, "port the embedded Sliver gRPC listener binds to")
@@ -123,7 +123,7 @@ func waitForForcedQuit(ctx context.Context, sig <-chan os.Signal) os.Signal {
 // daemon is stopped first so the fast path does not leave it behind.
 func forceQuitOnSignal(ctx context.Context, sig <-chan os.Signal, srv *launch.Server) {
 	s := waitForForcedQuit(ctx, sig)
-	log.Printf("[c2tool] %v during shutdown; forcing exit", s)
+	log.Printf("[sliverreshine] %v during shutdown; forcing exit", s)
 	if srv != nil {
 		srv.Stop()
 	}
@@ -181,7 +181,7 @@ func run(o options) {
 		select {
 		case <-shutdownDone:
 		case <-time.After(forceExitGrace):
-			log.Printf("[c2tool] shutdown did not finish within %s; forcing exit", forceExitGrace)
+			log.Printf("[sliverreshine] shutdown did not finish within %s; forcing exit", forceExitGrace)
 			srv.Stop()
 			os.Exit(0)
 		}
@@ -192,7 +192,7 @@ func run(o options) {
 	settings.MultiplayerPort = srv.MultiplayerPort()
 
 	if settings.ServerOnly {
-		log.Printf("[c2tool] server-only mode, gRPC on %s:%d; Ctrl-C to stop",
+		log.Printf("[sliverreshine] server-only mode, gRPC on %s:%d; Ctrl-C to stop",
 			settings.MultiplayerHost, settings.MultiplayerPort)
 		<-ctx.Done()
 		return
@@ -207,13 +207,13 @@ func run(o options) {
 	// their TLS policy rather than merely reminded of it.
 	if err := checkCleartextPolicy(settings); err != nil {
 		srv.Stop()
-		log.Fatalf("[c2tool] %v", err)
+		log.Fatalf("[sliverreshine] %v", err)
 	}
 
 	listener, err := listenConsole(settings.Addr)
 	if err != nil {
 		srv.Stop()
-		log.Fatalf("[c2tool] cannot listen on %s: %v", settings.Addr, err)
+		log.Fatalf("[sliverreshine] cannot listen on %s: %v", settings.Addr, err)
 	}
 	// The banner and the browser prompt have to name the address that is really
 	// serving; after a port fallback the configured port is no longer it.
@@ -232,12 +232,12 @@ func resolveHome(flagHome string) string {
 	if base == "" {
 		dir, err := defaultHome()
 		if err != nil {
-			log.Fatalf("[c2tool] cannot determine home directory: %v", err)
+			log.Fatalf("[sliverreshine] cannot determine home directory: %v", err)
 		}
 		base = dir
 	}
 	if err := os.MkdirAll(base, 0o700); err != nil {
-		log.Fatalf("[c2tool] cannot create %s: %v", base, err)
+		log.Fatalf("[sliverreshine] cannot create %s: %v", base, err)
 	}
 	return base
 }
@@ -255,15 +255,15 @@ func provision(base string, o options) (config.Config, string) {
 	// the first start, and never again. A restart must not overwrite an edit.
 	settings, created, err := config.Ensure(base)
 	if err != nil {
-		log.Fatalf("[c2tool] %v", err)
+		log.Fatalf("[sliverreshine] %v", err)
 	}
 	if created {
-		log.Printf("[c2tool] wrote default settings to %s", config.Path(base))
+		log.Printf("[sliverreshine] wrote default settings to %s", config.Path(base))
 	}
 	if wroteReadme, err := config.EnsureReadme(base); err != nil {
-		log.Printf("[c2tool] WARNING: cannot write %s: %v", filepath.Join(base, config.ReadmeName), err)
+		log.Printf("[sliverreshine] WARNING: cannot write %s: %v", filepath.Join(base, config.ReadmeName), err)
 	} else if wroteReadme {
-		log.Printf("[c2tool] wrote deployment notes to %s", filepath.Join(base, config.ReadmeName))
+		log.Printf("[sliverreshine] wrote deployment notes to %s", filepath.Join(base, config.ReadmeName))
 	}
 
 	settings, passOverride := applyOverrides(settings, overrides{
@@ -279,7 +279,7 @@ func provision(base string, o options) (config.Config, string) {
 	})
 	settings = settings.Normalize()
 
-	installLogFile(filepath.Join(base, "c2tool.log"))
+	installLogFile(filepath.Join(base, "sliverreshine.log"))
 	return settings, passOverride
 }
 
@@ -295,7 +295,7 @@ func startEmbeddedServer(ctx context.Context, base string, settings config.Confi
 		LogPath:         filepath.Join(base, "sliver-server.log"),
 	})
 	if err != nil {
-		log.Fatalf("[c2tool] %v", err)
+		log.Fatalf("[sliverreshine] %v", err)
 	}
 
 	// No Stop here: the server's lifetime belongs to run(), which defers it.
@@ -304,7 +304,7 @@ func startEmbeddedServer(ctx context.Context, base string, settings config.Confi
 	// from coming back; TestEmbeddedServerLifecycleBelongsToRun enforces it.
 	profile, _ := launch.ReadProfile(srv.ProfilePath)
 	if profile != nil {
-		log.Printf("[c2tool] operator %q -> %s", profile.Operator, profile.Path)
+		log.Printf("[sliverreshine] operator %q -> %s", profile.Operator, profile.Path)
 	}
 	return srv
 }
@@ -320,10 +320,10 @@ func newConsole(settings config.Config) *api.Server {
 	if settings.AutoConnect {
 		client, err := connectProfile(launchProfileName())
 		if err != nil {
-			log.Printf("[c2tool] auto-connect failed (%v); connect from the web console instead", err)
+			log.Printf("[sliverreshine] auto-connect failed (%v); connect from the web console instead", err)
 		} else {
 			web.SetClient(client)
-			log.Printf("[c2tool] web console attached to the embedded server")
+			log.Printf("[sliverreshine] web console attached to the embedded server")
 		}
 	}
 	return web
@@ -335,7 +335,7 @@ func newConsole(settings config.Config) *api.Server {
 // environment), otherwise the stored record, otherwise a freshly generated
 // password. The winner is then written back, so the record, the running console
 // and the next launch always converge on the same password. Without that
-// write-back an operator could set C2TOOL_AUTH_PASS once and have it silently
+// write-back an operator could set SLIVERRESHINE_AUTH_PASS once and have it silently
 // ignored on the next start in favour of whatever the record happened to hold.
 func configureAuth(web *api.Server, base string, settings config.Config, passOverride, authFile string) {
 	credPath := authFile
@@ -345,7 +345,7 @@ func configureAuth(web *api.Server, base string, settings config.Config, passOve
 	store := api.CredentialStore{Path: credPath}
 
 	if !settings.Auth.Enabled {
-		log.Printf("[c2tool] WARNING: authentication is disabled in %s; anyone who can reach %s gets full control",
+		log.Printf("[sliverreshine] WARNING: authentication is disabled in %s; anyone who can reach %s gets full control",
 			config.Path(base), settings.Addr)
 		return
 	}
@@ -354,7 +354,7 @@ func configureAuth(web *api.Server, base string, settings config.Config, passOve
 	//
 	//   username: the stored record wins, so a rename made from the console is
 	//             not reverted by the next restart.
-	//   password: an explicit -auth-pass / C2TOOL_AUTH_PASS wins over the
+	//   password: an explicit -auth-pass / SLIVERRESHINE_AUTH_PASS wins over the
 	//             record, then the record, then a generated one.
 	//
 	// The password used to follow the username's rule -- the record overwrote
@@ -379,7 +379,7 @@ func configureAuth(web *api.Server, base string, settings config.Config, passOve
 	// so a normal restart does not rewrite the file on every boot.
 	if storedUser, storedPass, found, _ := store.Load(); !found || storedUser != user || storedPass != pass {
 		if err := store.Save(user, pass); err != nil {
-			log.Printf("[c2tool] WARNING: cannot persist credentials to %s: %v", credPath, err)
+			log.Printf("[sliverreshine] WARNING: cannot persist credentials to %s: %v", credPath, err)
 		}
 	}
 	web.SetBasicAuth(cfg)
@@ -416,7 +416,7 @@ func listenConsole(addr string) (net.Listener, error) {
 	if fbErr != nil {
 		return nil, err
 	}
-	log.Printf("[c2tool] console address %s is in use; switched to %s", addr, fallback)
+	log.Printf("[sliverreshine] console address %s is in use; switched to %s", addr, fallback)
 	return ln, nil
 }
 
@@ -460,13 +460,13 @@ func serveConsole(ctx context.Context, stop context.CancelFunc, web *api.Server,
 		// Half a TLS config is a mistake worth stopping for: guessing which half
 		// the operator meant would silently downgrade them to plain HTTP, which
 		// is the thing they were trying to avoid by setting it at all.
-		log.Fatalf("[c2tool] tlsCert and tlsKey must be set together (%s)", config.Path(base))
+		log.Fatalf("[sliverreshine] tlsCert and tlsKey must be set together (%s)", config.Path(base))
 	case settings.TLSConfigured():
 		scheme = "https"
 		go func() {
 			if err := httpSrv.ServeTLS(listener, settings.TLSCert, settings.TLSKey); err != nil &&
 				err.Error() != "http: Server closed" {
-				log.Printf("[c2tool] https server stopped: %v", err)
+				log.Printf("[sliverreshine] https server stopped: %v", err)
 				stop()
 			}
 		}()
@@ -474,15 +474,15 @@ func serveConsole(ctx context.Context, stop context.CancelFunc, web *api.Server,
 		warnIfCleartextExposed(settings.Addr)
 		go func() {
 			if err := httpSrv.Serve(listener); err != nil && err.Error() != "http: Server closed" {
-				log.Printf("[c2tool] http server stopped: %v", err)
+				log.Printf("[sliverreshine] http server stopped: %v", err)
 				stop()
 			}
 		}()
 	}
 
-	log.Printf("[c2tool] web console listening on %s://%s", scheme, displayAddr(listener.Addr().String()))
+	log.Printf("[sliverreshine] web console listening on %s://%s", scheme, displayAddr(listener.Addr().String()))
 	<-ctx.Done()
-	log.Printf("[c2tool] shutting down ...")
+	log.Printf("[sliverreshine] shutting down ...")
 
 	shutdownConsole(httpSrv)
 }
@@ -541,20 +541,20 @@ func warnIfCleartextExposed(addr string) {
 	}
 
 	const rule = "================================================================"
-	log.Printf("[c2tool] %s", rule)
-	log.Printf("[c2tool] WARNING: UNSENCRYPTED CONSOLE ON A NETWORK INTERFACE")
-	log.Printf("[c2tool] %s", rule)
-	log.Printf("[c2tool] Listening on %s over plain HTTP.", addr)
-	log.Printf("[c2tool] The console login and every command result travel in clear text,")
-	log.Printf("[c2tool] and HTTP Basic is base64, not encryption: anyone on this network can")
-	log.Printf("[c2tool] read both, and can reuse the login to run commands on every implant.")
-	log.Printf("[c2tool]")
-	log.Printf("[c2tool] Three ways to fix it, in order of how much they cost:")
-	log.Printf("[c2tool]   1. bind 127.0.0.1:8080 here, and put an SSH tunnel in front:")
-	log.Printf("[c2tool]        ssh -L 8080:127.0.0.1:8080 user@this-host")
-	log.Printf("[c2tool]   2. set tlsCert and tlsKey in the settings file to serve HTTPS")
-	log.Printf("[c2tool]   3. set requireTLS to make this console refuse to start like this")
-	log.Printf("[c2tool] %s", rule)
+	log.Printf("[sliverreshine] %s", rule)
+	log.Printf("[sliverreshine] WARNING: UNSENCRYPTED CONSOLE ON A NETWORK INTERFACE")
+	log.Printf("[sliverreshine] %s", rule)
+	log.Printf("[sliverreshine] Listening on %s over plain HTTP.", addr)
+	log.Printf("[sliverreshine] The console login and every command result travel in clear text,")
+	log.Printf("[sliverreshine] and HTTP Basic is base64, not encryption: anyone on this network can")
+	log.Printf("[sliverreshine] read both, and can reuse the login to run commands on every implant.")
+	log.Printf("[sliverreshine]")
+	log.Printf("[sliverreshine] Three ways to fix it, in order of how much they cost:")
+	log.Printf("[sliverreshine]   1. bind 127.0.0.1:8080 here, and put an SSH tunnel in front:")
+	log.Printf("[sliverreshine]        ssh -L 8080:127.0.0.1:8080 user@this-host")
+	log.Printf("[sliverreshine]   2. set tlsCert and tlsKey in the settings file to serve HTTPS")
+	log.Printf("[sliverreshine]   3. set requireTLS to make this console refuse to start like this")
+	log.Printf("[sliverreshine] %s", rule)
 }
 
 // isLoopbackHost reports whether a listen host is local-only.
@@ -601,19 +601,19 @@ func applyOverrides(cfg config.Config, o overrides) (config.Config, string) {
 
 	// The environment is checked first so a flag, which is more specific, can
 	// still win below.
-	if v, ok := lookupEnv("C2TOOL_ADDR"); ok {
+	if v, ok := lookupEnv("SLIVERRESHINE_ADDR"); ok {
 		cfg.Addr = v
 	}
-	if v, ok := lookupEnv("C2TOOL_AUTH_USER"); ok {
+	if v, ok := lookupEnv("SLIVERRESHINE_AUTH_USER"); ok {
 		cfg.Auth.User = v
 	}
-	if v, ok := lookupEnv("C2TOOL_AUTH_REALM"); ok {
+	if v, ok := lookupEnv("SLIVERRESHINE_AUTH_REALM"); ok {
 		cfg.Auth.Realm = v
 	}
-	if v, ok := lookupEnv("C2TOOL_AUTH_PASS"); ok {
+	if v, ok := lookupEnv("SLIVERRESHINE_AUTH_PASS"); ok {
 		pass = v
 	}
-	if v, ok := lookupEnv("C2TOOL_AUTH"); ok && (v == "off" || v == "false" || v == "0") {
+	if v, ok := lookupEnv("SLIVERRESHINE_AUTH"); ok && (v == "off" || v == "false" || v == "0") {
 		cfg.Auth.Enabled = false
 	}
 
@@ -642,7 +642,7 @@ func applyOverrides(cfg config.Config, o overrides) (config.Config, string) {
 		pass = o.authPass
 	}
 	// An explicit -auth-user with an empty value turns the login off, which is
-	// how run.sh expressed C2TOOL_AUTH=off.
+	// how run.sh expressed SLIVERRESHINE_AUTH=off.
 	if flagSet("auth-user") {
 		cfg.Auth.User = o.authUser
 		cfg.Auth.Enabled = o.authUser != ""
@@ -726,7 +726,7 @@ func printCredentials(user, pass, credPath, settingsPath, addr, scheme string, s
 	const rule = "+" + "-----------------------------------------------------------" + "+"
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "  %s\n", rule)
-	fmt.Fprintf(os.Stderr, "  | c2tool console                                            |\n")
+	fmt.Fprintf(os.Stderr, "  | sliverreshine console                                      |\n")
 	fmt.Fprintf(os.Stderr, "  %s\n", rule)
 	fmt.Fprintf(os.Stderr, "     url      : %s\n", url)
 	fmt.Fprintf(os.Stderr, "     username : %s\n", user)
@@ -761,7 +761,7 @@ type resolvedAccount struct {
 //     the operator supplied nothing.
 //
 // The password used to follow the username's rule -- the record overwrote
-// whatever was passed -- which made `-auth-pass X` and C2TOOL_AUTH_PASS silently
+// whatever was passed -- which made `-auth-pass X` and SLIVERRESHINE_AUTH_PASS silently
 // do nothing once a record existed. An operator who set a password and restarted
 // was still asked for the old one, which is indistinguishable from the console
 // changing their password.
@@ -773,7 +773,7 @@ func resolveAccount(settingsUser, passOverride string, store api.CredentialStore
 	out := resolvedAccount{user: settingsUser, pass: passOverride}
 
 	if storedUser, storedPass, found, err := store.Load(); err != nil {
-		log.Printf("[c2tool] WARNING: cannot read %s: %v", store.Path, err)
+		log.Printf("[sliverreshine] WARNING: cannot read %s: %v", store.Path, err)
 	} else if found {
 		out.user = storedUser
 		if out.pass == "" {
@@ -787,7 +787,7 @@ func resolveAccount(settingsUser, passOverride string, store api.CredentialStore
 		// because it looks protected.
 		generated, err := generatePassword()
 		if err != nil {
-			log.Fatalf("[c2tool] cannot generate a console password: %v", err)
+			log.Fatalf("[sliverreshine] cannot generate a console password: %v", err)
 		}
 		out.pass = generated
 		out.generated = true
@@ -820,7 +820,7 @@ func flagSet(name string) bool {
 }
 
 // launchProfileName is the profile filename the launcher generates.
-func launchProfileName() string { return "c2tool" }
+func launchProfileName() string { return "sliverreshine" }
 
 // connectProfile attaches the console to the launcher-generated profile.
 func connectProfile(name string) (*sliver.Client, error) {
@@ -831,8 +831,8 @@ func connectProfile(name string) (*sliver.Client, error) {
 	return sliver.Connect(cfg)
 }
 
-// defaultHome resolves the state directory: C2TOOL_HOME, otherwise a data
-// directory beside the executable, otherwise ~/.c2tool.
+// defaultHome resolves the state directory: SLIVERRESHINE_HOME, otherwise a data
+// directory beside the executable, otherwise ~/.sliverreshine.
 //
 // Keeping the state next to the binary is what makes a deployment relocatable —
 // the config, the login record, the loot and the unpacked server all live in one

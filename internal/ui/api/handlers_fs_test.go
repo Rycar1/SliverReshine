@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // fsStub answers the file-system RPCs and records the request it was handed, so

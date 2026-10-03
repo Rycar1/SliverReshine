@@ -17,7 +17,7 @@ import (
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/rpcpb"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // This file drives the state-changing handlers against a stubbed Sliver RPC.

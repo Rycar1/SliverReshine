@@ -6,7 +6,7 @@ import (
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 func (s *Server) handleMonitorProviders(c *sliver.Client, w http.ResponseWriter, r *http.Request) {

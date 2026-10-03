@@ -32,7 +32,7 @@ the toolchain named in `go.mod` (`go 1.25.6`).
 
 | # | Command | Where | Purpose |
 |---|---------|-------|---------|
-| 1 | `govulncheck ./...` | repo root | The main `c2tool` module. This is the one that matters. |
+| 1 | `govulncheck ./...` | repo root | The main `sliverreshine` module. This is the one that matters. |
 | 2 | `govulncheck -show verbose ./...` | repo root | Same scan with the full call-graph listing for every finding. |
 | 3 | `govulncheck -tags "server go_sqlite" ./server/...` | `sliver/` | The embedded Sliver server. |
 
@@ -156,7 +156,7 @@ also found…" tail, not here.)
 govulncheck reports these as reachable because this code calls into them. Two
 call sites account for most of the standard-library findings:
 
-- **`cmd/c2tool/main.go:222` — `http.Server.Serve`.** The console's own HTTP
+- **`cmd/sliverreshine/main.go:222` — `http.Server.Serve`.** The console's own HTTP
   listener. It pulls in `net/http`, `html/template`, `crypto/tls`, `net/url`,
   `crypto/x509` and `net` in one go, which is why a single line appears as the
   trace for findings #3, #5, #10, #12, #13, #15, #16, #18, #20, #21 and #23.

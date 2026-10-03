@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/net/websocket"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // This file holds the two terminal modes that add compatibility at the cost of

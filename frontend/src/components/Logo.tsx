@@ -12,7 +12,7 @@ export default function Logo({ size = 30, className }: LogoProps) {
       fill="none"
       className={className}
       role="img"
-      aria-label="c2tool logo"
+      aria-label="SliverReshine logo"
     >
       <defs>
         <linearGradient id="sliver-grad" x1="6" y1="4" x2="42" y2="44" gradientUnits="userSpaceOnUse">

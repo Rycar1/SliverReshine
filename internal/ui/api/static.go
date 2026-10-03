@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"c2tool/web"
+	"sliverreshine/web"
 )
 
 var staticFS = func() fs.FS {
@@ -51,7 +51,7 @@ func serveStatic(w http.ResponseWriter, r *http.Request, fsys fs.FS, index []byt
 		// No production frontend build present (e.g. dev binary).
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, "Sliver UI API is running. Run `npm run build` in frontend/ and rebuild the backend to serve the web interface.")
+		_, _ = io.WriteString(w, "SliverReshine API is running. Run `npm run build` in frontend/ and rebuild the backend to serve the web interface.")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

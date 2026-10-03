@@ -15,7 +15,7 @@ import (
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
 	"google.golang.org/grpc"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // downloadStub answers the one RPC the download path uses. It embeds the

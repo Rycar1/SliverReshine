@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"c2tool/internal/embed"
+	"sliverreshine/internal/embed"
 )
 
 // sekurlsaOutput is trimmed from a real run against a domain-joined Windows 10

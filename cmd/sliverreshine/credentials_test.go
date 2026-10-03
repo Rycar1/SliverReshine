@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"c2tool/internal/ui/api"
+	"sliverreshine/internal/ui/api"
 )
 
 // The credential precedence, which is the whole content of resolveAccount.
 //
 // The regression it guards: the stored record used to overwrite an explicit
-// password, so `-auth-pass X` and C2TOOL_AUTH_PASS silently did nothing once a
+// password, so `-auth-pass X` and SLIVERRESHINE_AUTH_PASS silently did nothing once a
 // record existed. An operator who set a password and restarted was still asked
 // for the old one, which looks exactly like the console changing their password.
 func TestResolveAccountPrecedence(t *testing.T) {

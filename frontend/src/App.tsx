@@ -54,7 +54,7 @@ function AppLayout() {
   // 侧栏折叠 — 宽屏手动切换,窄屏默认收起;持久化到 localStorage
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
-      const stored = localStorage.getItem('sliverui-sidebar')
+      const stored = localStorage.getItem('sliverreshine-sidebar')
       if (stored !== null) return stored === '1'
     } catch {
       /* ignore */
@@ -62,7 +62,7 @@ function AppLayout() {
     return typeof window !== 'undefined' && window.innerWidth < 900
   })
   useEffect(() => {
-    localStorage.setItem('sliverui-sidebar', collapsed ? '1' : '0')
+    localStorage.setItem('sliverreshine-sidebar', collapsed ? '1' : '0')
   }, [collapsed])
 
   // 语言状态与侧栏按钮 / 设置页共享同一套读写逻辑（见 lib/lang.ts）。
@@ -86,7 +86,7 @@ function AppLayout() {
   }, [location.pathname])
 
   // 收藏列表 — localStorage 持久化,默认收藏 sessions / implants / beacons
-  const FAV_KEY = 'sliverui-favorites'
+  const FAV_KEY = 'sliverreshine-favorites'
   const DEFAULT_FAVS = ['sessions', 'implants', 'beacons']
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {

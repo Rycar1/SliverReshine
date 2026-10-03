@@ -1,8 +1,8 @@
-# Viper C2 功能全解 vs c2tool — 差集与可实现性评估
+# Viper C2 功能全解 vs sliverreshine — 差集与可实现性评估
 
 分析对象：`FunnyWolf/Viper`（5320★，2214 条目）当前主线，含 `JohnHubcr/viperpython` /
 `vipermsf` / `viperjs` 三个早期拆分仓库的源码。
-对照对象：c2tool（Sliver 1.7.3 + Web 控制台，177 路由 / 171 个客户端方法 / 16 会话 tab）。
+对照对象：sliverreshine（Sliver 1.7.3 + Web 控制台，177 路由 / 171 个客户端方法 / 16 会话 tab）。
 
 证据来源：`docs/en/guide/*.md`（60 篇功能文档）、`docs/en/module/*.md`（129 个模块）、
 `MODULES/` 源码、`PostModule/` 框架源码、`Msgrpc/msgrpc.py`（136 KB）、
@@ -203,7 +203,7 @@ Sliver 的 Host 没有 tag/comment。用一个按 `HostUUID` 索引的旁路元�
 #### ✅ W8. 回连过滤（Handler Firewall）
 **这是 Viper 的招牌功能之一，但 Sliver 没有监听器 ACL**（已核对 `clientpb`，无
 allowlist/blocklist 字段）。所以不能靠配置实现，要靠**代理层**：
-c2tool 在前面绑公网端口，sliver 监听内部端口，中间过一条规则链
+sliverreshine 在前面绑公网端口，sliver 监听内部端口，中间过一条规则链
 （白名单 → 黑名单 → 云厂商 ASN → 沙箱 IP → 地理位置）。
 成本：中（Go TCP/HTTP 代理 + 规则引擎 + GeoLite2/ASN 库 + 界面）。
 **收益高** —— 能挡住沙箱和蓝队直接拿 stager，是真实能力而不只是界面。

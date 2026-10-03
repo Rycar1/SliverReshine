@@ -1,4 +1,4 @@
-# Building c2tool
+# Building sliverreshine
 
 Three stages: build the patched server, bake it into the launcher, build the
 frontend into the launcher. Only the third one runs on every UI change.
@@ -7,7 +7,7 @@ frontend into the launcher. Only the third one runs on every UI change.
 build/
   build-server.ps1    BishopFox/sliver -> sliver-server binaries
   embed-payload.ps1   sliver-server -> internal/embed/serverbin/payload.gz
-  build-release.ps1   assemble dist/c2tool-linux-amd64.zip
+  build-release.ps1   assemble dist/sliverreshine-linux-amd64.zip
 ```
 
 ## Prerequisites
@@ -105,7 +105,7 @@ interrupted run never leaves a truncated payload embedded.
 ```powershell
 # release build: server is embedded
 $env:GOOS='linux'; $env:GOARCH='amd64'; $env:CGO_ENABLED='0'
-go build -tags embedserver -trimpath -o dist/c2tool ./cmd/c2tool
+go build -tags embedserver -trimpath -o dist/sliverreshine ./cmd/sliverreshine
 ```
 
 Without the `embedserver` tag the launcher builds against
@@ -119,7 +119,7 @@ loop for backend work, because it skips the 95 MB embed and a full relink.
 ./build/build-release.ps1 -Server ..\..\_out\sliver-server-linux-amd64
 ```
 
-Produces `dist/c2tool-linux-amd64.zip` containing `c2tool`, `run.sh` and
+Produces `dist/sliverreshine-linux-amd64.zip` containing `sliverreshine`, `run.sh` and
 `README.md`. The server is *inside* the binary, so the archive stays around
 100 MB.
 

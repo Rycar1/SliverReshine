@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/websocket"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 const (

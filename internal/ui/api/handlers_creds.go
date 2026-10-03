@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 func (s *Server) handleCreds(c *sliver.Client, w http.ResponseWriter, r *http.Request) {

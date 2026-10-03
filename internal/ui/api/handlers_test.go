@@ -275,7 +275,7 @@ func TestServeStaticDevBinary(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), "Sliver UI API is running") {
+	if !strings.Contains(rec.Body.String(), "SliverReshine API is running") {
 		t.Fatalf("body = %q, want the dev fallback message", rec.Body.String())
 	}
 }

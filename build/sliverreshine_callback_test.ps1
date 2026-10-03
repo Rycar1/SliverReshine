@@ -1,4 +1,4 @@
-# c2tool callback verification.
+# sliverreshine callback verification.
 #
 # The 183-route sweep proved routing, auth, validation and error codes. It did NOT
 # prove that a payload builds and calls home, because nearly every route was

@@ -96,7 +96,7 @@ func getHomeDir() string {
 // pass this value through explicitly so builds never depend on the ambient
 // environment.
 //
-// When c2tool launches the server it already provides a writable temp
+// When sliverreshine launches the server it already provides a writable temp
 // directory, which is reused here; otherwise we create one under the Sliver
 // root and fall back to the OS temp dir if even that fails.
 func getBuildTempDir() string {
@@ -136,7 +136,7 @@ func GarbleCmd(config GoConfig, cwd string, command []string) ([]byte, error) {
 		fmt.Sprintf("HTTPS_PROXY=%s", config.HTTPSPROXY),
 		fmt.Sprintf("PATH=%s:%s:%s", filepath.Join(config.GOROOT, "bin"), assets.GetZigDir(), os.Getenv("PATH")),
 		fmt.Sprintf("GOGARBLE=%s", config.GOGARBLE),
-		// c2tool: the Go toolchain picks its scratch directory from TMPDIR/
+		// sliverreshine: the Go toolchain picks its scratch directory from TMPDIR/
 		// TMP/TEMP. Sliver builds this environment from a fixed whitelist, so
 		// without these the toolchain falls back to the platform default — on a
 		// Windows service account that can be an unwritable C:\Windows, which
@@ -147,7 +147,7 @@ func GarbleCmd(config GoConfig, cwd string, command []string) ([]byte, error) {
 		fmt.Sprintf("TMP=%s", getBuildTempDir()),
 		fmt.Sprintf("TEMP=%s", getBuildTempDir()),
 		fmt.Sprintf("HOME=%s", getHomeDir()),
-		// c2tool: garble asks Go for its build cache location, and on Windows Go
+		// sliverreshine: garble asks Go for its build cache location, and on Windows Go
 		// answers from %LocalAppData%. This environment is built from a fixed
 		// whitelist -- it REPLACES the process environment rather than adding to
 		// it -- so a variable that is not listed here simply does not exist for
@@ -204,7 +204,7 @@ func GoCmd(config GoConfig, cwd string, command []string) ([]byte, error) {
 		fmt.Sprintf("HTTP_PROXY=%s", config.HTTPPROXY),
 		fmt.Sprintf("HTTPS_PROXY=%s", config.HTTPSPROXY),
 		fmt.Sprintf("PATH=%s:%s:%s", filepath.Join(config.GOROOT, "bin"), assets.GetZigDir(), os.Getenv("PATH")),
-		// c2tool: garble shells out to the Go toolchain, which needs a writable
+		// sliverreshine: garble shells out to the Go toolchain, which needs a writable
 		// scratch directory. See the garble command builder above for the
 		// failure this avoids.
 		fmt.Sprintf("GOTMPDIR=%s", getBuildTempDir()),
@@ -212,7 +212,7 @@ func GoCmd(config GoConfig, cwd string, command []string) ([]byte, error) {
 		fmt.Sprintf("TMP=%s", getBuildTempDir()),
 		fmt.Sprintf("TEMP=%s", getBuildTempDir()),
 		fmt.Sprintf("HOME=%s", getHomeDir()),
-		// c2tool: the same whitelist gap as the garble builder. The Go toolchain
+		// sliverreshine: the same whitelist gap as the garble builder. The Go toolchain
 		// consults %LocalAppData% for its cache on Windows too, and a plain build
 		// that reaches that path fails the same opaque way.
 		fmt.Sprintf("LOCALAPPDATA=%s", getBuildTempDir()),

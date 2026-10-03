@@ -1,9 +1,9 @@
 package api
 
 import (
-	"c2tool/internal/ui/sliver"
 	"math"
 	"net/http"
+	"sliverreshine/internal/ui/sliver"
 	"strconv"
 )
 

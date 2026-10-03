@@ -15,7 +15,7 @@ import (
 // The guard exists because net/http's own per-connection recover leaves the
 // client with an EOF and no status line, and prints the panic to stderr rather
 // than to the console's log -- so a handler that panics on every call is
-// invisible in c2tool.log.
+// invisible in sliverreshine.log.
 func TestRecoverConvertsPanicTo500(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/boom", func(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +251,7 @@ func TestRoutesChainInstallsRecover(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500. A panic through the assembled chain means "+
 			"withRecover is missing from wrap(), so the connection would be dropped "+
-			"and the request would never appear in c2tool.log", rec.Code)
+			"and the request would never appear in sliverreshine.log", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "error") {
 		t.Errorf("the panic produced no JSON error body: %q", rec.Body.String())

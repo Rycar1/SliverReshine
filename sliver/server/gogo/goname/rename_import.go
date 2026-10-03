@@ -106,7 +106,7 @@ func renameImportDir(dir, oldImportPrefix, newImportPrefix string) error {
 			return nil
 		}
 
-		// c2tool: a rebuild of the same implant name reuses the staging tree, so
+		// sliverreshine: a rebuild of the same implant name reuses the staging tree, so
 		// the destination can already exist from the previous build. Upstream
 		// bailed out here, which made every second build of a given name fail
 		// with "rename import dir: target exists". Clearing the stale directory

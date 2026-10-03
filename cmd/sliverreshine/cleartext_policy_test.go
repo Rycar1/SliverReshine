@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"c2tool/internal/config"
+	"sliverreshine/internal/config"
 )
 
 // The policy guard is the whole point of requireTLS: the pair below is the
@@ -70,8 +70,8 @@ func TestCheckCleartextPolicy(t *testing.T) {
 			name:        "tls satisfies the flag on the wildcard",
 			addr:        "0.0.0.0:8080",
 			requireTLS:  true,
-			cert:        "/etc/c2tool/console.crt",
-			key:         "/etc/c2tool/console.key",
+			cert:        "/etc/sliverreshine/console.crt",
+			key:         "/etc/sliverreshine/console.key",
 			wantRefused: false,
 		},
 		{
@@ -80,7 +80,7 @@ func TestCheckCleartextPolicy(t *testing.T) {
 			name:        "half a tls pair is still cleartext",
 			addr:        "0.0.0.0:8080",
 			requireTLS:  true,
-			cert:        "/etc/c2tool/console.crt",
+			cert:        "/etc/sliverreshine/console.crt",
 			wantRefused: true,
 		},
 		{

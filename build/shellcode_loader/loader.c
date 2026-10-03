@@ -1,5 +1,5 @@
 /*
- * A minimal shellcode loader for verifying that c2tool's shellcode output
+ * A minimal shellcode loader for verifying that sliverreshine's shellcode output
  * actually executes and calls home.
  *
  * Why this exists: the route sweep and the payload test both proved that
@@ -65,7 +65,7 @@ static unsigned char *read_file(const char *path, size_t *len) {
     return buf;
 }
 
-/* Recognises the container formats c2tool can emit, so a mismatch is reported
+/* Recognises the container formats sliverreshine can emit, so a mismatch is reported
  * as one instead of as a crash. Returns a borrowed description string. */
 static const char *describe_payload(const unsigned char *d, size_t n) {
     if (n >= 2 && d[0] == 'M' && d[1] == 'Z') {

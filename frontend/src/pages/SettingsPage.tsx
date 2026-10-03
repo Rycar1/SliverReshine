@@ -31,7 +31,7 @@ interface LoadedConfig {
 // selects it again. That is the whole point: an unlocked private key should not
 // outlive the operator's attention. Re-selecting the profile IS the recovery
 // path, and there is deliberately no silent one.
-const PROFILE_KEY = 'c2tool.activeProfile'
+const PROFILE_KEY = 'sliverreshine.activeProfile'
 
 function parseConfig(text: string): LoadedConfig {
   const data = JSON.parse(text)

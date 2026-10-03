@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // --- Prune ---

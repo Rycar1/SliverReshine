@@ -24,7 +24,7 @@ import (
 //     There is no way for the frontend to tell "the server crashed on this
 //     request" from "the network blipped".
 //   - The panic is printed to stderr by net/http, not to the console's own log,
-//     so the request never appears in c2tool.log at all. A handler that panics on
+//     so the request never appears in sliverreshine.log at all. A handler that panics on
 //     every call looks, in the log the operator reads, exactly like a handler
 //     that was never called.
 //
@@ -102,7 +102,7 @@ func withRecover(next http.Handler) http.Handler {
 //
 // There is no response left to write on a hijacked socket, so this records the
 // crash and closes the socket: the operator sees the terminal drop and finds
-// the reason in c2tool.log. It is meant to be deferred directly, since recover
+// the reason in sliverreshine.log. It is meant to be deferred directly, since recover
 // only works when the deferred function itself calls it.
 func recoverWS(ws *websocket.Conn, where string) {
 	rec := recover()

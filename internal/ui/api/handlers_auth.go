@@ -52,7 +52,7 @@ func (s *Server) handleAuthPut(w http.ResponseWriter, r *http.Request) {
 		// trivial lockout: set a password, and the operator is locked out of a
 		// console that was previously open to them.
 		writeErr(w, http.StatusConflict,
-			"the console has no account yet; set one with -auth-user/-auth-pass or C2TOOL_AUTH_USER/C2TOOL_AUTH_PASS and restart")
+			"the console has no account yet; set one with -auth-user/-auth-pass or SLIVERRESHINE_AUTH_USER/SLIVERRESHINE_AUTH_PASS and restart")
 		return
 	}
 

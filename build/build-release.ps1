@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Assembles the shippable c2tool archive.
+  Assembles the shippable sliverreshine archive.
 
 .DESCRIPTION
-  Produces dist/c2tool-<os>-<arch>.zip containing the single launcher binary.
+  Produces dist/sliverreshine-<os>-<arch>.zip containing the single launcher binary.
   The Sliver server for that same platform is embedded inside it as a gzip
   payload, so nothing else needs to ship.
 
@@ -62,7 +62,7 @@ $dist = Join-Path $root 'dist'
 # The variant is part of both the archive name and the staging directory name
 # because the two archives are different artifacts: an operator picking one from
 # a release page needs to know which they are getting, and
-# "c2tool-linux-amd64.zip" cannot say.
+# "sliverreshine-linux-amd64.zip" cannot say.
 #
 # Scoping the stage per variant also matters for correctness. The stage holds the
 # binary between the build and the zip, and the UPX branch rewrites it in place
@@ -71,8 +71,8 @@ $dist = Join-Path $root 'dist'
 # unpacked one between the pack and the liveness check -- and that check then
 # reports "the packed launcher does not run" for a binary it never packed.
 $variant = if ($Upx) { 'upx' } else { 'plain' }
-$stage = Join-Path $dist "c2tool-$GOOS-$GOARCH-$variant"
-$zip = Join-Path $dist "c2tool-$GOOS-$GOARCH-$variant.zip"
+$stage = Join-Path $dist "sliverreshine-$GOOS-$GOARCH-$variant"
+$zip = Join-Path $dist "sliverreshine-$GOOS-$GOARCH-$variant.zip"
 
 function Step($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }
 
@@ -209,7 +209,7 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
-$binName = if ($GOOS -eq 'windows') { 'c2tool.exe' } else { 'c2tool' }
+$binName = if ($GOOS -eq 'windows') { 'sliverreshine.exe' } else { 'sliverreshine' }
 $binPath = Join-Path $stage $binName
 
 $env:GOOS = $GOOS
@@ -242,7 +242,7 @@ if (Test-Path $shellcodeBlob) {
     Write-Host '    in-memory harvest disabled (no shellcode blob; run build/build-mimikatz-shellcode.ps1)'
 }
 
-& go build -tags $buildTags -trimpath -o $binPath ./cmd/c2tool
+& go build -tags $buildTags -trimpath -o $binPath ./cmd/sliverreshine
 if ($LASTEXITCODE -ne 0) { throw 'launcher build failed' }
 
 # --- 3b. optional UPX packing ------------------------------------------------
@@ -354,7 +354,7 @@ try {
     try {
         # One entry, 0755. The archive exists only so the executable bit
         # survives transport: a plain copy of the binary over a Windows share or
-        # through a browser would land as 0644 and `./c2tool` would fail with
+        # through a browser would land as 0644 and `./sliverreshine` would fail with
         # "Permission denied" on the target.
         $entries = @(
             @{ Path = $binPath; Mode = 0x81ED } # 0100755
@@ -423,5 +423,5 @@ Write-Host ("  archive : {0}" -f $zip)
 Write-Host ("  size    : {0:N1} MB" -f ($zipLen / 1MB))
 Write-Host ("  launcher: {0:N1} MB (server embedded)" -f ($binLen / 1MB))
 Write-Host ''
-Write-Host '  Deploy: copy the binary (or unzip it) and run ./c2tool — no other files needed'
+Write-Host '  Deploy: copy the binary (or unzip it) and run ./sliverreshine — no other files needed'
 Write-Host ("  modes   : unix host id stamped on {0} entries" -f $patchedEntries)

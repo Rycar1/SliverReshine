@@ -1,7 +1,7 @@
-# Viper 三件套 vs c2tool — 功能差集与性价比分析
+# Viper 三件套 vs sliverreshine — 功能差集与性价比分析
 
 分析对象：`viperpython` / `vipermsf` / `viperjs`（Viper 平台的三个拆分组件）
-对照对象：c2tool（Sliver 1.7.3 + Web 控制台）
+对照对象：sliverreshine（Sliver 1.7.3 + Web 控制台）
 
 ---
 
@@ -146,11 +146,11 @@ Viper:
       ▼
   Meterpreter / Python / Webshell session
 
-c2tool:
+sliverreshine:
   浏览器 (React/Vite)
       │ REST + WebSocket (177 路由)
       ▼
-  c2tool (Go)
+  sliverreshine (Go)
       │ gRPC (178 个客户端方法)
       ▼
   sliver-server
@@ -161,7 +161,7 @@ c2tool:
 
 关键差异：
 
-| 维度 | Viper | c2tool |
+| 维度 | Viper | sliverreshine |
 |---|---|---|
 | 引擎 | Metasploit（有 2000+ 现成模块可包） | Sliver（183 个 RPC 方法，无 exploit 库） |
 | 后端语言 | Python/Django | Go |

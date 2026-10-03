@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // Server holds the HTTP API handlers and the current Sliver connection.

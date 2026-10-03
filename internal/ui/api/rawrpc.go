@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"c2tool/internal/ui/sliver"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/rpcpb"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // The raw RPC console exists so the web UI can reach the *entire* SliverRPC

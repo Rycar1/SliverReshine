@@ -7,11 +7,12 @@ import zh from './locales/zh'
  * localStorage key holding the selected language.
  *
  * Exported so that every writer uses this exact constant. The language used to
- * be written under a second key (`sliverui-lang`) by the sidebar toggle while
- * this module read `c2tool-lang`, so switching language appeared to work and
- * then silently reverted on reload. Import this rather than retyping the string.
+ * be written under other keys (`sliverui-lang`, later `c2tool-lang`) by the
+ * sidebar toggle while this module read a different one, so switching language
+ * appeared to work and then silently reverted on reload. Import this rather
+ * than retyping the string.
  */
-export const LANG_KEY = 'c2tool-lang'
+export const LANG_KEY = 'sliverreshine-lang'
 
 // The language a fresh install starts in.
 //

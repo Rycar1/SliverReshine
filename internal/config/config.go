@@ -23,7 +23,7 @@ import (
 )
 
 // FileName is the settings file inside the state directory.
-const FileName = "c2tool.json"
+const FileName = "sliverreshine.json"
 
 // ReadmeName is the operator-facing note written next to the settings file.
 const ReadmeName = "README.txt"
@@ -249,7 +249,7 @@ func (c Config) Normalize() Config {
 // Readme is the operator-facing note written beside the settings file. It is
 // written once and never replaced, because it is the only documentation that
 // exists on a host where a single binary was dropped.
-const Readme = `c2tool — deployment notes
+const Readme = `sliverreshine — deployment notes
 =========================
 
 You are running a single self-contained binary. There is nothing else to
@@ -259,20 +259,20 @@ all inside it, and they unpack into this directory on first start.
 Files in this directory
 -----------------------
 
-  c2tool.json      Settings. Edit and restart to apply.
+  sliverreshine.json      Settings. Edit and restart to apply.
   console-auth     The console login, "user:password". Mode 0600.
   sliver/          Server state: certificates, loot, the unpacked toolchain.
   configs/         The generated operator profile the console connects with.
-  c2tool.log       Everything the process prints, mirrored to disk.
+  sliverreshine.log       Everything the process prints, mirrored to disk.
 
 The extracted server binary is not here. It lives in the OS cache directory
-(~/.cache/c2tool/bin on Linux, or $C2TOOL_HOME/bin when that variable is set),
+(~/.cache/sliverreshine/bin on Linux, or $SLIVERRESHINE_HOME/bin when that variable is set),
 so deleting this directory never leaves a stale binary behind.
 
 Change the listen address or the login
 --------------------------------------
 
-  Edit c2tool.json:
+  Edit sliverreshine.json:
 
     "addr":  "0.0.0.0:8080"   address the web console binds to
     "auth": {
@@ -317,7 +317,7 @@ Change the listen address or the login
 Turning authentication off
 --------------------------
 
-  Set "auth": { "enabled": false } in c2tool.json. The console will start with
+  Set "auth": { "enabled": false } in sliverreshine.json. The console will start with
   no login prompt and print a warning. Only do this where the port is not
   reachable by anyone you do not trust — an open C2 console is a full remote
   control channel for whoever finds it.
@@ -328,7 +328,7 @@ Command line
   Flags override the file, which is what you want for a one-off:
 
     --addr            listen address
-    --home            state directory (default: ~/.c2tool)
+    --home            state directory (default: ~/.sliverreshine)
     --operator        operator name in the generated profile
     --mp-host/--mp-port   embedded gRPC listener (loopback by default)
     --auth-user       override the account name

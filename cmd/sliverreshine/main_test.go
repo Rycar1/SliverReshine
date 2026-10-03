@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"c2tool/internal/config"
+	"sliverreshine/internal/config"
 )
 
 // withFlags installs a throwaway flag set carrying the same names as
@@ -24,7 +24,7 @@ import (
 func withFlags(t *testing.T, args ...string) {
 	t.Helper()
 	prev := flag.CommandLine
-	fs := flag.NewFlagSet("c2tool-test", flag.ContinueOnError)
+	fs := flag.NewFlagSet("sliverreshine-test", flag.ContinueOnError)
 	fs.String("addr", "", "")
 	fs.String("operator", "", "")
 	fs.String("mp-host", "", "")
@@ -41,17 +41,17 @@ func withFlags(t *testing.T, args ...string) {
 	}
 }
 
-// clearEnv neutralises every C2TOOL_* variable applyOverrides reads, so the
+// clearEnv neutralises every SLIVERRESHINE_* variable applyOverrides reads, so the
 // machine the test runs on cannot decide its outcome. An empty value counts as
 // unset to lookupEnv.
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
-		"C2TOOL_ADDR",
-		"C2TOOL_AUTH_USER",
-		"C2TOOL_AUTH_REALM",
-		"C2TOOL_AUTH_PASS",
-		"C2TOOL_AUTH",
+		"SLIVERRESHINE_ADDR",
+		"SLIVERRESHINE_AUTH_USER",
+		"SLIVERRESHINE_AUTH_REALM",
+		"SLIVERRESHINE_AUTH_PASS",
+		"SLIVERRESHINE_AUTH",
 	} {
 		t.Setenv(k, "")
 	}
@@ -60,7 +60,7 @@ func clearEnv(t *testing.T) {
 // quietProvision calls provision and then closes the log file it opened and
 // restores the logger.
 //
-// installLogFile points the process-wide logger at <home>/c2tool.log and keeps
+// installLogFile points the process-wide logger at <home>/sliverreshine.log and keeps
 // the handle open, which on Windows means the temp directory cannot be removed
 // while it lives. Closing it here also keeps one test's log file from being
 // repointed at by the next.
@@ -121,7 +121,7 @@ func TestApplyOverridesPrecedence(t *testing.T) {
 
 	t.Run("the environment fills a value the file left at its default", func(t *testing.T) {
 		clearEnv(t)
-		t.Setenv("C2TOOL_ADDR", "203.0.113.7:8443")
+		t.Setenv("SLIVERRESHINE_ADDR", "203.0.113.7:8443")
 		withFlags(t)
 
 		got, _ := applyOverrides(config.Default(), overrides{})
@@ -133,13 +133,13 @@ func TestApplyOverridesPrecedence(t *testing.T) {
 
 	t.Run("a flag beats the environment", func(t *testing.T) {
 		clearEnv(t)
-		t.Setenv("C2TOOL_ADDR", "203.0.113.7:8443")
+		t.Setenv("SLIVERRESHINE_ADDR", "203.0.113.7:8443")
 		withFlags(t, "-addr", "10.1.1.1:80")
 
 		got, _ := applyOverrides(config.Default(), overrides{addr: "10.1.1.1:80"})
 
 		if got.Addr != "10.1.1.1:80" {
-			t.Errorf("Addr = %q, want the flag to win over C2TOOL_ADDR", got.Addr)
+			t.Errorf("Addr = %q, want the flag to win over SLIVERRESHINE_ADDR", got.Addr)
 		}
 	})
 
@@ -196,9 +196,9 @@ func TestApplyOverridesPrecedence(t *testing.T) {
 // Enabled/User pair.
 func TestApplyOverridesAuth(t *testing.T) {
 	for _, off := range []string{"off", "false", "0"} {
-		t.Run("C2TOOL_AUTH="+off+" disables the login", func(t *testing.T) {
+		t.Run("SLIVERRESHINE_AUTH="+off+" disables the login", func(t *testing.T) {
 			clearEnv(t)
-			t.Setenv("C2TOOL_AUTH", off)
+			t.Setenv("SLIVERRESHINE_AUTH", off)
 			withFlags(t)
 			cfg := config.Default()
 			if !cfg.Auth.Enabled {
@@ -208,14 +208,14 @@ func TestApplyOverridesAuth(t *testing.T) {
 			got, _ := applyOverrides(cfg, overrides{})
 
 			if got.Auth.Enabled {
-				t.Errorf("Auth.Enabled = true, want false for C2TOOL_AUTH=%s", off)
+				t.Errorf("Auth.Enabled = true, want false for SLIVERRESHINE_AUTH=%s", off)
 			}
 		})
 	}
 
-	t.Run("C2TOOL_AUTH=on leaves the login enabled", func(t *testing.T) {
+	t.Run("SLIVERRESHINE_AUTH=on leaves the login enabled", func(t *testing.T) {
 		clearEnv(t)
-		t.Setenv("C2TOOL_AUTH", "on")
+		t.Setenv("SLIVERRESHINE_AUTH", "on")
 		withFlags(t)
 
 		got, _ := applyOverrides(config.Default(), overrides{})
@@ -255,9 +255,9 @@ func TestApplyOverridesAuth(t *testing.T) {
 		}
 	})
 
-	t.Run("C2TOOL_AUTH_USER is the account when no flag is given", func(t *testing.T) {
+	t.Run("SLIVERRESHINE_AUTH_USER is the account when no flag is given", func(t *testing.T) {
 		clearEnv(t)
-		t.Setenv("C2TOOL_AUTH_USER", "env-user")
+		t.Setenv("SLIVERRESHINE_AUTH_USER", "env-user")
 		withFlags(t)
 
 		got, _ := applyOverrides(config.Default(), overrides{})
@@ -280,9 +280,9 @@ func TestApplyOverridesAuth(t *testing.T) {
 
 	// The password never lives on the Config; it comes back as a second return
 	// value so the settings file can stay readable and diffable.
-	t.Run("C2TOOL_AUTH_PASS supplies the password when no flag is given", func(t *testing.T) {
+	t.Run("SLIVERRESHINE_AUTH_PASS supplies the password when no flag is given", func(t *testing.T) {
 		clearEnv(t)
-		t.Setenv("C2TOOL_AUTH_PASS", "env-secret")
+		t.Setenv("SLIVERRESHINE_AUTH_PASS", "env-secret")
 		withFlags(t)
 
 		_, pass := applyOverrides(config.Default(), overrides{})
@@ -292,9 +292,9 @@ func TestApplyOverridesAuth(t *testing.T) {
 		}
 	})
 
-	t.Run("-auth-pass beats C2TOOL_AUTH_PASS", func(t *testing.T) {
+	t.Run("-auth-pass beats SLIVERRESHINE_AUTH_PASS", func(t *testing.T) {
 		clearEnv(t)
-		t.Setenv("C2TOOL_AUTH_PASS", "env-secret")
+		t.Setenv("SLIVERRESHINE_AUTH_PASS", "env-secret")
 		withFlags(t, "-auth-pass", "flag-secret")
 
 		_, pass := applyOverrides(config.Default(), overrides{authPass: "flag-secret"})
@@ -351,22 +351,22 @@ func TestDisplayAddr(t *testing.T) {
 
 func TestLookupEnv(t *testing.T) {
 	t.Run("a value reports set", func(t *testing.T) {
-		t.Setenv("C2TOOL_TEST_LOOKUP", "value")
-		v, ok := lookupEnv("C2TOOL_TEST_LOOKUP")
+		t.Setenv("SLIVERRESHINE_TEST_LOOKUP", "value")
+		v, ok := lookupEnv("SLIVERRESHINE_TEST_LOOKUP")
 		if !ok || v != "value" {
 			t.Errorf("lookupEnv = (%q, %v), want (value, true)", v, ok)
 		}
 	})
 
 	t.Run("an empty value reports unset", func(t *testing.T) {
-		t.Setenv("C2TOOL_TEST_LOOKUP_EMPTY", "")
-		if v, ok := lookupEnv("C2TOOL_TEST_LOOKUP_EMPTY"); ok || v != "" {
+		t.Setenv("SLIVERRESHINE_TEST_LOOKUP_EMPTY", "")
+		if v, ok := lookupEnv("SLIVERRESHINE_TEST_LOOKUP_EMPTY"); ok || v != "" {
 			t.Errorf("lookupEnv = (%q, %v), want (\"\", false)", v, ok)
 		}
 	})
 
 	t.Run("a missing variable reports unset", func(t *testing.T) {
-		const key = "C2TOOL_TEST_LOOKUP_MISSING"
+		const key = "SLIVERRESHINE_TEST_LOOKUP_MISSING"
 		prev, had := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatal(err)
@@ -450,14 +450,14 @@ func TestResolveHome(t *testing.T) {
 		}
 	})
 
-	t.Run("an empty flag falls back to C2TOOL_HOME", func(t *testing.T) {
+	t.Run("an empty flag falls back to SLIVERRESHINE_HOME", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "home")
-		t.Setenv("C2TOOL_HOME", dir)
+		t.Setenv("SLIVERRESHINE_HOME", dir)
 
 		got := resolveHome("")
 
 		if got != dir {
-			t.Errorf("resolveHome(\"\") = %q, want %q from C2TOOL_HOME", got, dir)
+			t.Errorf("resolveHome(\"\") = %q, want %q from SLIVERRESHINE_HOME", got, dir)
 		}
 		if _, err := os.Stat(dir); err != nil {
 			t.Errorf("state directory was not created: %v", err)
@@ -491,7 +491,7 @@ func TestProvisionWritesFirstRunFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(base, config.ReadmeName)); err != nil {
 		t.Errorf("deployment notes were not written: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(base, "c2tool.log")); err != nil {
+	if _, err := os.Stat(filepath.Join(base, "sliverreshine.log")); err != nil {
 		t.Errorf("log file was not created: %v", err)
 	}
 }

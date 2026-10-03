@@ -181,7 +181,7 @@ func (c *Client) writableTempDir(sessionID, goos string) (string, error) {
 		if dir == "" {
 			continue
 		}
-		probe := joinRemote(dir, ".c2tool-write-probe")
+		probe := joinRemote(dir, ".sliverreshine-write-probe")
 		if err := c.Upload(sessionID, probe, []byte("probe")); err != nil {
 			tried = append(tried, fmt.Sprintf("%s (%v)", dir, err))
 			continue

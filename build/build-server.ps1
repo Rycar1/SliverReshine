@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds the Sliver server binaries that c2tool embeds.
+  Builds the Sliver server binaries that sliverreshine embeds.
 
 .DESCRIPTION
   Builds ./server out of a BishopFox/sliver checkout with the build tags Sliver

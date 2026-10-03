@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {

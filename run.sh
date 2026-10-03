@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# c2tool launcher — OPTIONAL, kept for compatibility.
+# sliverreshine launcher — OPTIONAL, kept for compatibility.
 #
 # The binary is self-sufficient: it writes its own settings and login record on
 # first start, generates the console password itself, and prints the URL. The
@@ -7,7 +7,7 @@
 # script. It is kept so that a workflow already calling ./run.sh keeps working —
 # everything here is now a flag override the binary would have applied itself.
 #
-# New deployments: just run ./c2tool.
+# New deployments: just run ./sliverreshine.
 #
 # The console is password protected by default. An unauthenticated C2 console is
 # both a liability and easy to catalog: asset engines and internet-wide scanners
@@ -16,11 +16,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-ADDR="${C2TOOL_ADDR:-0.0.0.0:8080}"
-HOME_DIR="${C2TOOL_HOME:-$HOME/.c2tool}"
+ADDR="${SLIVERRESHINE_ADDR:-0.0.0.0:8080}"
+HOME_DIR="${SLIVERRESHINE_HOME:-$HOME/.sliverreshine}"
 CRED_FILE="$HOME_DIR/console-auth"
 
-BIN=./c2tool
+BIN=./sliverreshine
 # Zip archives written on Windows do not carry the unix executable bit, so a
 # plain unzip leaves the launcher non-runnable. Restore it here rather than
 # failing with a confusing "binary not found".
@@ -28,10 +28,10 @@ if [ -f "$BIN" ] && [ ! -x "$BIN" ]; then
   chmod +x "$BIN" 2>/dev/null || true
 fi
 if [ ! -x "$BIN" ]; then
-  if [ -x ./c2tool.exe ]; then
-    BIN=./c2tool.exe
+  if [ -x ./sliverreshine.exe ]; then
+    BIN=./sliverreshine.exe
   else
-    echo "[c2tool] launcher binary not found next to $0" >&2
+    echo "[sliverreshine] launcher binary not found next to $0" >&2
     exit 1
   fi
 fi
@@ -47,12 +47,12 @@ gen_password() {
   fi
 }
 
-AUTH_USER="${C2TOOL_AUTH_USER:-}"
-AUTH_PASS="${C2TOOL_AUTH_PASS:-}"
-AUTH_REALM="${C2TOOL_AUTH_REALM:-}"
+AUTH_USER="${SLIVERRESHINE_AUTH_USER:-}"
+AUTH_PASS="${SLIVERRESHINE_AUTH_PASS:-}"
+AUTH_REALM="${SLIVERRESHINE_AUTH_REALM:-}"
 
-if [ "${C2TOOL_AUTH:-on}" = "off" ]; then
-  echo "[c2tool] WARNING: C2TOOL_AUTH=off — the console is open to anyone who can reach it." >&2
+if [ "${SLIVERRESHINE_AUTH:-on}" = "off" ]; then
+  echo "[sliverreshine] WARNING: SLIVERRESHINE_AUTH=off — the console is open to anyone who can reach it." >&2
   AUTH_USER=""
   AUTH_PASS=""
 else
@@ -77,9 +77,9 @@ else
   fi
 fi
 
-echo "[c2tool] state:  $HOME_DIR"
-echo "[c2tool] console will listen on http://$ADDR"
-echo "[c2tool] first launch unpacks the implant toolchain and can take a minute"
+echo "[sliverreshine] state:  $HOME_DIR"
+echo "[sliverreshine] console will listen on http://$ADDR"
+echo "[sliverreshine] first launch unpacks the implant toolchain and can take a minute"
 echo
 
 if [ -n "$AUTH_USER" ]; then
@@ -91,8 +91,8 @@ if [ -n "$AUTH_USER" ]; then
   echo "     stored   : $CRED_FILE"
   echo
   echo "     The browser will prompt for these before serving anything."
-  echo "     Change them by editing that file, or set C2TOOL_AUTH_USER"
-  echo "     and C2TOOL_AUTH_PASS in the environment."
+  echo "     Change them by editing that file, or set SLIVERRESHINE_AUTH_USER"
+  echo "     and SLIVERRESHINE_AUTH_PASS in the environment."
   echo
 fi
 
@@ -107,9 +107,9 @@ fi
 # that Get-Process/WMI report. An explicit flag still wins over the variable, so
 # anything the operator types on the command line keeps working.
 if [ -n "$AUTH_USER" ]; then
-  C2TOOL_AUTH_USER="$AUTH_USER" \
-  C2TOOL_AUTH_PASS="$AUTH_PASS" \
-  C2TOOL_AUTH_REALM="$AUTH_REALM" \
+  SLIVERRESHINE_AUTH_USER="$AUTH_USER" \
+  SLIVERRESHINE_AUTH_PASS="$AUTH_PASS" \
+  SLIVERRESHINE_AUTH_REALM="$AUTH_REALM" \
   exec "$BIN" -addr "$ADDR" "$@"
 fi
 exec "$BIN" -addr "$ADDR" "$@"

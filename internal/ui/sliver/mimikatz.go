@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"c2tool/internal/embed"
+	"sliverreshine/internal/embed"
 )
 
 // mimikatzTimeout bounds a credential run. The generic Execute helper caps out

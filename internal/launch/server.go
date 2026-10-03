@@ -74,7 +74,7 @@ type Server struct {
 
 const (
 	// profileName is the operator profile filename (minus .json).
-	profileName = "c2tool"
+	profileName = "sliverreshine"
 
 	// versionFile mirrors sliver's own asset version marker. Bumping it forces
 	// a re-unpack.

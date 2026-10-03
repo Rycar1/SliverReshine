@@ -1,7 +1,7 @@
-# c2tool route-coverage e2e harness.
+# sliverreshine route-coverage e2e harness.
 #
 # Drives EVERY route in the route inventory CSV (default 183 rows) against an
-# already-running c2tool console and classifies each one:
+# already-running sliverreshine console and classifies each one:
 #
 #   PASS           2xx, or a well-formed JSON error that is clearly about the
 #                  REQUEST (400/404/422/... from a handler that ran).
@@ -30,16 +30,16 @@
 # ASCII only: Windows PowerShell 5.1 reads a BOM-less script as ANSI.
 #
 # Usage:
-#   .\c2tool_e2e_routes.ps1
-#   .\c2tool_e2e_routes.ps1 -Base http://127.0.0.1:18500 -Cred 'op:pass'
-#   .\c2tool_e2e_routes.ps1 -Only 'beacons'      # run a subset by substring
+#   .\sliverreshine_e2e_routes.ps1
+#   .\sliverreshine_e2e_routes.ps1 -Base http://127.0.0.1:18500 -Cred 'op:pass'
+#   .\sliverreshine_e2e_routes.ps1 -Only 'beacons'      # run a subset by substring
 
 param(
     [string]$Base = 'http://127.0.0.1:18500',
     [string]$Cred = 'op:debt-123456',
     [string]$SidFile = "$env:TEMP\debt_sid.txt",
     [string]$RoutesCsv = "$env:TEMP\routes_full.csv",
-    [string]$OutDir = "$env:TEMP\c2tool-e2e-routes",
+    [string]$OutDir = "$env:TEMP\sliverreshine-e2e-routes",
     [int]$TimeoutSec = 30,
     [int]$DelayMs = 25,
     [string]$Only = '',
@@ -47,7 +47,7 @@ param(
     # Off by default so the sweep keeps a live console. With -IncludeCrashers they
     # are moved to the very end, so the crash cannot mask the other routes.
     [switch]$IncludeCrashers,
-    # Console home directory, used only to snapshot c2tool.log and
+    # Console home directory, used only to snapshot sliverreshine.log and
     # sliver-server.log into the output directory when the run finishes.
     [string]$EntryPoint = ''
 )
@@ -67,7 +67,7 @@ if (-not (Test-Path $RoutesCsv)) { Write-Host "FATAL: no route inventory at $Rou
 $routes = @(Import-Csv $RoutesCsv)
 
 $Fake = 'no-such-thing'
-$SiteFixture = 'c2tool-e2e-fixture'
+$SiteFixture = 'sliverreshine-e2e-fixture'
 
 # Session routes that only READ from the target: safe against the real id.
 $realIdRoutes = @(
@@ -137,14 +137,14 @@ P 'GET /api/sessions/{id}/fs/pwd' '' 'real session id: read-only'
 P 'POST /api/sessions/{id}/fs/cd' '{"path":"C:\\Windows"}' 'fake session id: cd mutates the target session cwd'
 P 'GET /api/sessions/{id}/fs/cat' '' 'real session id: read-only download of a harmless system file' '?path=C:%5CWindows%5Cwin.ini' $true
 P 'GET /api/sessions/{id}/fs/download' '' 'real session id: read-only download of a harmless system file' '?path=C:%5CWindows%5Cwin.ini' $true
-P 'POST /api/sessions/{id}/fs/upload' '{"path":"C:\\Windows\\Temp\\c2tool-e2e-nope.txt","data":"QUJD"}' 'fake session id: upload would write to the target'
-P 'POST /api/sessions/{id}/fs/mkdir' '{"path":"C:\\Windows\\Temp\\c2tool-e2e-nope"}' 'fake session id: mkdir would create a directory on the target'
-P 'DELETE /api/sessions/{id}/fs' '' 'fake session id: rm would delete on the target' '?path=C:%5CWindows%5CTemp%5Cc2tool-e2e-nope.txt'
-P 'POST /api/sessions/{id}/fs/mv' '{"src":"C:\\Windows\\Temp\\c2tool-e2e-a","dst":"C:\\Windows\\Temp\\c2tool-e2e-b"}' 'fake session id: mv would rename on the target'
-P 'POST /api/sessions/{id}/fs/chmod' '{"path":"C:\\Windows\\Temp\\c2tool-e2e-nope","mode":"0644","recursive":false}' 'fake session id: chmod mutates the target'
-P 'POST /api/sessions/{id}/fs/chown' '{"path":"C:\\Windows\\Temp\\c2tool-e2e-nope","uid":"0","gid":"0","recursive":false}' 'fake session id: chown mutates the target'
-P 'POST /api/sessions/{id}/fs/chtimes' '{"path":"C:\\Windows\\Temp\\c2tool-e2e-nope","atime":0,"mtime":0}' 'fake session id: chtimes mutates the target'
-P 'POST /api/sessions/{id}/fs/grep' '{"pattern":"c2tool-e2e-no-match","path":".","recursive":false,"before":0,"after":0}' 'real session id: content search is read-only'
+P 'POST /api/sessions/{id}/fs/upload' '{"path":"C:\\Windows\\Temp\\sliverreshine-e2e-nope.txt","data":"QUJD"}' 'fake session id: upload would write to the target'
+P 'POST /api/sessions/{id}/fs/mkdir' '{"path":"C:\\Windows\\Temp\\sliverreshine-e2e-nope"}' 'fake session id: mkdir would create a directory on the target'
+P 'DELETE /api/sessions/{id}/fs' '' 'fake session id: rm would delete on the target' '?path=C:%5CWindows%5CTemp%5Csliverreshine-e2e-nope.txt'
+P 'POST /api/sessions/{id}/fs/mv' '{"src":"C:\\Windows\\Temp\\sliverreshine-e2e-a","dst":"C:\\Windows\\Temp\\sliverreshine-e2e-b"}' 'fake session id: mv would rename on the target'
+P 'POST /api/sessions/{id}/fs/chmod' '{"path":"C:\\Windows\\Temp\\sliverreshine-e2e-nope","mode":"0644","recursive":false}' 'fake session id: chmod mutates the target'
+P 'POST /api/sessions/{id}/fs/chown' '{"path":"C:\\Windows\\Temp\\sliverreshine-e2e-nope","uid":"0","gid":"0","recursive":false}' 'fake session id: chown mutates the target'
+P 'POST /api/sessions/{id}/fs/chtimes' '{"path":"C:\\Windows\\Temp\\sliverreshine-e2e-nope","atime":0,"mtime":0}' 'fake session id: chtimes mutates the target'
+P 'POST /api/sessions/{id}/fs/grep' '{"pattern":"sliverreshine-e2e-no-match","path":".","recursive":false,"before":0,"after":0}' 'real session id: content search is read-only'
 
 # --- recon ------------------------------------------------------------------
 P 'GET /api/sessions/{id}/ifconfig' '' 'real session id: read-only'
@@ -152,9 +152,9 @@ P 'GET /api/sessions/{id}/ps' '' 'real session id: read-only'
 P 'POST /api/sessions/{id}/ps/kill' '{"pid":2147483647,"force":false}' 'fake session id: killing a process is destructive'
 P 'GET /api/sessions/{id}/netstat' '' 'real session id: read-only'
 P 'GET /api/sessions/{id}/env' '' 'real session id: read-only'
-P 'POST /api/sessions/{id}/env' '{"key":"C2TOOL_E2E_PROBE","value":"1"}' 'fake session id: setting an env var mutates the target'
+P 'POST /api/sessions/{id}/env' '{"key":"SLIVERRESHINE_E2E_PROBE","value":"1"}' 'fake session id: setting an env var mutates the target'
 P 'DELETE /api/sessions/{id}/env/{key}' '' 'fake session id + fake key: unset would mutate the target'
-P 'POST /api/sessions/{id}/exec' '{"path":"C:\\c2tool-e2e-no-such-binary.exe","args":[]}' 'fake session id: exec runs code on the target'
+P 'POST /api/sessions/{id}/exec' '{"path":"C:\\sliverreshine-e2e-no-such-binary.exe","args":[]}' 'fake session id: exec runs code on the target'
 P 'GET /api/sessions/{id}/screenshot' '' 'real session id: read-only screen capture of the same host'
 
 # --- code execution / injection (fake session id everywhere) ----------------
@@ -163,68 +163,68 @@ P 'POST /api/sessions/{id}/sideload' '{"data":"!!!not-base64!!!","processName":"
 P 'POST /api/sessions/{id}/spawn-dll' '{"data":"!!!not-base64!!!","processName":"","args":"","entryPoint":""}' 'invalid base64 -> 400 before any RPC'
 P 'POST /api/sessions/{id}/migrate' '{"pid":2147483647,"procName":""}' 'fake session id: migrate would move the implant'
 P 'POST /api/sessions/{id}/process-dump' '{"pid":4}' 'fake session id: dumping a process reads target memory' '' $true
-P 'POST /api/sessions/{id}/av-scan' '{"filter":"c2tool-e2e-no-such-process"}' 'fake session id: scan would enumerate the target process list'
-P 'POST /api/sessions/{id}/impersonate' '{"username":"c2tool-e2e-no-such-user"}' 'fake session id: impersonation changes the target token'
-P 'POST /api/sessions/{id}/make-token' '{"username":"c2tool-e2e-no-such-user","password":"x","domain":"."}' 'fake session id: token creation is a credential operation'
+P 'POST /api/sessions/{id}/av-scan' '{"filter":"sliverreshine-e2e-no-such-process"}' 'fake session id: scan would enumerate the target process list'
+P 'POST /api/sessions/{id}/impersonate' '{"username":"sliverreshine-e2e-no-such-user"}' 'fake session id: impersonation changes the target token'
+P 'POST /api/sessions/{id}/make-token' '{"username":"sliverreshine-e2e-no-such-user","password":"x","domain":"."}' 'fake session id: token creation is a credential operation'
 P 'POST /api/sessions/{id}/rev-to-self' '{}' 'fake session id: reverting a token changes target state'
 P 'POST /api/sessions/{id}/getsystem' '{"hostingProcess":""}' 'fake session id: getsystem escalates on the target'
 P 'GET /api/sessions/{id}/privs' '' 'real session id: read-only'
-P 'POST /api/av/test' '{"url":"http://127.0.0.1:1/","database":"c2tool-e2e"}' 'explicit unreachable endpoint so no third-party lookup service is contacted'
-P 'POST /api/sessions/{id}/execute-token' '{"path":"C:\\c2tool-e2e-no-such-binary.exe","args":[],"output":false}' 'fake session id: runs code under another token'
-P 'POST /api/sessions/{id}/runas' '{"username":"c2tool-e2e-no-such-user","process_name":"c2tool-e2e-no-such-binary.exe","args":""}' 'fake session id: runas spawns a process on the target'
+P 'POST /api/av/test' '{"url":"http://127.0.0.1:1/","database":"sliverreshine-e2e"}' 'explicit unreachable endpoint so no third-party lookup service is contacted'
+P 'POST /api/sessions/{id}/execute-token' '{"path":"C:\\sliverreshine-e2e-no-such-binary.exe","args":[],"output":false}' 'fake session id: runs code under another token'
+P 'POST /api/sessions/{id}/runas' '{"username":"sliverreshine-e2e-no-such-user","process_name":"sliverreshine-e2e-no-such-binary.exe","args":""}' 'fake session id: runas spawns a process on the target'
 
 # --- topology / pivots ------------------------------------------------------
 P 'GET /api/pivots/graph' '' 'read-only'
 P 'GET /api/topology' '' 'read-only'
 P 'GET /api/webdelivery/formats' '' 'static list'
-P 'POST /api/webdelivery' '{"profile_name":"c2tool-e2e-no-such-profile","host":"127.0.0.1","port":1,"format":"psh"}' 'unknown profile -> error before any stage is built or listener started'
+P 'POST /api/webdelivery' '{"profile_name":"sliverreshine-e2e-no-such-profile","host":"127.0.0.1","port":1,"format":"psh"}' 'unknown profile -> error before any stage is built or listener started'
 P 'GET /api/sessions/{id}/pivots/listeners' '' 'real session id: read-only'
 P 'POST /api/sessions/{id}/pivots/listeners' '{"type":"mtls","bind_address":"127.0.0.1"}' 'fake session id: starting a pivot listener binds on the target'
 P 'DELETE /api/sessions/{id}/pivots/listeners/{pivotID}' '' 'fake session id + non-numeric pivot id -> 400'
 
 # --- services / ssh ---------------------------------------------------------
-P 'POST /api/sessions/{id}/services' '{"service_name":"c2tool-e2e-nope","description":"","bin_path":"","hostname":"","arguments":""}' 'fake session id: creating a service changes the target'
-P 'POST /api/sessions/{id}/services/stop' '{"service_name":"c2tool-e2e-nope","hostname":""}' 'fake session id: stopping a service changes the target'
-P 'POST /api/sessions/{id}/services/remove' '{"service_name":"c2tool-e2e-nope","hostname":""}' 'fake session id: removing a service changes the target'
-P 'POST /api/sessions/{id}/ssh' '{"username":"c2tool-e2e","hostname":"127.0.0.1","port":1,"command":"id","password":"x","priv_key":""}' 'fake session id: ssh runs a command on the target'
-P 'POST /api/sessions/{id}/services/detail' '{"name":"c2tool-e2e-nope","hostname":""}' 'fake session id: service query'
-P 'POST /api/sessions/{id}/services/start-by-name' '{"name":"c2tool-e2e-nope","hostname":""}' 'fake session id: starting a service changes the target'
+P 'POST /api/sessions/{id}/services' '{"service_name":"sliverreshine-e2e-nope","description":"","bin_path":"","hostname":"","arguments":""}' 'fake session id: creating a service changes the target'
+P 'POST /api/sessions/{id}/services/stop' '{"service_name":"sliverreshine-e2e-nope","hostname":""}' 'fake session id: stopping a service changes the target'
+P 'POST /api/sessions/{id}/services/remove' '{"service_name":"sliverreshine-e2e-nope","hostname":""}' 'fake session id: removing a service changes the target'
+P 'POST /api/sessions/{id}/ssh' '{"username":"sliverreshine-e2e","hostname":"127.0.0.1","port":1,"command":"id","password":"x","priv_key":""}' 'fake session id: ssh runs a command on the target'
+P 'POST /api/sessions/{id}/services/detail' '{"name":"sliverreshine-e2e-nope","hostname":""}' 'fake session id: service query'
+P 'POST /api/sessions/{id}/services/start-by-name' '{"name":"sliverreshine-e2e-nope","hostname":""}' 'fake session id: starting a service changes the target'
 
 # --- extensions / msf / shellcode ------------------------------------------
 P 'GET /api/sessions/{id}/extensions' '' 'real session id: read-only'
-P 'POST /api/sessions/{id}/extensions/register' '{"name":"c2tool-e2e","os":"windows","init":"","data_b64":"!!!"}' 'invalid base64 -> 400 before any RPC'
-P 'POST /api/sessions/{id}/extensions/call' '{"name":"c2tool-e2e-no-such-extension","export":"","server_store":false,"args_b64":""}' 'fake session id: extension call executes on the target'
+P 'POST /api/sessions/{id}/extensions/register' '{"name":"sliverreshine-e2e","os":"windows","init":"","data_b64":"!!!"}' 'invalid base64 -> 400 before any RPC'
+P 'POST /api/sessions/{id}/extensions/call' '{"name":"sliverreshine-e2e-no-such-extension","export":"","server_store":false,"args_b64":""}' 'fake session id: extension call executes on the target'
 P 'POST /api/sessions/{id}/msf' '{"payload":"","lhost":"127.0.0.1","lport":1,"encoder":"","iterations":0}' 'fake session id: msf payloads execute on the target'
 P 'POST /api/sessions/{id}/msf/remote' '{"payload":"","lhost":"127.0.0.1","lport":1,"encoder":"","iterations":0,"pid":2147483647}' 'fake session id: msf injection is destructive'
 P 'POST /api/msf/stage' '{"arch":"x64","format":"exe","port":4444,"host":"127.0.0.1","os":"windows","protocol":"tcp"}' 'the connected server no longer implements MsfStage; the client returns a deliberate unsupported error'
-P 'POST /api/sessions/{id}/backdoor' '{"file_path":"C:\\c2tool-e2e-no-such-binary.exe","profile_name":"c2tool-e2e-no-such-profile"}' 'fake session id: backdoor patches a file on the target'
-P 'POST /api/sessions/{id}/dll-hijack' '{"reference_dll_path":"","target_location":"","reference_dll_b64":"","target_dll_b64":"","profile_name":"c2tool-e2e-no-such-profile"}' 'fake session id: dll hijack writes to the target'
+P 'POST /api/sessions/{id}/backdoor' '{"file_path":"C:\\sliverreshine-e2e-no-such-binary.exe","profile_name":"sliverreshine-e2e-no-such-profile"}' 'fake session id: backdoor patches a file on the target'
+P 'POST /api/sessions/{id}/dll-hijack' '{"reference_dll_path":"","target_location":"","reference_dll_b64":"","target_dll_b64":"","profile_name":"sliverreshine-e2e-no-such-profile"}' 'fake session id: dll hijack writes to the target'
 P 'POST /api/shellcode/rdi' '{"data_b64":"AAAA","function_name":"","arguments":""}' 'server-side donut encode of an invalid blob; no session, nothing is executed'
 
 # --- persistence / credentials harvesting ----------------------------------
 P 'GET /api/persistence/modules' '' 'static catalog'
 P 'GET /api/sessions/{id}/persistence' '' 'real session id: read-only inventory'
-P 'POST /api/sessions/{id}/persistence/install' '{"platform":"windows","module":"c2tool-e2e-no-such-module","payload":"","name":""}' 'fake session id + unknown module: the installer cannot reach the target'
-P 'POST /api/sessions/{id}/persistence/remove' '{"platform":"windows","module":"c2tool-e2e-no-such-module","payload":"","name":""}' 'fake session id + unknown module: the remover cannot reach the target'
+P 'POST /api/sessions/{id}/persistence/install' '{"platform":"windows","module":"sliverreshine-e2e-no-such-module","payload":"","name":""}' 'fake session id + unknown module: the installer cannot reach the target'
+P 'POST /api/sessions/{id}/persistence/remove' '{"platform":"windows","module":"sliverreshine-e2e-no-such-module","payload":"","name":""}' 'fake session id + unknown module: the remover cannot reach the target'
 P 'GET /api/mimikatz/modules' '' 'static catalog'
-P 'POST /api/sessions/{id}/mimikatz' '{"command":"c2tool-e2e-no-such-command","autoAdd":false}' 'fake session id: mimikatz would harvest credentials from the target'
-P 'POST /api/mimikatz/parse' '{"text":"c2tool e2e probe, no credentials here","source":"c2tool-e2e","autoAdd":false}' 'pure parser, autoAdd=false so the credential vault is never written'
+P 'POST /api/sessions/{id}/mimikatz' '{"command":"sliverreshine-e2e-no-such-command","autoAdd":false}' 'fake session id: mimikatz would harvest credentials from the target'
+P 'POST /api/mimikatz/parse' '{"text":"sliverreshine e2e probe, no credentials here","source":"sliverreshine-e2e","autoAdd":false}' 'pure parser, autoAdd=false so the credential vault is never written'
 P 'POST /api/sessions/{id}/exec-shellcode' '{"data_b64":"!!!not-base64!!!","pid":0,"rwx_pages":false}' 'invalid base64 -> 400 before any RPC'
-P 'POST /api/sessions/{id}/psexec' '{"hostname":"","profile_name":"c2tool-e2e-no-such-profile","service_name":"c2tool-e2e-nope","service_desc":"","bin_path":""}' 'fake session id: psexec executes on a remote host'
+P 'POST /api/sessions/{id}/psexec' '{"hostname":"","profile_name":"sliverreshine-e2e-no-such-profile","service_name":"sliverreshine-e2e-nope","service_desc":"","bin_path":""}' 'fake session id: psexec executes on a remote host'
 P 'POST /api/sessions/{id}/ping' '' 'real session id: ping is read-only'
 
 # --- registry ---------------------------------------------------------------
 P 'GET /api/sessions/{id}/reg/subkeys' '' 'real session id: read-only registry enumeration' '?hive=HKEY_LOCAL_MACHINE&path=SOFTWARE'
 P 'GET /api/sessions/{id}/reg/values' '' 'real session id: read-only registry enumeration' '?hive=HKEY_LOCAL_MACHINE&path=SOFTWARE'
 P 'GET /api/sessions/{id}/reg/read' '' 'real session id: read-only registry read' '?hive=HKEY_LOCAL_MACHINE&path=SOFTWARE%5CMicrosoft%5CWindows%5CCurrentVersion&key=ProgramFilesDir'
-P 'POST /api/sessions/{id}/reg/write' '{"hive":"HKEY_LOCAL_MACHINE","path":"Software\\c2tool-e2e-nope","key":"c2tool-e2e","value":"1","type":"string"}' 'fake session id: a registry write is explicitly off-limits on the live host'
-P 'POST /api/sessions/{id}/reg/create-key' '{"hive":"HKEY_LOCAL_MACHINE","path":"Software\\c2tool-e2e-nope","key":"c2tool-e2e"}' 'fake session id: registry key creation is off-limits'
-P 'POST /api/sessions/{id}/reg/delete-key' '{"hive":"HKEY_LOCAL_MACHINE","path":"Software\\c2tool-e2e-nope","key":"c2tool-e2e"}' 'fake session id: registry key deletion is off-limits'
+P 'POST /api/sessions/{id}/reg/write' '{"hive":"HKEY_LOCAL_MACHINE","path":"Software\\sliverreshine-e2e-nope","key":"sliverreshine-e2e","value":"1","type":"string"}' 'fake session id: a registry write is explicitly off-limits on the live host'
+P 'POST /api/sessions/{id}/reg/create-key' '{"hive":"HKEY_LOCAL_MACHINE","path":"Software\\sliverreshine-e2e-nope","key":"sliverreshine-e2e"}' 'fake session id: registry key creation is off-limits'
+P 'POST /api/sessions/{id}/reg/delete-key' '{"hive":"HKEY_LOCAL_MACHINE","path":"Software\\sliverreshine-e2e-nope","key":"sliverreshine-e2e"}' 'fake session id: registry key deletion is off-limits'
 P 'POST /api/sessions/{id}/reg/hive' '{"rootHive":"HKEY_LOCAL_MACHINE","requestedHive":"SAM"}' 'fake session id: hive extraction reads live hives and streams bytes' '' $true
 
 # --- session bookkeeping ----------------------------------------------------
 P 'POST /api/sessions/{id}/reconfigure' '{"reconnect_interval":60}' 'fake session id: reconfigure changes the live implant timing'
-P 'POST /api/sessions/{id}/rename' '{"name":"c2tool-e2e-rename"}' 'fake session id: renaming the real session would be visible state'
+P 'POST /api/sessions/{id}/rename' '{"name":"sliverreshine-e2e-rename"}' 'fake session id: renaming the real session would be visible state'
 P 'POST /api/beacons/{id}/open-session' '' 'non-existent beacon id'
 P 'GET /api/portfwd' '' 'read-only'
 P 'POST /api/portfwd' '{}' 'missing session_id/remote_port -> 400 before a local listener is opened'
@@ -236,7 +236,7 @@ P 'DELETE /api/aliases/{name}' '' 'non-existent alias name'
 P 'POST /api/sessions/{id}/aliases/{name}/run' '{"args":"","process":"","arch":"","method":"","class":""}' 'fake session id + non-existent alias: nothing runs'
 P 'GET /api/beacons' '' 'read-only'
 P 'GET /api/beacons/{id}' '' 'non-existent beacon id'
-P 'POST /api/beacons/{id}/rename' '{"name":"c2tool-e2e-rename"}' 'non-existent beacon id'
+P 'POST /api/beacons/{id}/rename' '{"name":"sliverreshine-e2e-rename"}' 'non-existent beacon id'
 P 'DELETE /api/beacons/{id}' '' 'non-existent beacon id'
 P 'GET /api/beacons/{id}/tasks' '' 'non-existent beacon id'
 P 'GET /api/beacons/{id}/tasks/{taskID}' '' 'non-existent beacon id and task id'
@@ -246,7 +246,7 @@ P 'GET /api/implant-profiles' '' 'read-only'
 P 'POST /api/implant-profiles' '{}' 'empty name -> "profile name is required" before anything is saved'
 P 'DELETE /api/implant-profiles/{name}' '' 'non-existent profile name; the client guards this call because the server RPC panics on unknown names'
 P 'DELETE /api/implant-builds/{name}' '' 'non-existent build name'
-P 'POST /api/regenerate' '{"implantName":"c2tool-e2e-no-such-build"}' 'non-existent build name'
+P 'POST /api/regenerate' '{"implantName":"sliverreshine-e2e-no-such-build"}' 'non-existent build name'
 P 'GET /api/operators' '' 'read-only'
 P 'GET /api/compiler' '' 'read-only'
 
@@ -257,8 +257,8 @@ P 'DELETE /api/hosts/{uuid}' '' 'non-existent host uuid'
 P 'DELETE /api/hosts/{uuid}/iocs/{iocID}' '' 'non-existent host uuid and ioc id'
 P 'GET /api/websites' '' 'read-only'
 P 'GET /api/websites/{name}' '' 'non-existent website name'
-P 'POST /api/websites/{name}/content' '{"path":"/e2e","content_type":"text/plain","text":"c2tool e2e fixture"}' 'creates a fixture website named c2tool-e2e-fixture; the paired DELETE below removes it'
-P 'PUT /api/websites/{name}/content' '{"path":"/e2e","content_type":"text/plain","text":"c2tool e2e fixture v2"}' 'updates the same fixture'
+P 'POST /api/websites/{name}/content' '{"path":"/e2e","content_type":"text/plain","text":"sliverreshine e2e fixture"}' 'creates a fixture website named sliverreshine-e2e-fixture; the paired DELETE below removes it'
+P 'PUT /api/websites/{name}/content' '{"path":"/e2e","content_type":"text/plain","text":"sliverreshine e2e fixture v2"}' 'updates the same fixture'
 P 'DELETE /api/websites/{name}/content' '{"paths":["/e2e"]}' 'removes content from the same fixture'
 P 'DELETE /api/websites/{name}' '' 'removes the fixture website created above (never a real site)'
 P 'GET /api/canaries' '' 'read-only'
@@ -278,8 +278,8 @@ P 'DELETE /api/socks/{id}' '' 'non-numeric proxy id -> 400'
 
 # --- loot -------------------------------------------------------------------
 P 'GET /api/loot' '' 'read-only'
-P 'POST /api/loot' '{"type":"file","name":"c2tool-e2e-nope","file_name":"x.txt","file_type":"text","file_data_b64":"!!!"}' 'invalid base64 -> error before anything is stored'
-P 'POST /api/loot/{id}/rename' '{"name":"c2tool-e2e-rename"}' 'non-existent loot id'
+P 'POST /api/loot' '{"type":"file","name":"sliverreshine-e2e-nope","file_name":"x.txt","file_type":"text","file_data_b64":"!!!"}' 'invalid base64 -> error before anything is stored'
+P 'POST /api/loot/{id}/rename' '{"name":"sliverreshine-e2e-rename"}' 'non-existent loot id'
 P 'GET /api/loot/{id}' '' 'non-existent loot id'
 P 'DELETE /api/loot/{id}' '' 'non-existent loot id'
 
@@ -287,8 +287,8 @@ P 'DELETE /api/loot/{id}' '' 'non-existent loot id'
 P 'GET /api/jobs' '' 'read-only'
 P 'GET /api/events' '' 'read-only event stream drained with a bounded timeout'
 P 'GET /api/builders' '' 'read-only'
-P 'POST /api/generate' '{"name":"c2tool-e2e-nope","os":"plan9","arch":"amd64","format":"exe"}' 'invalid os -> rejected by validateBuildRequest before any compile is queued'
-P 'POST /api/listeners' '{"type":"c2tool-e2e-no-such-type","addr":"127.0.0.1","port":1,"tls":false}' 'unknown listener type -> error before any socket is bound'
+P 'POST /api/generate' '{"name":"sliverreshine-e2e-nope","os":"plan9","arch":"amd64","format":"exe"}' 'invalid os -> rejected by validateBuildRequest before any compile is queued'
+P 'POST /api/listeners' '{"type":"sliverreshine-e2e-no-such-type","addr":"127.0.0.1","port":1,"tls":false}' 'unknown listener type -> error before any socket is bound'
 P 'GET /api/listeners/bind' '' 'read-only'
 P 'POST /api/listeners/bind' '{"host":"","port":0}' 'empty host -> "host is required" before a dialer job is created'
 P 'DELETE /api/listeners/bind/{id}' '' 'non-numeric job id -> 400'
@@ -299,11 +299,11 @@ P 'POST /api/rpc/call' '{"method":"GetVersion","request":{},"timeout":10}' 'read
 
 # --- credential vault -------------------------------------------------------
 P 'GET /api/creds' '' 'read-only'
-P 'POST /api/creds' '{"__c2tool_e2e_probe__":true}' 'validation-only probe: the handler has no request validation, and any well-formed body would write an entry into the server vault, so an unknown field is used to force the 400 decode path'
+P 'POST /api/creds' '{"__sliverreshine_e2e_probe__":true}' 'validation-only probe: the handler has no request validation, and any well-formed body would write an entry into the server vault, so an unknown field is used to force the 400 decode path'
 P 'PUT /api/creds' '{}' 'empty credential list -> "no credentials supplied" before the vault is touched'
-P 'DELETE /api/creds' '{"ids":["c2tool-e2e-no-such-credential"]}' 'non-existent credential id'
+P 'DELETE /api/creds' '{"ids":["sliverreshine-e2e-no-such-credential"]}' 'non-existent credential id'
 P 'GET /api/creds/filter' '' 'read-only' '?type=1000'
-P 'POST /api/creds/sniff' '{"hash":"c2tool-e2e-no-such-hash"}' 'read-only hash-type identification'
+P 'POST /api/creds/sniff' '{"hash":"sliverreshine-e2e-no-such-hash"}' 'read-only hash-type identification'
 P 'GET /api/creds/{id}' '' 'non-existent credential id'
 
 # --- memfiles ---------------------------------------------------------------
@@ -313,23 +313,23 @@ P 'DELETE /api/sessions/{id}/memfiles' '{"fd":-1}' 'fake session id + impossible
 
 # --- monitoring providers ---------------------------------------------------
 P 'GET /api/monitor/providers' '' 'read-only'
-P 'POST /api/monitor/providers' '{"__c2tool_e2e_probe__":true}' 'validation-only probe: an accepted body would add a real telemetry sink, so an unknown field forces the 400 decode path'
-P 'DELETE /api/monitor/providers' '{"__c2tool_e2e_probe__":true}' 'validation-only probe: an accepted body would remove a real telemetry sink'
+P 'POST /api/monitor/providers' '{"__sliverreshine_e2e_probe__":true}' 'validation-only probe: an accepted body would add a real telemetry sink, so an unknown field forces the 400 decode path'
+P 'DELETE /api/monitor/providers' '{"__sliverreshine_e2e_probe__":true}' 'validation-only probe: an accepted body would remove a real telemetry sink'
 
 # --- c2 profiles / encoders -------------------------------------------------
 P 'GET /api/c2profiles' '' 'read-only'
 P 'POST /api/c2profiles' '{}' 'missing profile -> "no profile supplied" before anything is stored'
 P 'GET /api/c2profiles/{name}' '' 'non-existent profile name'
 P 'GET /api/traffic-encoders' '' 'read-only'
-P 'POST /api/traffic-encoders' '{"name":"c2tool-e2e-nope","wasm":"!!!not-base64!!!","skipTests":false}' 'invalid base64 -> 400, nothing is registered'
+P 'POST /api/traffic-encoders' '{"name":"sliverreshine-e2e-nope","wasm":"!!!not-base64!!!","skipTests":false}' 'invalid base64 -> 400, nothing is registered'
 P 'DELETE /api/traffic-encoders/{name}' '' 'non-existent encoder name'
 P 'GET /api/shellcode-encoders' '' 'read-only'
-P 'POST /api/shellcode-encoders' '{"encoder":"c2tool-e2e-no-such-encoder","arch":"amd64","iterations":1,"badChars":"","data":"AAAA"}' 'unknown encoder name; encoding is a pure computation with no side effects'
+P 'POST /api/shellcode-encoders' '{"encoder":"sliverreshine-e2e-no-such-encoder","arch":"amd64","iterations":1,"badChars":"","data":"AAAA"}' 'unknown encoder name; encoding is a pure computation with no side effects'
 
 # --- wasm extensions --------------------------------------------------------
 P 'GET /api/sessions/{id}/wasm' '' 'real session id: read-only'
-P 'POST /api/sessions/{id}/wasm/register' '{"name":"c2tool-e2e","wasm":"!!!not-base64!!!"}' 'invalid base64 -> 400 before any RPC'
-P 'POST /api/sessions/{id}/wasm/exec' '{"name":"c2tool-e2e-no-such-extension","args":[]}' 'fake session id: wasm exec runs on the target'
+P 'POST /api/sessions/{id}/wasm/register' '{"name":"sliverreshine-e2e","wasm":"!!!not-base64!!!"}' 'invalid base64 -> 400 before any RPC'
+P 'POST /api/sessions/{id}/wasm/exec' '{"name":"sliverreshine-e2e-no-such-extension","args":[]}' 'fake session id: wasm exec runs on the target'
 
 # --- reverse port forwards / certs / tunnels --------------------------------
 P 'GET /api/sessions/{id}/rportfwd' '' 'real session id: read-only'
@@ -342,7 +342,7 @@ P 'DELETE /api/tunnels' '{"tunnelID":4294967295,"sessionID":"no-such-thing"}' 'i
 
 # --- console auth -----------------------------------------------------------
 P 'GET /api/settings/auth' '' 'read-only'
-P 'PUT /api/settings/auth' '{"username":"","password":"","currentPassword":"c2tool-e2e-wrong-password"}' 'wrong current password -> 403; the console credential is never changed'
+P 'PUT /api/settings/auth' '{"username":"","password":"","currentPassword":"sliverreshine-e2e-wrong-password"}' 'wrong current password -> 403; the console credential is never changed'
 
 # ---------------------------------------------------------------- runner -----
 
@@ -446,7 +446,7 @@ function Save-LogSnapshots {
     # state in a data subdirectory, and <home>/<log> when -home names the data
     # directory itself. Copy from whichever is present.
     $roots = @((Join-Path $consoleHome 'data'), $consoleHome)
-    foreach ($n in @('c2tool.log', 'sliver-server.log')) {
+    foreach ($n in @('sliverreshine.log', 'sliver-server.log')) {
         foreach ($root in $roots) {
             $src = Join-Path $root $n
             if (Test-Path $src) {
@@ -511,13 +511,13 @@ function Invoke-Route {
 # ---------------------------------------------------------------- main -------
 
 Write-Host ""
-Write-Host ("c2tool route coverage :: base=$Base routes=" + $routes.Count + " session=" + $Sid) -ForegroundColor White
+Write-Host ("sliverreshine route coverage :: base=$Base routes=" + $routes.Count + " session=" + $Sid) -ForegroundColor White
 
 $script:abortedAt = ''
 Save-LogSnapshots
 if (-not (Invoke-Probe)) {
     Write-Host "WARNING: the console reports it is NOT connected to sliver-server. Session/client routes will all answer Unavailable." -ForegroundColor Yellow
-    Write-Host "         Restart c2tool first (it relaunches the embedded server) or the sweep measures nothing." -ForegroundColor Yellow
+    Write-Host "         Restart sliverreshine first (it relaunches the embedded server) or the sweep measures nothing." -ForegroundColor Yellow
 }
 Write-Host ""
 
@@ -610,9 +610,9 @@ Save-LogSnapshots
 
 # ---------------------------------------------------------------- report -----
 
-$jsonPath = Join-Path $OutDir 'c2tool_e2e_routes_results.json'
-$csvPath = Join-Path $OutDir 'c2tool_e2e_routes_results.csv'
-$txtPath = Join-Path $OutDir 'c2tool_e2e_routes_report.txt'
+$jsonPath = Join-Path $OutDir 'sliverreshine_e2e_routes_results.json'
+$csvPath = Join-Path $OutDir 'sliverreshine_e2e_routes_results.csv'
+$txtPath = Join-Path $OutDir 'sliverreshine_e2e_routes_report.txt'
 
 $script:results | ConvertTo-Json -Depth 4 | Set-Content -Path $jsonPath -Encoding UTF8
 $script:results | Select-Object Method, Pattern, Code, Class, CType, Size, Note, Body |
@@ -627,7 +627,7 @@ $abt = @($script:results | Where-Object { $_.Class -eq 'ABORTED' })
 $lines = New-Object System.Collections.Generic.List[string]
 function Add-Line([string]$s) { $script:lines.Add($s) }
 
-Add-Line 'c2tool route coverage report'
+Add-Line 'sliverreshine route coverage report'
 Add-Line ("base        : " + $Base)
 Add-Line ("session id  : " + $Sid)
 Add-Line ("inventory   : " + $RoutesCsv + " (" + $routes.Count + " rows)")

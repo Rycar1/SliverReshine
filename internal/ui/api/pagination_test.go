@@ -13,7 +13,7 @@ import (
 	"github.com/bishopfox/sliver/protobuf/rpcpb"
 	"google.golang.org/grpc"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // --- paginate, as a unit ---------------------------------------------------

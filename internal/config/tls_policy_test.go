@@ -50,8 +50,8 @@ func TestRequireTLSSurvivesARoundTrip(t *testing.T) {
 
 	cfg := Default()
 	cfg.RequireTLS = true
-	cfg.TLSCert = "/etc/c2tool/console.crt"
-	cfg.TLSKey = "/etc/c2tool/console.key"
+	cfg.TLSCert = "/etc/sliverreshine/console.crt"
+	cfg.TLSKey = "/etc/sliverreshine/console.key"
 	if err := Save(home, cfg); err != nil {
 		t.Fatalf("Save: %v", err)
 	}

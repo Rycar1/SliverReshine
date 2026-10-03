@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // handleOneLiner turns a running listener into a one-line command that gets a

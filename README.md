@@ -29,7 +29,7 @@
 
 | 能力              | 说明                                   |
 | --------------- | ------------------------------------ |
-| **单文件部署**       | 控制台内嵌服务端，`./c2tool` 起来就是完整 C2        |
+| **单文件部署**       | 控制台内嵌服务端，`./sliverreshine` 起来就是完整 C2        |
 | **Web 控制台**     | React 前端，中英双语，浏览器操作，不用记命令行           |
 | **正向连接（Bind）**  | 上游只有反向连接；本项目加了 implant 监听、C2 拨入的完整链路 |
 | **多级代理生成**      | 生成页可直接产出 `tcp-pivot` 中转载荷，链路成树       |
@@ -51,12 +51,12 @@
 
 ```bash
 # Windows
-unzip c2tool-windows-amd64-plain.zip
-./c2tool.exe
+unzip sliverreshine-windows-amd64-plain.zip
+./sliverreshine.exe
 
 # Linux
-unzip c2tool-linux-amd64-plain.zip
-./c2tool
+unzip sliverreshine-linux-amd64-plain.zip
+./sliverreshine
 ```
 
 首次启动会在控制台打印访问地址与随机密码，浏览器打开即可。
@@ -82,7 +82,7 @@ build\build-release.ps1 -ServerDir .\build\out -GOOS windows -GOARCH amd64
 验证产物（Linux，需 WSL）：
 
 ```bash
-build/verify-artifact.sh dist/c2tool-linux-amd64-upx.zip
+build/verify-artifact.sh dist/sliverreshine-linux-amd64-upx.zip
 ```
 
 它会解包、启动控制台与内嵌服务端、验证鉴权门与 API（含 `/api/oneliner/all`），
@@ -122,7 +122,7 @@ upx   zip : 239,227,416 字节   ← 反而大 18 KB
 
 ```
 .
-├── cmd/c2tool/              控制台入口
+├── cmd/sliverreshine/              控制台入口
 ├── internal/
 │   ├── embed/               内嵌资源
 │   │   ├── serverbin/       服务端载荷（构建时生成，不入库）
@@ -492,5 +492,5 @@ make pb
 - 本项目：见 `LICENSE`
 - 上游 Sliver：`sliver/LICENSE`（GPL-3.0）
 - 内嵌 mimikatz：`internal/embed/mimikatz/`（原作者 Benjamin Delpy，见其仓库许可）
--  Sliver UI:https://github.com/9Insomnie/sliver_ui
+-  SliverReshine:https://github.com/9Insomnie/sliver_ui
 内嵌第三方二进制是为了部署便利；分发时请遵守各自的许可条款。

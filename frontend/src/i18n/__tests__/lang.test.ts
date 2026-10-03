@@ -11,11 +11,12 @@ describe('language preference', () => {
   it('persists under a stable key so the choice survives a reload', () => {
     setLang('zh')
 
-    // 回归测试：侧栏切换曾经写入 'sliverui-lang'，而 i18n/index.ts 初始化时
-    // 读的是 'c2tool-lang'，导致切完中文一刷新就回退成英文。
-    // 这两个断言把「写入的 key」和「读取的 key」钉在一起。
+    // 回归测试：侧栏切换曾经写入 'sliverui-lang'、后来又写入 'c2tool-lang'，而
+    // i18n/index.ts 初始化时读的是另一个 key，导致切完中文一刷新就回退成英文。
+    // 这几个断言把「写入的 key」和「读取的 key」钉在一起，并确认旧 key 不再被写入。
     expect(localStorage.getItem(LANG_KEY)).toBe('zh')
-    expect(localStorage.getItem('c2tool-lang')).toBe('zh')
+    expect(localStorage.getItem('sliverreshine-lang')).toBe('zh')
+    expect(localStorage.getItem('c2tool-lang')).toBeNull()
     expect(localStorage.getItem('sliverui-lang')).toBeNull()
   })
 
@@ -50,6 +51,6 @@ describe('language preference', () => {
 
   it('LANG_KEY matches the key i18n initialises from', () => {
     // 常量被导出正是为了让读写两侧不可能再各写各的。
-    expect(LANG_KEY).toBe('c2tool-lang')
+    expect(LANG_KEY).toBe('sliverreshine-lang')
   })
 })

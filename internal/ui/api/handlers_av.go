@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // ---------------------------------------------------------------------------

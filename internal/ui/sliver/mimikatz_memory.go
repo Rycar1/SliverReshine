@@ -7,7 +7,7 @@ import (
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 
-	"c2tool/internal/embed"
+	"sliverreshine/internal/embed"
 )
 
 // Execution modes for a credential-harvesting run. These are the strings the

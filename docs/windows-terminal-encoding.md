@@ -163,7 +163,7 @@ source it compiles a payload from. So `shell_windows.go` reaches a payload throu
 this chain:
 
 ```
-shell_windows.go  ->  implant.FS (go:embed)  ->  sliver-server  ->  payload-*.gz  ->  c2tool launcher
+shell_windows.go  ->  implant.FS (go:embed)  ->  sliver-server  ->  payload-*.gz  ->  sliverreshine launcher
 ```
 
 Each arrow is a build step. Editing the file and rebuilding only the launcher

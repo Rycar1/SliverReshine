@@ -1,6 +1,6 @@
 # Build artifacts
-/c2tool
-/c2tool.exe
+/sliverreshine
+/sliverreshine.exe
 
 # The shellcode loader and its probe are built locally by whoever needs them.
 # The sources are the deliverable; the binaries are throwaway artefacts that

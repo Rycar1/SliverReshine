@@ -1,7 +1,7 @@
 #!/bin/bash
 # End-to-end verification of a built Linux release archive.
 #
-# Usage:  verify-artifact.sh [path/to/c2tool-linux-amd64-*.zip]
+# Usage:  verify-artifact.sh [path/to/sliverreshine-linux-amd64-*.zip]
 #
 # Extracts the archive, runs the console plus its embedded C2 server against an
 # isolated home under /tmp, exercises the HTTP API with the generated Basic Auth
@@ -16,7 +16,7 @@
 # Nothing is left running and nothing outside /tmp is touched.
 set -u
 
-ZIP="${1:-$(dirname "$0")/../dist/c2tool-linux-amd64-plain.zip}"
+ZIP="${1:-$(dirname "$0")/../dist/sliverreshine-linux-amd64-plain.zip}"
 if [ ! -f "$ZIP" ]; then
   echo "FAIL: archive not found: $ZIP" >&2
   exit 1
@@ -41,13 +41,13 @@ trap cleanup EXIT
 
 cd "$WORK" || exit 1
 unzip -q "$ZIP" || { echo "FAIL: unzip"; exit 1; }
-chmod +x c2tool
+chmod +x sliverreshine
 
 echo "=== artifact ==="
-file c2tool
-ls -l c2tool
+file sliverreshine
+ls -l sliverreshine
 
-./c2tool -home "$WORK/data" \
+./sliverreshine -home "$WORK/data" \
   -addr "127.0.0.1:$CONSOLE_PORT" \
   -mp-host 127.0.0.1 -mp-port "$GRPC_PORT" \
   -operator verify > console.log 2>&1 &
@@ -123,11 +123,11 @@ kill -KILL "$CPID" 2>/dev/null
 CPID=""
 sleep 1
 
-echo "=== surviving c2tool processes ==="
+echo "=== surviving sliverreshine processes ==="
 # -x matches the process name exactly, not the whole command line. A -f match
-# would also hit this script (its own arguments contain "c2tool") and report a
+# would also hit this script (its own arguments contain "sliverreshine") and report a
 # leak that is really the check looking at itself.
-pgrep -x c2tool || echo "(none - clean)"
+pgrep -x sliverreshine || echo "(none - clean)"
 echo "=== surviving sliver-server processes ==="
 pgrep -x -f 'sliver-server-*' || echo "(none - clean)"
 echo "=== done ==="

@@ -184,4 +184,4 @@ Move-Item -LiteralPath $tmp -Destination $dst -Force
 $outLen = (Get-Item -LiteralPath $dst).Length
 $ratio = if ($inLen -gt 0) { 100.0 * $outLen / $inLen } else { 0 }
 Write-Host ("[embed] wrote {0} ({1:N1} MB, {2:N0}% of original)" -f $dst, ($outLen / 1MB), $ratio)
-Write-Host "[embed] build the launcher for this platform with: go build -tags embedserver ./cmd/c2tool"
+Write-Host "[embed] build the launcher for this platform with: go build -tags embedserver ./cmd/sliverreshine"

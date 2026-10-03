@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"c2tool/internal/ui/sliver"
+	"sliverreshine/internal/ui/sliver"
 )
 
 // withClient is the dispatcher that replaced the two-line "fetch the client,

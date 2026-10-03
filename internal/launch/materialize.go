@@ -70,7 +70,13 @@ func MaterializeServer() (string, error) {
 		// price of not exec'ing an arbitrary binary.
 		if err := verifyExecutableFormat(target); err == nil {
 			if err := verifyExtractedContent(target); err == nil {
-				_ = os.Chmod(target, 0o755)
+				// A failed chmod is not fatal -- on Windows it only toggles the
+				// read-only bit -- but on unix it leaves a server that cannot be
+				// executed, and the launcher would otherwise report only that
+				// the process exited. Logging it names the cause here.
+				if err := os.Chmod(target, 0o755); err != nil {
+					log.Printf("[launch] could not mark %s executable: %v", target, err)
+				}
 				return target, nil
 			} else {
 				log.Printf("[launch] discarding %s: %v", target, err)

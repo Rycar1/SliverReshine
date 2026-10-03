@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
+
+	"golang.org/x/net/websocket"
 )
 
 // This file holds the panic guard for the HTTP surface.
@@ -87,6 +89,30 @@ func withRecover(next http.Handler) http.Handler {
 
 		next.ServeHTTP(pw, r)
 	})
+}
+
+// recoverWS logs a panic on a goroutine that runs after a WebSocket upgrade.
+//
+// net/http recovers a panic per connection, but that protection ends the moment
+// the connection is hijacked: the goroutines the terminal runs afterwards -- the
+// socket handler x/net/websocket starts, and the tunnel->browser forwarder
+// started with go -- have nothing above them. A panic there is not a dropped
+// request, it is a dead console in the middle of an engagement, taking every
+// other operator session with it.
+//
+// There is no response left to write on a hijacked socket, so this records the
+// crash and closes the socket: the operator sees the terminal drop and finds
+// the reason in c2tool.log. It is meant to be deferred directly, since recover
+// only works when the deferred function itself calls it.
+func recoverWS(ws *websocket.Conn, where string) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	log.Printf("[api] PANIC in %s websocket: %v\n%s", where, rec, debug.Stack())
+	if ws != nil {
+		_ = ws.Close()
+	}
 }
 
 // panicWriter records whether the response has been started.

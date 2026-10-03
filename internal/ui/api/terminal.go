@@ -78,6 +78,9 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	websocket.Server{
 		Handshake: sameOriginHandshake,
 		Handler: func(ws *websocket.Conn) {
+			// Past this point the connection is hijacked, so net/http's own
+			// recover no longer covers this goroutine. See recoverWS.
+			defer recoverWS(ws, "terminal")
 			// x/net/websocket defaults to text frames; the frontend reads raw
 			// binary frames (ArrayBuffer), so force binary on both directions.
 			ws.PayloadType = websocket.BinaryFrame
@@ -345,8 +348,13 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 	//
 	// A unix session is unaffected: its PTY echoes as the operator types.
 
-	// Tunnel -> WS: forward implant output to the browser.
-	go forwardTunnelToWS(ws, tunnel, codec)
+	// Tunnel -> WS: forward implant output to the browser. Guarded like the
+	// socket handler: a panic here runs on its own goroutine, with nothing
+	// above it, and would take the console down.
+	go func() {
+		defer recoverWS(ws, "terminal-forward")
+		forwardTunnelToWS(ws, tunnel, codec)
+	}()
 
 	// WS -> tunnel: forward browser keystrokes to the implant.
 	pumpWSToTunnel(ws, tm, tunnel, sessionID, codec, windowsSession)

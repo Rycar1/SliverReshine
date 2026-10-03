@@ -647,42 +647,48 @@ func (s *Server) generateProfile(ctx context.Context) error {
 		return fmt.Errorf("start operator generator: %w", err)
 	}
 
-	// The generator asks before overwriting an existing operator record. Feed
-	// a stream of confirmations rather than parsing the prompt, which keeps
-	// this robust across upstream wording changes.
-	go func() {
-		defer stdin.Close()
-		scanner := bufio.NewScanner(strings.NewReader(strings.Repeat("y\n", 16)))
-		for scanner.Scan() {
-			if _, err := io.WriteString(stdin, scanner.Text()+"\n"); err != nil {
-				return
-			}
-			time.Sleep(120 * time.Millisecond)
-		}
-	}()
+	go feedConfirmations(stdin)
 
 	waitErr := cmd.Wait()
+	return checkGeneratedProfile(target, waitErr, buf.String())
+}
 
-	// Success is judged by whether the profile is complete and usable, not by
-	// whether the file happens to exist.
-	//
-	// The old check was: if the generator exited non-zero AND the file was
-	// absent, report failure. A generator that wrote a partial file and then
-	// died therefore returned nil and logged "operator profile generated",
-	// while the file failed to parse -- and the damage was permanent, because
-	// Start stats that path and skips regeneration on every later run. The file
-	// holds the operator's mTLS key and token.
-	//
-	// So the file is parsed here. A partial write fails that parse and the
-	// caller is told, rather than the console starting against a profile it
-	// cannot use.
+// feedConfirmations answers the generator's overwrite prompt.
+//
+// The generator asks before overwriting an existing operator record. Feed a
+// stream of confirmations rather than parsing the prompt, which keeps this
+// robust across upstream wording changes.
+func feedConfirmations(stdin io.WriteCloser) {
+	defer stdin.Close()
+	scanner := bufio.NewScanner(strings.NewReader(strings.Repeat("y\n", 16)))
+	for scanner.Scan() {
+		if _, err := io.WriteString(stdin, scanner.Text()+"\n"); err != nil {
+			return
+		}
+		time.Sleep(120 * time.Millisecond)
+	}
+}
+
+// checkGeneratedProfile judges success by whether the profile is complete and
+// usable, not by whether the file happens to exist.
+//
+// The old check was: if the generator exited non-zero AND the file was absent,
+// report failure. A generator that wrote a partial file and then died therefore
+// returned nil and logged "operator profile generated", while the file failed to
+// parse -- and the damage was permanent, because Start stats that path and skips
+// regeneration on every later run. The file holds the operator's mTLS key and
+// token.
+//
+// So the file is parsed here. A partial write fails that parse and the caller is
+// told, rather than the console starting against a profile it cannot use.
+func checkGeneratedProfile(target string, waitErr error, output string) error {
 	if _, err := ReadProfile(target); err != nil {
 		how := "the generator reported success"
 		if waitErr != nil {
 			how = waitErr.Error()
 		}
 		return fmt.Errorf("operator profile at %s is not usable (%s): %w: %s",
-			target, how, err, tail(buf.String(), 2000))
+			target, how, err, tail(output, 2000))
 	}
 	if waitErr != nil {
 		// Usable but a non-zero exit: worth saying, since the generator may have

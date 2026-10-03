@@ -69,9 +69,5 @@ func (s *Server) handleMsfStage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stager, err := c.MsfStage(req.Arch, req.Format, req.Port, req.Host, req.OS, req.Protocol, req.BadChars)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, stager)
+	writeResult(w, stager, err)
 }

@@ -119,11 +119,7 @@ func (s *Server) handleMimikatzRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := c.MimikatzRun(target, run, uuid)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	writeResult(w, result, err)
 }
 
 // handleMimikatzParse runs the parser against text the operator pastes in.

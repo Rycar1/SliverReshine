@@ -733,11 +733,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sessions, err := c.Sessions()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+	writeResult(w, map[string]any{"sessions": sessions}, err)
 }
 
 func (s *Server) handleBeacons(w http.ResponseWriter, r *http.Request) {
@@ -746,11 +742,7 @@ func (s *Server) handleBeacons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	beacons, err := c.Beacons()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"beacons": beacons})
+	writeResult(w, map[string]any{"beacons": beacons}, err)
 }
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
@@ -759,11 +751,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jobs, err := c.Jobs()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs})
+	writeResult(w, map[string]any{"jobs": jobs}, err)
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -772,11 +760,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	events, err := c.Events()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	writeResult(w, map[string]any{"events": events}, err)
 }
 
 func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
@@ -802,11 +786,7 @@ func (s *Server) handleBuilders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	builds, err := c.ImplantBuilds()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"builders": builds})
+	writeResult(w, map[string]any{"builders": builds}, err)
 }
 
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
@@ -820,11 +800,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := c.GenerateImplant(&req)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	writeResult(w, result, err)
 }
 
 func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
@@ -878,11 +854,7 @@ func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
 		website = defaultDeliverySite
 	}
 	jobID, err := c.StartListener(req.Type, addr, port, req.TLS, website, req.Domain)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "job_id": jobID})
+	writeResult(w, map[string]any{"success": true, "job_id": jobID}, err)
 }
 
 func (s *Server) handleStopListener(w http.ResponseWriter, r *http.Request) {

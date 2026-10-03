@@ -14,11 +14,7 @@ func (s *Server) handleWGClientConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg, err := c.GenerateWGClientConfig()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, cfg)
+	writeResult(w, cfg, err)
 }
 
 func (s *Server) handleWGUniqueIP(w http.ResponseWriter, r *http.Request) {
@@ -27,11 +23,7 @@ func (s *Server) handleWGUniqueIP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip, err := c.GenerateUniqueIP()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"ip": ip})
+	writeResult(w, map[string]string{"ip": ip}, err)
 }
 
 func (s *Server) handleWGForwarders(w http.ResponseWriter, r *http.Request) {
@@ -40,11 +32,7 @@ func (s *Server) handleWGForwarders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	forwarders, err := c.WGForwarders(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"forwarders": forwarders})
+	writeResult(w, map[string]any{"forwarders": forwarders}, err)
 }
 
 func (s *Server) handleWGStartPortForward(w http.ResponseWriter, r *http.Request) {
@@ -95,11 +83,7 @@ func (s *Server) handleWGSocksServers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	servers, err := c.WGSocksServers(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"servers": servers})
+	writeResult(w, map[string]any{"servers": servers}, err)
 }
 
 func (s *Server) handleWGStartSocks(w http.ResponseWriter, r *http.Request) {

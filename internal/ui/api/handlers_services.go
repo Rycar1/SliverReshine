@@ -95,11 +95,7 @@ func (s *Server) handleRunSSHCommand(w http.ResponseWriter, r *http.Request) {
 		privKey = decoded
 	}
 	result, err := c.RunSSHCommand(id, req.Username, req.Hostname, req.Port, req.Command, req.Password, privKey)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	writeResult(w, result, err)
 }
 
 // --- Extensions ---
@@ -174,9 +170,5 @@ func (s *Server) handleCallExtension(w http.ResponseWriter, r *http.Request) {
 		args = decoded
 	}
 	result, err := c.CallExtension(id, req.Name, req.Export, req.ServerStore, args)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	writeResult(w, result, err)
 }

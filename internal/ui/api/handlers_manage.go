@@ -63,11 +63,7 @@ func (s *Server) handleBeaconTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tasks, err := c.BeaconTasks(r.PathValue("id"))
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"tasks": tasks})
+	writeResult(w, map[string]any{"tasks": tasks}, err)
 }
 
 func (s *Server) handleBeacon(w http.ResponseWriter, r *http.Request) {
@@ -114,11 +110,7 @@ func (s *Server) handleOpenSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	async, err := c.OpenSessionFromBeacon(r.PathValue("id"))
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "async": async})
+	writeResult(w, map[string]any{"success": true, "async": async}, err)
 }
 
 func (s *Server) handleCloseSession(w http.ResponseWriter, r *http.Request) {
@@ -163,11 +155,7 @@ func (s *Server) handleBeaconTaskContent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	task, err := c.BeaconTaskContent(r.PathValue("taskID"))
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, task)
+	writeResult(w, task, err)
 }
 
 // --- Implant profiles ---
@@ -178,11 +166,7 @@ func (s *Server) handleImplantProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profiles, err := c.ImplantProfiles()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"profiles": profiles})
+	writeResult(w, map[string]any{"profiles": profiles}, err)
 }
 
 func (s *Server) handleSaveImplantProfile(w http.ResponseWriter, r *http.Request) {
@@ -223,11 +207,7 @@ func (s *Server) handleCompiler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	compiler, err := c.CompilerInfo()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, compiler)
+	writeResult(w, compiler, err)
 }
 
 // --- SOCKS5 proxies ---
@@ -256,16 +236,12 @@ func (s *Server) handleSocksStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := c.Socks().Start(req.SessionID, req.BindAddr, req.BindPort, req.Username, req.Password)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeResult(w, map[string]any{
 		"success":  true,
 		"id":       p.ID,
 		"bindAddr": p.BindAddr,
 		"bindPort": p.BindPort,
-	})
+	}, err)
 }
 
 func (s *Server) handleSocksStop(w http.ResponseWriter, r *http.Request) {
@@ -318,11 +294,7 @@ func (s *Server) handleLootAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := c.LootAdd(&req)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "id": id})
+	writeResult(w, map[string]any{"success": true, "id": id}, err)
 }
 
 func (s *Server) handleLootRename(w http.ResponseWriter, r *http.Request) {
@@ -354,11 +326,7 @@ func (s *Server) handleLootContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loot, err := c.LootContent(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, loot)
+	writeResult(w, loot, err)
 }
 
 func (s *Server) handleLootRemove(w http.ResponseWriter, r *http.Request) {

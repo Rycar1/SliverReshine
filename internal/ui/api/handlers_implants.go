@@ -105,11 +105,7 @@ func (s *Server) handleShellcodeRDI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := c.ShellcodeRDI(data, req.FunctionName, req.Arguments)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	writeResult(w, result, err)
 }
 
 // --- Execute shellcode ---
@@ -161,15 +157,11 @@ func (s *Server) handlePsExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := c.PsExec(id, req.Hostname, req.ProfileName, req.ServiceName, req.ServiceDesc, req.BinPath)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeResult(w, map[string]any{
 		"success": true,
 		"message": result["message"],
 		"path":    result["path"],
 		"service": result["service"],
 		"host":    result["hostname"],
-	})
+	}, err)
 }

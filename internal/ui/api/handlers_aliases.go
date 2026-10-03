@@ -24,11 +24,7 @@ func (s *Server) handlePruneBeacons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pruned, err := c.PruneBeacons(req.Days)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "pruned": pruned})
+	writeResult(w, map[string]any{"success": true, "pruned": pruned}, err)
 }
 
 func (s *Server) handlePruneSessions(w http.ResponseWriter, r *http.Request) {
@@ -37,11 +33,7 @@ func (s *Server) handlePruneSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pruned, err := c.PruneSessions()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "pruned": pruned})
+	writeResult(w, map[string]any{"success": true, "pruned": pruned}, err)
 }
 
 // --- Aliases ---
@@ -52,11 +44,7 @@ func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	aliases, err := sliver.ListAliases()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"aliases": aliases})
+	writeResult(w, map[string]any{"aliases": aliases}, err)
 }
 
 func (s *Server) handleAliasInstall(w http.ResponseWriter, r *http.Request) {

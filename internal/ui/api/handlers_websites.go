@@ -14,11 +14,7 @@ func (s *Server) handleWebsites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	websites, err := c.Websites()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"websites": websites})
+	writeResult(w, map[string]any{"websites": websites}, err)
 }
 
 func (s *Server) handleWebsite(w http.ResponseWriter, r *http.Request) {
@@ -48,11 +44,7 @@ func (s *Server) handleWebsiteAddContent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	website, err := c.WebsiteAddContent(r.PathValue("name"), &req)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, website)
+	writeResult(w, website, err)
 }
 
 func (s *Server) handleWebsiteUpdateContent(w http.ResponseWriter, r *http.Request) {
@@ -65,11 +57,7 @@ func (s *Server) handleWebsiteUpdateContent(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	website, err := c.WebsiteUpdateContent(r.PathValue("name"), &req)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, website)
+	writeResult(w, website, err)
 }
 
 func (s *Server) handleWebsiteRemoveContent(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +72,7 @@ func (s *Server) handleWebsiteRemoveContent(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	website, err := c.WebsiteRemoveContent(r.PathValue("name"), req.Paths)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, website)
+	writeResult(w, website, err)
 }
 
 func (s *Server) handleWebsiteRemove(w http.ResponseWriter, r *http.Request) {

@@ -29,9 +29,5 @@ func (s *Server) handleWebDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := c.WebDelivery(req)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, res)
+	writeResult(w, res, err)
 }

@@ -12,11 +12,7 @@ func (s *Server) handleGetPrivs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	privs, err := c.GetPrivs(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"privileges": privs})
+	writeResult(w, map[string]any{"privileges": privs}, err)
 }
 
 func (s *Server) handleCurrentTokenOwner(w http.ResponseWriter, r *http.Request) {
@@ -25,11 +21,7 @@ func (s *Server) handleCurrentTokenOwner(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	owner, err := c.CurrentTokenOwner(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"owner": owner})
+	writeResult(w, map[string]string{"owner": owner}, err)
 }
 
 func (s *Server) handleExecuteToken(w http.ResponseWriter, r *http.Request) {
@@ -46,11 +38,7 @@ func (s *Server) handleExecuteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := c.ExecuteToken(id, req.Path, req.Args, req.Output)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, res)
+	writeResult(w, res, err)
 }
 
 func (s *Server) handleRunAs(w http.ResponseWriter, r *http.Request) {

@@ -33,11 +33,7 @@ func (s *Server) handleOneLiner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := c.OneLiner(req)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, res)
+	writeResult(w, res, err)
 }
 
 // handleOneLinerTargets reports which listeners can serve a stage, so the UI can

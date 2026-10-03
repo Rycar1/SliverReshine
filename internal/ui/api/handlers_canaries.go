@@ -12,9 +12,5 @@ func (s *Server) handleCanaries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	canaries, err := c.Canaries()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"canaries": canaries})
+	writeResult(w, map[string]any{"canaries": canaries}, err)
 }

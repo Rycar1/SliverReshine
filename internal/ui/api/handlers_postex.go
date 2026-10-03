@@ -20,11 +20,7 @@ func (s *Server) handleCreds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	creds, err := c.Creds()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})
+	writeResult(w, map[string]any{"credentials": creds}, err)
 }
 
 func (s *Server) handleCredsAdd(w http.ResponseWriter, r *http.Request) {
@@ -108,11 +104,7 @@ func (s *Server) handleCredByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cred, err := c.GetCredByID(r.PathValue("id"))
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, cred)
+	writeResult(w, cred, err)
 }
 
 func (s *Server) handleCredsSniff(w http.ResponseWriter, r *http.Request) {
@@ -127,11 +119,7 @@ func (s *Server) handleCredsSniff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cred, err := c.CredsSniffHashType(req.Hash)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, cred)
+	writeResult(w, cred, err)
 }
 
 // handleCredsByHashType serves both filtered variants: ?plaintext=1 narrows to
@@ -176,11 +164,7 @@ func (s *Server) handleMemfilesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir, err := c.MemfilesList(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, dir)
+	writeResult(w, dir, err)
 }
 
 func (s *Server) handleMemfilesAdd(w http.ResponseWriter, r *http.Request) {
@@ -189,11 +173,7 @@ func (s *Server) handleMemfilesAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fd, err := c.MemfilesAdd(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"fd": fd})
+	writeResult(w, map[string]any{"fd": fd}, err)
 }
 
 func (s *Server) handleMemfilesRemove(w http.ResponseWriter, r *http.Request) {
@@ -300,11 +280,7 @@ func (s *Server) handleGrep(w http.ResponseWriter, r *http.Request) {
 		req.Path = "."
 	}
 	out, err := c.Grep(id, req.Pattern, req.Path, req.Recursive, req.Before, req.After)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
+	writeResult(w, out, err)
 }
 
 // ---------------------------------------------------------------------------
@@ -317,11 +293,7 @@ func (s *Server) handleMonitorProviders(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	providers, err := c.MonitorListConfig()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"providers": providers})
+	writeResult(w, map[string]any{"providers": providers}, err)
 }
 
 func (s *Server) handleMonitorAdd(w http.ResponseWriter, r *http.Request) {
@@ -366,11 +338,7 @@ func (s *Server) handleC2Profiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profiles, err := c.HTTPC2Profiles()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"profiles": profiles})
+	writeResult(w, map[string]any{"profiles": profiles}, err)
 }
 
 func (s *Server) handleC2Profile(w http.ResponseWriter, r *http.Request) {
@@ -379,11 +347,7 @@ func (s *Server) handleC2Profile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg, err := c.HTTPC2Profile(r.PathValue("name"))
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, cfg)
+	writeResult(w, cfg, err)
 }
 
 func (s *Server) handleC2ProfileSave(w http.ResponseWriter, r *http.Request) {
@@ -415,11 +379,7 @@ func (s *Server) handleTrafficEncoders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	names, err := c.TrafficEncoders()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"encoders": names})
+	writeResult(w, map[string]any{"encoders": names}, err)
 }
 
 func (s *Server) handleTrafficEncoderAdd(w http.ResponseWriter, r *http.Request) {
@@ -441,11 +401,7 @@ func (s *Server) handleTrafficEncoderAdd(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	report, err := c.TrafficEncoderAdd(req.Name, wasm, req.SkipTests)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, report)
+	writeResult(w, report, err)
 }
 
 func (s *Server) handleTrafficEncoderRemove(w http.ResponseWriter, r *http.Request) {
@@ -470,11 +426,7 @@ func (s *Server) handleShellcodeEncoders(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	encoders, err := c.ShellcodeEncoders()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"encoders": encoders})
+	writeResult(w, map[string]any{"encoders": encoders}, err)
 }
 
 func (s *Server) handleShellcodeEncode(w http.ResponseWriter, r *http.Request) {
@@ -498,14 +450,10 @@ func (s *Server) handleShellcodeEncode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := c.ShellcodeEncode(req.Encoder, req.Arch, data, req.Iterations, []byte(req.BadChars))
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeResult(w, map[string]any{
 		"data":   base64.StdEncoding.EncodeToString(out),
 		"length": len(out),
-	})
+	}, err)
 }
 
 // ---------------------------------------------------------------------------
@@ -518,11 +466,7 @@ func (s *Server) handleWasmExtensions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	names, err := c.WasmExtensions(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"extensions": names})
+	writeResult(w, map[string]any{"extensions": names}, err)
 }
 
 func (s *Server) handleWasmRegister(w http.ResponseWriter, r *http.Request) {
@@ -583,11 +527,7 @@ func (s *Server) handleRportFwdList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	listeners, err := c.RportFwdListeners(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"listeners": listeners})
+	writeResult(w, map[string]any{"listeners": listeners}, err)
 }
 
 func (s *Server) handleRportFwdStart(w http.ResponseWriter, r *http.Request) {
@@ -605,11 +545,7 @@ func (s *Server) handleRportFwdStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l, err := c.StartRportFwdListener(id, req.BindAddress, req.BindPort, req.ForwardAddress, req.ForwardPort)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, l)
+	writeResult(w, l, err)
 }
 
 func (s *Server) handleRportFwdStop(w http.ResponseWriter, r *http.Request) {
@@ -640,11 +576,7 @@ func (s *Server) handleCACertificates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	certs, err := c.CertificateAuthority()
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"certificates": certs})
+	writeResult(w, map[string]any{"certificates": certs}, err)
 }
 
 func (s *Server) handleCertificates(w http.ResponseWriter, r *http.Request) {
@@ -662,11 +594,7 @@ func (s *Server) handleCertificates(w http.ResponseWriter, r *http.Request) {
 		category = uint32(n)
 	}
 	certs, err := c.Certificates(category, r.URL.Query().Get("cn"))
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"certificates": certs})
+	writeResult(w, map[string]any{"certificates": certs}, err)
 }
 
 // ---------------------------------------------------------------------------
@@ -679,11 +607,7 @@ func (s *Server) handleTunnelCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tunnelID, err := c.CreateTunnel(id)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"tunnelID": tunnelID})
+	writeResult(w, map[string]any{"tunnelID": tunnelID}, err)
 }
 
 func (s *Server) handleTunnelClose(w http.ResponseWriter, r *http.Request) {
@@ -722,11 +646,7 @@ func (s *Server) handleServiceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	detail, err := c.ServiceDetail(id, req.Name, req.Hostname)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, detail)
+	writeResult(w, detail, err)
 }
 
 func (s *Server) handleServiceStartByName(w http.ResponseWriter, r *http.Request) {

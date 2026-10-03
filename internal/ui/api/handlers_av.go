@@ -164,16 +164,12 @@ func (s *Server) handleAVTest(w http.ResponseWriter, r *http.Request) {
 	// A fixed probe: one security product and one benign system process.
 	probe := "\"映像名称\",\"PID\"\n\"HipsDaemon.exe\",\"1\"\n\"explorer.exe\",\"2\"\n"
 	result, err := client.Lookup(r.Context(), probe)
-	if err != nil {
-		writeClientError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeResult(w, map[string]any{
 		"success":  true,
 		"database": result.Database,
 		"resolved": len(result.Processes),
 		"sample":   result.Processes,
-	})
+	}, err)
 }
 
 // containsFold is a case-insensitive substring test.

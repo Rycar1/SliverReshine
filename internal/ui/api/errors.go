@@ -112,6 +112,12 @@ var invalidMarkers = []string{
 	"cannot be empty",
 	"illegal base64",
 	"no profile supplied",
+	// The console's own write-path validation: a stored credential may not
+	// take the reserved "apikey" username, which the vault uses as the marker
+	// for an API key. The error is produced here rather than by the server, so
+	// no gRPC code carries it, and without this the caller's mistake reached
+	// the operator as a 500.
+	"is reserved for",
 	// A delivery method that does not match the requested platform, and a
 	// listener type that cannot serve a stage: both are the caller asking for
 	// something that cannot work, not the console failing.

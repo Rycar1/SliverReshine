@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -385,52 +386,17 @@ func mustStayInside(parent, child string) error {
 // The guard also closes the second half: the manifest's own file path is joined
 // onto AliasDir below, so an escaped manifest could name a binary anywhere.
 func (c *Client) RunAlias(sessionID, name, args, process, arch, method, class string) (*AliasView, map[string]any, error) {
-	if err := validateArtifactName(name); err != nil {
-		return nil, nil, fmt.Errorf("invalid alias name: %w", err)
-	}
-
-	data, err := os.ReadFile(aliasManifestPath(name))
-	if err != nil {
-		return nil, nil, fmt.Errorf("alias %q is not installed", name)
-	}
-	manifest := &AliasManifest{}
-	if err := json.Unmarshal(data, manifest); err != nil {
-		return nil, nil, err
-	}
-
-	sessions, err := c.Sessions()
+	manifest, err := loadAliasManifest(name)
 	if err != nil {
 		return nil, nil, err
 	}
-	var targetOS, targetArch string
-	for _, s := range sessions {
-		if s.ID == sessionID {
-			targetOS = s.OS
-			targetArch = s.Arch
-			break
-		}
-	}
-	if targetOS == "" {
-		return nil, nil, fmt.Errorf("session %s not found", sessionID)
-	}
-
-	var binRel string
-	for _, f := range manifest.Files {
-		if f != nil && strings.EqualFold(f.OS, targetOS) && strings.EqualFold(f.Arch, targetArch) {
-			binRel = f.Path
-			break
-		}
-	}
-	if binRel == "" {
-		return nil, nil, fmt.Errorf("no alias file for %s/%s", targetOS, targetArch)
-	}
-	rel, err := safeAliasRelPath(binRel)
+	targetOS, targetArch, err := c.resolveAliasTarget(sessionID)
 	if err != nil {
 		return nil, nil, err
 	}
-	binData, err := os.ReadFile(filepath.Join(AliasDir, name, rel))
+	binRel, binData, err := loadAliasBinary(manifest, name, targetOS, targetArch)
 	if err != nil {
-		return nil, nil, fmt.Errorf("alias file not found: %s", binRel)
+		return nil, nil, err
 	}
 
 	extArgs := strings.Join(strings.Fields(args), " ")
@@ -444,9 +410,85 @@ func (c *Client) RunAlias(sessionID, name, args, process, arch, method, class st
 
 	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
+	output, err := c.executeAlias(ctx, sessionID, manifest, binData, extArgs, process, arch, method, class, isDLL)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	v := aliasView(manifest)
+	return &v, map[string]any{
+		"output":   output,
+		"mode":     aliasMode(manifest),
+		"command":  manifest.CommandName,
+		"args":     extArgs,
+		"process":  process,
+		"platform": targetOS + "/" + targetArch,
+	}, nil
+}
+
+// loadAliasManifest reads and parses the installed manifest for name.
+//
+// The name guard runs before the read: it is what keeps a path segment such as
+// ".." or "a/b" from resolving the manifest read outside AliasDir.
+func loadAliasManifest(name string) (*AliasManifest, error) {
+	if err := validateArtifactName(name); err != nil {
+		return nil, fmt.Errorf("invalid alias name: %w", err)
+	}
+	data, err := os.ReadFile(aliasManifestPath(name))
+	if err != nil {
+		return nil, fmt.Errorf("alias %q is not installed", name)
+	}
+	manifest := &AliasManifest{}
+	if err := json.Unmarshal(data, manifest); err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+
+// resolveAliasTarget returns the OS and arch reported for sessionID.
+func (c *Client) resolveAliasTarget(sessionID string) (string, string, error) {
+	sessions, err := c.Sessions()
+	if err != nil {
+		return "", "", err
+	}
+	for _, s := range sessions {
+		if s.ID == sessionID {
+			return s.OS, s.Arch, nil
+		}
+	}
+	return "", "", fmt.Errorf("session %s not found", sessionID)
+}
+
+// loadAliasBinary picks the manifest entry for the target platform and reads it
+// from inside AliasDir, returning the manifest-relative path and the bytes.
+func loadAliasBinary(manifest *AliasManifest, name, targetOS, targetArch string) (string, []byte, error) {
+	var binRel string
+	for _, f := range manifest.Files {
+		if f != nil && strings.EqualFold(f.OS, targetOS) && strings.EqualFold(f.Arch, targetArch) {
+			binRel = f.Path
+			break
+		}
+	}
+	if binRel == "" {
+		return "", nil, fmt.Errorf("no alias file for %s/%s", targetOS, targetArch)
+	}
+	rel, err := safeAliasRelPath(binRel)
+	if err != nil {
+		return "", nil, err
+	}
+	binData, err := os.ReadFile(filepath.Join(AliasDir, name, rel))
+	if err != nil {
+		return "", nil, fmt.Errorf("alias file not found: %s", binRel)
+	}
+	return binRel, binData, nil
+}
+
+// executeAlias runs an alias binary through the RPC path its manifest selects:
+// ExecuteAssembly for a .NET assembly, SpawnDll for a reflective DLL, and
+// Sideload otherwise.
+func (c *Client) executeAlias(ctx context.Context, sessionID string, manifest *AliasManifest, binData []byte, extArgs, process, arch, method, class string, isDLL bool) (string, error) {
 	request := &commonpb.Request{SessionID: sessionID}
 
-	output := ""
 	if manifest.IsAssembly {
 		if arch == "" {
 			arch = "x84"
@@ -462,13 +504,15 @@ func (c *Client) RunAlias(sessionID, name, args, process, arch, method, class st
 			Request:   request,
 		})
 		if err != nil {
-			return nil, nil, err
+			return "", err
 		}
 		if resp.Response != nil && resp.Response.Err != "" {
-			return nil, nil, errors.New(resp.Response.Err)
+			return "", errors.New(resp.Response.Err)
 		}
-		output = string(resp.Output)
-	} else if manifest.IsReflective {
+		return string(resp.Output), nil
+	}
+
+	if manifest.IsReflective {
 		resp, err := c.RPC.SpawnDll(ctx, &sliverpb.InvokeSpawnDllReq{
 			Data:        binData,
 			Args:        []string{strings.TrimSpace(extArgs)},
@@ -478,40 +522,30 @@ func (c *Client) RunAlias(sessionID, name, args, process, arch, method, class st
 			Request:     request,
 		})
 		if err != nil {
-			return nil, nil, err
+			return "", err
 		}
 		if resp.Response != nil && resp.Response.Err != "" {
-			return nil, nil, errors.New(resp.Response.Err)
+			return "", errors.New(resp.Response.Err)
 		}
-		output = resp.Result
-	} else {
-		resp, err := c.RPC.Sideload(ctx, &sliverpb.SideloadReq{
-			Data:        binData,
-			Args:        []string{extArgs},
-			EntryPoint:  manifest.Entrypoint,
-			ProcessName: process,
-			IsDLL:       isDLL,
-			Kill:        true,
-			Request:     request,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		if resp.Response != nil && resp.Response.Err != "" {
-			return nil, nil, errors.New(resp.Response.Err)
-		}
-		output = resp.Result
+		return resp.Result, nil
 	}
 
-	v := aliasView(manifest)
-	return &v, map[string]any{
-		"output":   output,
-		"mode":     aliasMode(manifest),
-		"command":  manifest.CommandName,
-		"args":     extArgs,
-		"process":  process,
-		"platform": targetOS + "/" + targetArch,
-	}, nil
+	resp, err := c.RPC.Sideload(ctx, &sliverpb.SideloadReq{
+		Data:        binData,
+		Args:        []string{extArgs},
+		EntryPoint:  manifest.Entrypoint,
+		ProcessName: process,
+		IsDLL:       isDLL,
+		Kill:        true,
+		Request:     request,
+	})
+	if err != nil {
+		return "", err
+	}
+	if resp.Response != nil && resp.Response.Err != "" {
+		return "", errors.New(resp.Response.Err)
+	}
+	return resp.Result, nil
 }
 
 func aliasMode(m *AliasManifest) string {

@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -17,12 +16,14 @@ import (
 // method expects and forwards it. Several sliver-server handlers dereference a
 // NESTED message without checking it, and protojson happily leaves that nested
 // message nil when the key is absent or null. Measured against the real
-// descriptors:
+// descriptors and the server source (sliver/server/rpc):
 //
-//	Generate          req.Config.ID              Config nil -> panic
-//	SaveHTTPC2Profile CheckHTTPC2ConfigErrors   ServerConfig / ImplantConfig nil -> panic
+//	Shell             req.Request.SessionID      Request nil -> panic
+//	Generate          req.Config.ID              Config  nil -> panic
+//	TrafficEncoderAdd req.Wasm.Data              Wasm    nil -> panic
+//	SaveHTTPC2Profile CheckHTTPC2ConfigErrors    C2Config nil -> panic
 //
-// The second is already checked on the typed path (sliver.SaveHTTPC2Profile), but
+// The last is already checked on the typed path (sliver.SaveHTTPC2Profile), but
 // the raw endpoint bypasses that check -- it calls the method directly through
 // reflection. So the same input is refused on one route and fatal on the other.
 //
@@ -39,8 +40,12 @@ import (
 // server, checked before the call is made. It is not a general validator, and it
 // cannot be: the console cannot know what every upstream handler dereferences.
 // The list exists because a wrong guess here is cheap and a panic there is not.
-// When upstream adds another one, it belongs here -- and the fix that belongs
-// upstream is a nil check in the handler.
+//
+// TestGuardCoversEveryUnguardedServerDeref scans the embedded server source and
+// fails when a handler dereferences a nested request message that this list does
+// not cover, so a new upstream method cannot silently reopen the crash. When it
+// does, add the entry here -- and the fix that belongs upstream is a nil check
+// in the handler.
 
 // nilNestedGuard names a request field that must not be nil for a given method.
 type nilNestedGuard struct {
@@ -52,12 +57,45 @@ type nilNestedGuard struct {
 	Why string
 }
 
-// nilNestedGuards is the set of known-crashing nil nested messages.
+// requestDerefWhy is shared by every Request guard: the handlers in this class
+// all read a field of the nested commonpb.Request before checking that the
+// message exists.
+const requestDerefWhy = "the handler reads req.Request before checking it, so a " +
+	"request without it panics the server"
+
+// requestDerefMethods lists the unary methods whose sliver-server handler
+// dereferences the nested Request message without a nil check. Each was read in
+// sliver/server/rpc: Backdoor reads req.Request.SessionID, Shell and ShellResize
+// read req.Request.SessionID, Migrate/ExecuteAssembly/Sideload/SpawnDll/Msf/
+// MsfRemote/GetPrivs read req.Request.Async first, Reconfigure reads
+// req.Request.SessionID on its first line, Kill/KillSession/CloseSession/
+// HijackDLL/GetSystem/Portfwd read req.Request.SessionID, and so on.
 //
-// Kept as data rather than as code in the call path so the list is one obvious
-// place to extend, and so a test can assert that every entry actually exists in
-// the descriptor it names.
-var nilNestedGuards = []nilNestedGuard{
+// These are all "generic" RPCs in spirit -- most even call rpc.GenericHandler --
+// but the dereference happens before that call, so the nil check inside
+// GenericHandler is never reached.
+var requestDerefMethods = []string{
+	"Backdoor",
+	"CloseSession",
+	"ExecuteAssembly",
+	"GetPrivs",
+	"GetSystem",
+	"HijackDLL",
+	"Kill",
+	"Migrate",
+	"Msf",
+	"MsfRemote",
+	"Portfwd",
+	"Reconfigure",
+	"Shell",
+	"ShellResize",
+	"Sideload",
+	"SpawnDll",
+}
+
+// explicitNilNestedGuards covers methods that crash on a nil nested message
+// other than Request.
+var explicitNilNestedGuards = []nilNestedGuard{
 	{
 		Method: "Generate",
 		Field:  "Config",
@@ -70,6 +108,45 @@ var nilNestedGuards = []nilNestedGuard{
 		Why: "CheckHTTPC2ConfigErrors dereferences ServerConfig and ImplantConfig " +
 			"unconditionally, so a profile without them panics the server",
 	},
+	{
+		Method: "Migrate",
+		Field:  "Config",
+		Why: "the handler reads req.Config in the branch that regenerates missing " +
+			"shellcode, so a request without a config panics the server whenever " +
+			"the named shellcode is not cached",
+	},
+	{
+		Method: "GetSystem",
+		Field:  "Config",
+		Why: "the handler reads req.Config.HTTPC2ConfigName unconditionally, so a " +
+			"request without a config panics the server",
+	},
+	{
+		Method: "TrafficEncoderAdd",
+		Field:  "Wasm",
+		Why: "the handler reads req.Wasm.Data to compute the encoder ID before " +
+			"testTrafficEncoder's nil check, so a request without a wasm file " +
+			"panics the server",
+	},
+}
+
+// nilNestedGuards is the set of known-crashing nil nested messages.
+//
+// Kept as data rather than as code in the call path so the list is one obvious
+// place to extend, and so a test can assert that every entry actually exists in
+// the descriptor it names.
+var nilNestedGuards = buildNilNestedGuards()
+
+func buildNilNestedGuards() []nilNestedGuard {
+	out := make([]nilNestedGuard, 0, len(requestDerefMethods)+len(explicitNilNestedGuards))
+	for _, method := range requestDerefMethods {
+		out = append(out, nilNestedGuard{
+			Method: method,
+			Field:  "Request",
+			Why:    requestDerefWhy,
+		})
+	}
+	return append(out, explicitNilNestedGuards...)
 }
 
 // guardsByMethod indexes nilNestedGuards for lookup.
@@ -114,27 +191,4 @@ func checkNilNestedFields(method string, msg proto.Message) error {
 		}
 	}
 	return nil
-}
-
-// guardNamesForMethod lists the guarded fields, for the method catalogue so the
-// UI can show why a field is required.
-func guardNamesForMethod(method string) []string {
-	guards := guardsByMethod[method]
-	if len(guards) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(guards))
-	for _, g := range guards {
-		out = append(out, g.Field)
-	}
-	return out
-}
-
-// describeGuards renders the guard list for a log or error line.
-func describeGuards() string {
-	parts := make([]string, 0, len(nilNestedGuards))
-	for _, g := range nilNestedGuards {
-		parts = append(parts, g.Method+"."+g.Field)
-	}
-	return strings.Join(parts, ", ")
 }

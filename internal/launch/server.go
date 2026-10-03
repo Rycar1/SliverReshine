@@ -83,15 +83,8 @@ const (
 //
 // The returned Server owns the child process; call Stop to terminate it.
 func Start(ctx context.Context, opts Options) (*Server, error) {
-	if opts.Operator == "" {
-		opts.Operator = "operator"
-	}
-	if opts.MultiplayerHost == "" {
-		opts.MultiplayerHost = "127.0.0.1"
-	}
-	if opts.MultiplayerPort == 0 {
-		opts.MultiplayerPort = 31337
-	}
+	opts = normalizeOptions(opts)
+
 	if err := os.MkdirAll(opts.StateDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create state dir: %w", err)
 	}
@@ -107,19 +100,8 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 	}
 	s.bin = bin
 
-	// The console discovers profiles through this variable; setting it here
-	// keeps the console and the launcher in agreement without any UI step.
-	// The profile directory is exported so the console can find it without a UI
-	// step, but only when the operator has not set it themselves. Overwriting an
-	// explicit value silently repointed the profile list at a different
-	// directory, and the symptom -- saved profiles missing from the console --
-	// points at the profiles rather than at this line.
-	if existing := os.Getenv("SLIVER_CLIENT_CONFIGS"); existing == "" {
-		if err := os.Setenv("SLIVER_CLIENT_CONFIGS", opts.ConfigDir); err != nil {
-			return nil, fmt.Errorf("export SLIVER_CLIENT_CONFIGS: %w", err)
-		}
-	} else {
-		log.Printf("[launch] SLIVER_CLIENT_CONFIGS is already set to %q; leaving it alone", existing)
+	if err := exportClientConfigs(opts.ConfigDir); err != nil {
+		return nil, err
 	}
 
 	if err := s.unpack(ctx); err != nil {
@@ -147,6 +129,43 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 
 	log.Printf("[launch] sliver server ready (gRPC %s:%d)", opts.MultiplayerHost, opts.MultiplayerPort)
 	return s, nil
+}
+
+// normalizeOptions fills in the option values the launcher derives when the
+// caller left them unset.
+func normalizeOptions(opts Options) Options {
+	if opts.Operator == "" {
+		opts.Operator = "operator"
+	}
+	if opts.MultiplayerHost == "" {
+		opts.MultiplayerHost = "127.0.0.1"
+	}
+	if opts.MultiplayerPort == 0 {
+		opts.MultiplayerPort = 31337
+	}
+	return opts
+}
+
+// exportClientConfigs points the console at dir through SLIVER_CLIENT_CONFIGS,
+// unless the operator has already set that variable themselves.
+//
+// The console discovers profiles through this variable; setting it here keeps
+// the console and the launcher in agreement without any UI step. The profile
+// directory is exported so the console can find it without a UI step, but only
+// when the operator has not set it themselves. Overwriting an explicit value
+// silently repointed the profile list at a different directory, and the symptom
+// -- saved profiles missing from the console -- points at the profiles rather
+// than at this line.
+func exportClientConfigs(dir string) error {
+	existing := os.Getenv("SLIVER_CLIENT_CONFIGS")
+	if existing != "" {
+		log.Printf("[launch] SLIVER_CLIENT_CONFIGS is already set to %q; leaving it alone", existing)
+		return nil
+	}
+	if err := os.Setenv("SLIVER_CLIENT_CONFIGS", dir); err != nil {
+		return fmt.Errorf("export SLIVER_CLIENT_CONFIGS: %w", err)
+	}
+	return nil
 }
 
 // env returns the child environment with the Sliver state directory and a

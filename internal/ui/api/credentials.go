@@ -70,6 +70,17 @@ func (c CredentialStore) Save(user, pass string) error {
 		return errors.New("password must not contain CR or LF")
 	}
 
+	// 0700 and 0600 protect this on Unix. On Windows they do almost nothing:
+	// Go's os.Chmod there only toggles the read-only attribute, so the real
+	// protection is whatever ACL the directory inherits. That matters because this
+	// file holds the console password, and the console's default state directory
+	// is alongside the executable -- so unpacking into a shared or world-writable
+	// directory leaves the login readable by other local users.
+	//
+	// Setting an explicit DACL is deliberately not attempted here: a wrong one
+	// locks the operator out of their own console, and the correct one depends on
+	// the account the service runs as. The mitigation is documented instead; see
+	// EnsureReadme in internal/config, which the state directory already writes.
 	dir := filepath.Dir(c.Path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err

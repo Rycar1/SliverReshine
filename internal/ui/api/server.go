@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,11 +21,51 @@ type Server struct {
 	client *sliver.Client
 	// auth guards the console when configured; nil disables authentication.
 	auth *BasicAuth
+	// avLookupURL overrides the process-identification endpoint. Empty means the
+	// built-in default; "off" disables the feature. See SetAVLookupURL.
+	avLookupURL string
 }
 
 // New creates an API server.
 func New() *Server {
 	return &Server{}
+}
+
+// SetAVLookupURL configures the process-identification endpoint.
+//
+// The endpoint receives the target's process list, so this is the switch that
+// decides whether any such data leaves the operator's network and where it goes.
+// An empty value keeps the built-in public default; "off" makes the handlers
+// refuse rather than silently falling back, so a deployment that has opted out
+// cannot be talked into a disclosure by a request body field.
+func (s *Server) SetAVLookupURL(url string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.avLookupURL = strings.TrimSpace(url)
+}
+
+// avLookupEndpoint resolves the per-request override against the deployment
+// setting, and reports whether the lookup is permitted at all.
+//
+// Precedence: the request override wins, so an operator can point one scan at a
+// URL they control; then the deployment setting; then the built-in default. A
+// deployment that set "off" refuses the override too -- opt-out should not be
+// reversible from a request body.
+func (s *Server) avLookupEndpoint(requestURL string) (string, bool) {
+	s.mu.RLock()
+	configured := s.avLookupURL
+	s.mu.RUnlock()
+
+	if strings.EqualFold(configured, "off") {
+		return "", false
+	}
+	if u := strings.TrimSpace(requestURL); u != "" {
+		return u, true
+	}
+	if configured != "" {
+		return configured, true
+	}
+	return sliver.DefaultAVLookupURL, true
 }
 
 // SetBasicAuth installs credentials for the console. Passing nil disables

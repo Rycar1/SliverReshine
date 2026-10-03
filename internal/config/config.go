@@ -85,6 +85,15 @@ type Config struct {
 	// the console is already encrypted and there is nothing left to refuse.
 	RequireTLS bool `json:"requireTLS"`
 
+	// AVLookupURL overrides the process-identification endpoint.
+	//
+	// The endpoint receives the target's process list, so it is a disclosure of
+	// which hosts are being worked and which EDR each runs. Empty means "use the
+	// built-in default", which is a public service; set it to "off" to disable
+	// the feature entirely, or to a URL you control to keep that data on your own
+	// network. Resolved by api.Server.avLookupEndpoint.
+	AVLookupURL string `json:"avLookupURL"`
+
 	Auth AuthConfig `json:"auth"`
 }
 
@@ -267,6 +276,23 @@ Change the listen address or the login
 
     printf 'operator:%s\n' 'a-new-password' > console-auth
     chmod 600 console-auth
+
+  On Windows the chmod above does nothing: Go's os.Chmod there only toggles the
+  read-only attribute, so console-auth is protected by whatever ACL this
+  directory inherits. That file holds the console password, and this directory
+  also holds configs/ (the mTLS operator private key and bearer token) and
+  sliver/sliver.db (every credential the implants have harvested). Unpack into a
+  user-private location, not C:\Tools or C:\Users\Public:
+
+    icacls . /inheritance:r /grant:r "%USERNAME%:(OI)(CI)F"
+
+  The same applies to the data directory as a whole. On Linux and macOS the
+  0700/0600 modes the console sets are real and nothing extra is needed.
+
+  Process identification sends the target's process list to a third party. To
+  keep that on your own network, or to switch the feature off entirely:
+
+    "avLookupURL": "https://your-own-service/api"   or   "off"
 
   Deleting console-auth makes the next start generate a fresh random password
   and print it.

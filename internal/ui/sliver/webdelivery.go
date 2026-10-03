@@ -92,8 +92,12 @@ func (c *Client) WebDelivery(req WebDeliveryRequest) (*WebDeliveryResult, error)
 		return nil, fmt.Errorf("a profile name is required")
 	}
 	host := strings.TrimSpace(req.Host)
-	if host == "" {
-		return nil, fmt.Errorf("a host reachable from the target is required")
+	// Validated, not merely trimmed. The host becomes both the URL in the delivery
+	// command and the implant's callback address, and the templates do not quote
+	// it consistently -- so an unvalidated value is a second command on the
+	// target. See hostguard.go.
+	if err := validateHost(host); err != nil {
+		return nil, err
 	}
 	if req.Port == 0 {
 		return nil, fmt.Errorf("a port is required")
@@ -158,7 +162,7 @@ func (c *Client) WebDelivery(req WebDeliveryRequest) (*WebDeliveryResult, error)
 		return nil, err
 	}
 
-	url := fmt.Sprintf("http://%s:%d%s", host, req.Port, stagePath)
+	url := fmt.Sprintf("http://%s:%d%s", hostForURL(host), req.Port, stagePath)
 	result.URL = url
 	result.Command = webDeliveryCommand(format, url)
 

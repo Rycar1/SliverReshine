@@ -124,6 +124,10 @@ func main() {
 
 	// ---- web console --------------------------------------------------------
 	web := api.New()
+	// The process-identification endpoint receives the target's process list, so
+	// whether it is used at all is a deployment decision rather than a per-click
+	// one. Empty keeps the built-in public default; "off" disables it.
+	web.SetAVLookupURL(settings.AVLookupURL)
 	if settings.AutoConnect {
 		client, err := connectProfile(launchProfileName())
 		if err != nil {
@@ -154,24 +158,21 @@ func main() {
 		log.Printf("[c2tool] WARNING: authentication is disabled in %s; anyone who can reach %s gets full control",
 			config.Path(base), settings.Addr)
 	} else {
-		user, pass := settings.Auth.User, passOverride
-		if storedUser, storedPass, found, err := store.Load(); err != nil {
-			log.Printf("[c2tool] WARNING: cannot read %s: %v", credPath, err)
-		} else if found {
-			// The record wins over the settings file's username, so a rename
-			// made from the console is not reverted by the next restart.
-			user, pass = storedUser, storedPass
-		}
-		if pass == "" {
-			// First run: generate one rather than starting with a known default.
-			// A predictable console password on a C2 is worse than no password,
-			// because it looks protected.
-			generated, err := generatePassword()
-			if err != nil {
-				log.Fatalf("[c2tool] cannot generate a console password: %v", err)
-			}
-			pass = generated
-		}
+		// Precedence, and the order matters:
+		//
+		//   username: the stored record wins, so a rename made from the console is
+		//             not reverted by the next restart.
+		//   password: an explicit -auth-pass / C2TOOL_AUTH_PASS wins over the
+		//             record, then the record, then a generated one.
+		//
+		// The password used to follow the username's rule -- the record overwrote
+		// whatever the operator passed. That made `-auth-pass X` silently do
+		// nothing once a record existed, so an operator who set a password and
+		// restarted was still asked for the old one. From the outside that is
+		// indistinguishable from the console changing their password, and it is
+		// the opposite of what the comment below claims the write-back prevents.
+		resolved := resolveAccount(settings.Auth.User, passOverride, store)
+		user, pass, wasGenerated := resolved.user, resolved.pass, resolved.generated
 		if user == "" {
 			user = "operator"
 		}
@@ -190,7 +191,7 @@ func main() {
 		}
 		web.SetBasicAuth(cfg)
 
-		printCredentials(user, pass, credPath, config.Path(base), settings.Addr, consoleScheme(settings))
+		printCredentials(user, pass, credPath, config.Path(base), settings.Addr, consoleScheme(settings), wasGenerated)
 	}
 
 	// ---- cleartext policy ---------------------------------------------------
@@ -461,7 +462,13 @@ func consoleScheme(settings config.Config) string {
 // scheme is passed in rather than assumed: the URL was hardcoded to http://, so
 // an operator running the console over TLS was handed a link that does not
 // connect.
-func printCredentials(user, pass, credPath, settingsPath, addr, scheme string) {
+// showPassword is true only when this run generated the password. The stored
+// password is not reprinted on every start: the banner goes to stderr, and a
+// supervisor (systemd, journald, a container log driver, a service wrapper)
+// captures stderr into a store whose access control is not the 0600 credential
+// file. Repeating a live secret into that store on every boot is the opposite of
+// what the 0600 file is for, and the operator can always read the file.
+func printCredentials(user, pass, credPath, settingsPath, addr, scheme string, showPassword bool) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		host, port = addr, ""
@@ -481,12 +488,73 @@ func printCredentials(user, pass, credPath, settingsPath, addr, scheme string) {
 	fmt.Fprintf(os.Stderr, "  %s\n", rule)
 	fmt.Fprintf(os.Stderr, "     url      : %s\n", url)
 	fmt.Fprintf(os.Stderr, "     username : %s\n", user)
-	fmt.Fprintf(os.Stderr, "     password : %s\n", pass)
+	if showPassword {
+		fmt.Fprintf(os.Stderr, "     password : %s\n", pass)
+	} else {
+		fmt.Fprintf(os.Stderr, "     password : (unchanged; see %s)\n", credPath)
+	}
 	fmt.Fprintf(os.Stderr, "     stored   : %s\n", credPath)
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "     The browser will prompt for these before serving anything.\n")
 	fmt.Fprintf(os.Stderr, "     Edit that file, or %s, to change them.\n", settingsPath)
 	fmt.Fprintf(os.Stderr, "\n")
+}
+
+// resolvedAccount is the console account that won, and whether this run invented
+// the password.
+type resolvedAccount struct {
+	user      string
+	pass      string
+	generated bool
+}
+
+// resolveAccount applies the credential precedence.
+//
+// Split out of main so it can be tested. The ordering is the whole content of
+// this function and it is easy to get wrong in a way nothing reports:
+//
+//   - The username comes from the stored record when there is one, so a rename
+//     made in the Settings panel is not reverted by the next restart.
+//   - The password is the explicit override first. The record only fills in when
+//     the operator supplied nothing.
+//
+// The password used to follow the username's rule -- the record overwrote
+// whatever was passed -- which made `-auth-pass X` and C2TOOL_AUTH_PASS silently
+// do nothing once a record existed. An operator who set a password and restarted
+// was still asked for the old one, which is indistinguishable from the console
+// changing their password.
+//
+// A record that cannot be read is reported and otherwise ignored rather than
+// being fatal: an unreadable file should not stop a console the operator may be
+// trying to recover.
+func resolveAccount(settingsUser, passOverride string, store api.CredentialStore) resolvedAccount {
+	out := resolvedAccount{user: settingsUser, pass: passOverride}
+
+	if storedUser, storedPass, found, err := store.Load(); err != nil {
+		log.Printf("[c2tool] WARNING: cannot read %s: %v", store.Path, err)
+	} else if found {
+		out.user = storedUser
+		if out.pass == "" {
+			out.pass = storedPass
+		}
+	}
+
+	if out.pass == "" {
+		// First run: generate one rather than starting with a known default. A
+		// predictable console password on a C2 is worse than no password,
+		// because it looks protected.
+		generated, err := generatePassword()
+		if err != nil {
+			log.Fatalf("[c2tool] cannot generate a console password: %v", err)
+		}
+		out.pass = generated
+		out.generated = true
+	}
+
+	if out.user == "" {
+		out.user = "operator"
+	}
+	return out
 }
 
 // lookupEnv reads an environment variable, reporting whether it was set to a

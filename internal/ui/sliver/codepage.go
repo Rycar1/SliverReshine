@@ -10,7 +10,6 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/simplifiedchinese"
-
 )
 
 // Why Windows output is decoded rather than transcoded on the target
@@ -36,6 +35,15 @@ import (
 // codePageCache memoises the OEM code page per session. A session ID belongs to
 // one running implant for its whole life, so the answer cannot go stale, and the
 // lookup costs one extra spawn rather than one per command.
+//
+// It is bounded because it is a package-level map keyed by session, and nothing
+// removes an entry when a session ends: a console left running accumulates one
+// per implant that has ever checked in. The bound is high enough that no real
+// deployment reaches it -- sessions are counted in dozens, not thousands -- so it
+// only ever triggers as a safety valve, and evicting the whole map at that point
+// costs one probe per live session rather than being a correctness problem.
+const maxCodePageCacheEntries = 512
+
 var (
 	codePageMu    sync.Mutex
 	codePageCache = map[string]uint32{}
@@ -87,6 +95,12 @@ func (c *Client) sessionCodePage(sessionID string) uint32 {
 	}
 
 	codePageMu.Lock()
+	if len(codePageCache) >= maxCodePageCacheEntries {
+		// Drop the whole map rather than evicting one entry: choosing a victim
+		// needs an LRU this cache does not justify, and a cold map only costs a
+		// re-probe for sessions that are actually still in use.
+		codePageCache = map[string]uint32{}
+	}
 	codePageCache[sessionID] = cp
 	codePageMu.Unlock()
 	return cp

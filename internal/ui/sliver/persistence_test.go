@@ -263,7 +263,10 @@ func TestPersistenceLinuxInstallCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("linux-cron: %v", err)
 	}
-	check("linux-cron", got, `(crontab -l 2>/dev/null; echo "@reboot '/tmp/a.out'") | crontab -`)
+	// Single-quoted as one unit rather than wrapped in a double-quoted echo: a
+	// double quote in the payload used to close the echo argument and the rest of
+	// the line ran as a command. See shellQuotePOSIX usage in installCommand.
+	check("linux-cron", got, `(crontab -l 2>/dev/null; echo '@reboot /tmp/a.out') | crontab -`)
 
 	got, err = installCommand(platformLinux, "linux-bashrc", path, name)
 	if err != nil {
@@ -509,10 +512,13 @@ func TestPersistencePayloadWithSpaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("linux-cron: %v", err)
 	}
-	if want := `(crontab -l 2>/dev/null; echo "@reboot '/opt/my app/a.out'") | crontab -`; got[2] != want {
+	if want := `(crontab -l 2>/dev/null; echo '@reboot /opt/my app/a.out') | crontab -`; got[2] != want {
 		t.Errorf("linux payload with spaces:\n got %q\nwant %q", got[2], want)
 	}
-	if !strings.Contains(got[2], "'"+nixPayload+"'") {
+	// The payload is carried literally, quotes and all. The old shape nested a
+	// single-quoted value inside a double-quoted echo, so a payload containing a
+	// double quote broke out of the argument and ran as a command.
+	if !strings.Contains(got[2], "'@reboot "+nixPayload+"'") {
 		t.Errorf("linux payload lost its quoting: %q", got[2])
 	}
 }

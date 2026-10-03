@@ -92,14 +92,20 @@ func TestC2AddressRejectsAPortlessListener(t *testing.T) {
 // from an address the target can reach directly.
 func TestStageURLHostFallsBackSensibly(t *testing.T) {
 	withDomain := &JobView{ID: 1, Name: "http", Port: 80, Domains: []string{"c2.example.com"}}
-	if got := hostForStageURL(withDomain, ""); got != "c2.example.com" {
+	if got, err := hostForStageURL(withDomain, ""); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	} else if got != "c2.example.com" {
 		t.Errorf("= %q, want the listener domain", got)
 	}
 	wildcard := &JobView{ID: 1, Name: "http", Port: 80, Domains: []string{"0.0.0.0"}}
-	if got := hostForStageURL(wildcard, ""); got != "127.0.0.1" {
+	if got, err := hostForStageURL(wildcard, ""); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	} else if got != "127.0.0.1" {
 		t.Errorf("= %q, want loopback rather than the wildcard", got)
 	}
-	if got := hostForStageURL(wildcard, "10.1.1.1"); got != "10.1.1.1" {
+	if got, err := hostForStageURL(wildcard, "10.1.1.1"); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	} else if got != "10.1.1.1" {
 		t.Errorf("= %q, want the explicit host", got)
 	}
 }

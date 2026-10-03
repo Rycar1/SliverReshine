@@ -51,6 +51,13 @@ const errUnknownMessageType = "unknown message type"
 //
 // The mutex is held across the fetch so that a cold cache under concurrent
 // spawns costs one Sessions call rather than one per caller.
+//
+// The cache is rebuilt from the session list on every miss rather than merged
+// into. Merging left an entry behind for every session that had ever been seen,
+// so a long-running console accumulated one map entry per implant that had ever
+// checked in -- the list only grows, and nothing ever removed a dead session.
+// Replacing makes the map exactly the live set, which is the property the
+// comment above assumes when it says the answer cannot go stale.
 func (c *Client) sessionOS(sessionID string) (string, bool) {
 	c.osMu.Lock()
 	defer c.osMu.Unlock()
@@ -63,12 +70,12 @@ func (c *Client) sessionOS(sessionID string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	if c.osCache == nil {
-		c.osCache = make(map[string]string, len(sessions))
-	}
+	// Rebuilt, not merged: the map ends up holding exactly the live sessions.
+	live := make(map[string]string, len(sessions))
 	for _, s := range sessions {
-		c.osCache[s.ID] = strings.ToLower(s.OS)
+		live[s.ID] = strings.ToLower(s.OS)
 	}
+	c.osCache = live
 	osName, ok := c.osCache[sessionID]
 	return osName, ok
 }

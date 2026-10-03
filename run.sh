@@ -87,7 +87,7 @@ if [ -n "$AUTH_USER" ]; then
   echo "  │  HTTP Basic Auth is ON                                 │"
   echo "  └────────────────────────────────────────────────────────┘"
   echo "     username : $AUTH_USER"
-  echo "     password : $AUTH_PASS"
+  echo "     password : see $CRED_FILE"
   echo "     stored   : $CRED_FILE"
   echo
   echo "     The browser will prompt for these before serving anything."
@@ -96,7 +96,20 @@ if [ -n "$AUTH_USER" ]; then
   echo
 fi
 
+# The password is passed through the environment rather than on the command
+# line.
+#
+# argv is world-readable on Linux (/proc/<pid>/cmdline, ps) and is collected by
+# EDR and process-accounting agents on Windows -- precisely the telemetry a C2
+# console should not appear in with its login in hand. The environment is still
+# visible to the same user through /proc/<pid>/environ, but it is not in the ps
+# output, not in a supervisor command-line audit, and not in the process table
+# that Get-Process/WMI report. An explicit flag still wins over the variable, so
+# anything the operator types on the command line keeps working.
 if [ -n "$AUTH_USER" ]; then
-  exec "$BIN" -addr "$ADDR" -auth-user "$AUTH_USER" -auth-pass "$AUTH_PASS" -auth-realm "$AUTH_REALM" "$@"
+  C2TOOL_AUTH_USER="$AUTH_USER" \
+  C2TOOL_AUTH_PASS="$AUTH_PASS" \
+  C2TOOL_AUTH_REALM="$AUTH_REALM" \
+  exec "$BIN" -addr "$ADDR" "$@"
 fi
 exec "$BIN" -addr "$ADDR" "$@"

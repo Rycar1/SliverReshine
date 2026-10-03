@@ -16,9 +16,23 @@ import (
 // names to the identification service and returns whatever it recognises,
 // merged with the local process details so the console can display both.
 //
-// The lookup itself happens server-side rather than in the browser: the service
-// sends no CORS headers, and routing through the API keeps the operator's
-// browser from being the thing that talks to a third party.
+// # This sends target data to a third party
+//
+// The default endpoint is a public service, and nothing here is shy about saying
+// so: the request carries the target's process names off the operator's network
+// to whoever runs that service. That is a real disclosure -- it tells the
+// recipient which hosts are being worked, when, from which source IP, and which
+// EDR each one runs -- so it must be a deliberate act rather than something that
+// happens because someone clicked a button.
+//
+// Two things make it deliberate. The operator can override the endpoint per
+// request, and a deployment that never wants the call configures its own URL (or
+// leaves the default empty) in the settings file. The response is third-party
+// text and is only ever displayed, never executed.
+//
+// The lookup happens server-side rather than in the browser: the service sends
+// no CORS headers, and routing through the API keeps the operator's browser from
+// being the thing that talks to a third party.
 func (s *Server) handleAVScan(w http.ResponseWriter, r *http.Request) {
 	id, c := s.sessionID(w, r)
 	if c == nil {
@@ -58,7 +72,15 @@ func (s *Server) handleAVScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := sliver.NewAVLookupClient(req.URL, req.Database)
+	endpoint, allowed := s.avLookupEndpoint(req.URL)
+	if !allowed {
+		writeErr(w, http.StatusForbidden,
+			"process identification is disabled for this deployment (avLookupURL is \"off\" in the settings file); "+
+				"the lookup sends the target's process list to a third party")
+		return
+	}
+
+	client := sliver.NewAVLookupClient(endpoint, req.Database)
 	result, err := client.Lookup(r.Context(), sliver.BuildTasklistText(rows))
 	if err != nil {
 		writeClientError(w, err)
@@ -131,7 +153,14 @@ func (s *Server) handleAVTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := sliver.NewAVLookupClient(req.URL, req.Database)
+	endpoint, allowed := s.avLookupEndpoint(req.URL)
+	if !allowed {
+		writeErr(w, http.StatusForbidden,
+			"process identification is disabled for this deployment (avLookupURL is \"off\" in the settings file)")
+		return
+	}
+
+	client := sliver.NewAVLookupClient(endpoint, req.Database)
 	// A fixed probe: one security product and one benign system process.
 	probe := "\"映像名称\",\"PID\"\n\"HipsDaemon.exe\",\"1\"\n\"explorer.exe\",\"2\"\n"
 	result, err := client.Lookup(r.Context(), probe)

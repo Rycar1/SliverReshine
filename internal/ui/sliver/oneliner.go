@@ -166,9 +166,14 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 			req.JobID)
 	}
 
+	stageHost, err := hostForStageURL(job, req.Host)
+	if err != nil {
+		return nil, err
+	}
+
 	res, err := c.WebDelivery(WebDeliveryRequest{
 		ProfileName: profileName,
-		Host:        hostForStageURL(job, req.Host),
+		Host:        stageHost,
 		Port:        job.Port,
 		Path:        req.Path,
 		Format:      delivery,
@@ -382,12 +387,30 @@ func jobServesStage(job *JobView) bool {
 // successfully and never connect.
 func c2AddressForJob(job *JobView, explicitHost string) (string, error) {
 	host := strings.TrimSpace(explicitHost)
+	if host != "" {
+		// The same field as the stage URL, validated here as well because this
+		// runs first: an unvalidated value would otherwise be written into the
+		// implant profile as the address it dials, and the operator would get a
+		// build that calls back somewhere nonsensical with no explanation.
+		if err := validateHost(host); err != nil {
+			return "", err
+		}
+	}
 	if host == "" {
 		for _, d := range job.Domains {
-			if d = strings.TrimSpace(d); d != "" && d != "0.0.0.0" && d != "::" {
-				host = d
-				break
+			d = strings.TrimSpace(d)
+			if d == "" || d == "0.0.0.0" || d == "::" {
+				continue
 			}
+			// Skip a domain that is not usable rather than failing the whole
+			// one-liner; a listener may list several and one bad entry should not
+			// block the rest. The 0.0.0.0 fallback below is the documented
+			// placeholder case and stays.
+			if err := validateHost(d); err != nil {
+				continue
+			}
+			host = d
+			break
 		}
 	}
 	if host == "" {
@@ -403,7 +426,7 @@ func c2AddressForJob(job *JobView, explicitHost string) (string, error) {
 	if strings.EqualFold(job.Name, "https") {
 		scheme = "https"
 	}
-	return fmt.Sprintf("%s://%s:%d", scheme, host, job.Port), nil
+	return fmt.Sprintf("%s://%s:%d", scheme, hostForURL(host), job.Port), nil
 }
 
 // hostForStageURL picks the host for the fetch URL.
@@ -412,16 +435,30 @@ func c2AddressForJob(job *JobView, explicitHost string) (string, error) {
 // told to dial a public name while the stage must be fetched from an address the
 // target can reach directly. When the operator supplies a host it is used for
 // both, which is the common case; otherwise the listener's own address is used.
-func hostForStageURL(job *JobView, explicitHost string) string {
+func hostForStageURL(job *JobView, explicitHost string) (string, error) {
+	// Both sources are checked, not just the operator's. A listener's own domain
+	// also ends up in the delivery command, and it comes from a job the console
+	// did not necessarily create -- so it is no more trustworthy than the field.
 	if h := strings.TrimSpace(explicitHost); h != "" {
-		return h
+		if err := validateHost(h); err != nil {
+			return "", err
+		}
+		return h, nil
 	}
 	for _, d := range job.Domains {
-		if d = strings.TrimSpace(d); d != "" && d != "0.0.0.0" && d != "::" {
-			return d
+		d = strings.TrimSpace(d)
+		if d == "" || d == "0.0.0.0" || d == "::" {
+			continue
 		}
+		if err := validateHost(d); err != nil {
+			// Skip a domain that cannot be used rather than failing: a listener can
+			// list several, and one bad entry should not make the whole one-liner
+			// unavailable when another works.
+			continue
+		}
+		return d, nil
 	}
-	return "127.0.0.1"
+	return "127.0.0.1", nil
 }
 
 // deliveryForRequest resolves an empty delivery to a platform default.

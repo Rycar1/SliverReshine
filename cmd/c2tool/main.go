@@ -33,23 +33,82 @@ import (
 	"c2tool/internal/ui/sliver"
 )
 
-func main() {
-	var (
-		addr       = flag.String("addr", "", "HTTP listen address for the web console (overrides the settings file)")
-		home       = flag.String("home", "", "base directory for state and profiles (default: <exe dir>/data, then ~/.c2tool)")
-		operator   = flag.String("operator", "", "operator name recorded in the generated profile")
-		mpHost     = flag.String("mp-host", "", "host the embedded Sliver gRPC listener binds to")
-		mpPort     = flag.Int("mp-port", 0, "port the embedded Sliver gRPC listener binds to")
-		serverOnly = flag.Bool("server-only", false, "run only the embedded C2 server and skip the web console")
-		noAutoConn = flag.Bool("no-autoconnect", false, "do not attach the console to the generated profile on startup")
-		authUser   = flag.String("auth-user", "", "HTTP Basic Auth username for the web console (empty disables auth)")
-		authPass   = flag.String("auth-pass", "", "HTTP Basic Auth password for the web console")
-		authRealm  = flag.String("auth-realm", "", "Basic Auth realm shown in the browser prompt (default: a generic string)")
-		authFile   = flag.String("auth-file", "", "credential file holding the console account (default: <home>/console-auth)")
-	)
-	flag.Parse()
+// options is the command line as parsed, before anything has been read from
+// disk. Keeping it in a struct is what lets run() be driven by a test or by a
+// future subcommand without going through the global flag set.
+type options struct {
+	addr       string
+	home       string
+	operator   string
+	mpHost     string
+	mpPort     int
+	serverOnly bool
+	noAutoConn bool
+	authUser   string
+	authPass   string
+	authRealm  string
+	authFile   string
+}
 
-	base := *home
+func main() {
+	run(parseFlags())
+}
+
+// parseFlags registers the command line flags and parses them.
+func parseFlags() options {
+	var o options
+	flag.StringVar(&o.addr, "addr", "", "HTTP listen address for the web console (overrides the settings file)")
+	flag.StringVar(&o.home, "home", "", "base directory for state and profiles (default: <exe dir>/data, then ~/.c2tool)")
+	flag.StringVar(&o.operator, "operator", "", "operator name recorded in the generated profile")
+	flag.StringVar(&o.mpHost, "mp-host", "", "host the embedded Sliver gRPC listener binds to")
+	flag.IntVar(&o.mpPort, "mp-port", 0, "port the embedded Sliver gRPC listener binds to")
+	flag.BoolVar(&o.serverOnly, "server-only", false, "run only the embedded C2 server and skip the web console")
+	flag.BoolVar(&o.noAutoConn, "no-autoconnect", false, "do not attach the console to the generated profile on startup")
+	flag.StringVar(&o.authUser, "auth-user", "", "HTTP Basic Auth username for the web console (empty disables auth)")
+	flag.StringVar(&o.authPass, "auth-pass", "", "HTTP Basic Auth password for the web console")
+	flag.StringVar(&o.authRealm, "auth-realm", "", "Basic Auth realm shown in the browser prompt (default: a generic string)")
+	flag.StringVar(&o.authFile, "auth-file", "", "credential file holding the console account (default: <home>/console-auth)")
+	flag.Parse()
+	return o
+}
+
+// run is main without the flag parsing: it provisions the state directory,
+// starts the embedded C2 server, serves the web console and blocks until the
+// process is asked to stop.
+//
+// It is split out of main so the phases read as a list of what a launch does,
+// rather than as two hundred lines of one function. Each phase below owns one
+// resource and its own failure message.
+func run(o options) {
+	base := resolveHome(o.home)
+	settings, passOverride := provision(base, o)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// ---- embedded C2 server -------------------------------------------------
+	srv := startEmbeddedServer(ctx, base, settings)
+	defer srv.Stop()
+
+	if settings.ServerOnly {
+		log.Printf("[c2tool] server-only mode, gRPC on %s:%d; Ctrl-C to stop",
+			settings.MultiplayerHost, settings.MultiplayerPort)
+		<-ctx.Done()
+		return
+	}
+
+	// ---- web console --------------------------------------------------------
+	web := newConsole(settings)
+	configureAuth(web, base, settings, passOverride, o.authFile)
+	serveConsole(ctx, stop, web, base, settings)
+}
+
+// resolveHome resolves the state directory and creates it.
+//
+// It is the first thing a launch does, because everything else -- the settings
+// file, the login record, the unpacked server -- is written underneath it.
+func resolveHome(flagHome string) string {
+	base := flagHome
 	if base == "" {
 		dir, err := defaultHome()
 		if err != nil {
@@ -60,7 +119,16 @@ func main() {
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		log.Fatalf("[c2tool] cannot create %s: %v", base, err)
 	}
+	return base
+}
 
+// provision writes the first-run files and layers the command line and the
+// environment over the settings file.
+//
+// The password is returned separately rather than stored on the Config: it is a
+// secret, and the settings file is a document the operator is invited to read,
+// diff and share.
+func provision(base string, o options) (config.Config, string) {
 	// ---- first-run provisioning --------------------------------------------
 	//
 	// Everything the operator is expected to be able to edit is written here, on
@@ -79,24 +147,25 @@ func main() {
 	}
 
 	settings, passOverride := applyOverrides(settings, overrides{
-		addr:       *addr,
-		operator:   *operator,
-		mpHost:     *mpHost,
-		mpPort:     *mpPort,
-		serverOnly: *serverOnly,
-		noAutoConn: *noAutoConn,
-		authUser:   *authUser,
-		authPass:   *authPass,
-		authRealm:  *authRealm,
+		addr:       o.addr,
+		operator:   o.operator,
+		mpHost:     o.mpHost,
+		mpPort:     o.mpPort,
+		serverOnly: o.serverOnly,
+		noAutoConn: o.noAutoConn,
+		authUser:   o.authUser,
+		authPass:   o.authPass,
+		authRealm:  o.authRealm,
 	})
 	settings = settings.Normalize()
 
 	installLogFile(filepath.Join(base, "c2tool.log"))
+	return settings, passOverride
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	// ---- embedded C2 server -------------------------------------------------
+// startEmbeddedServer starts the embedded Sliver server and reports the operator
+// profile it generated.
+func startEmbeddedServer(ctx context.Context, base string, settings config.Config) *launch.Server {
 	srv, err := launch.Start(ctx, launch.Options{
 		StateDir:        filepath.Join(base, "sliver"),
 		ConfigDir:       filepath.Join(base, "configs"),
@@ -114,15 +183,12 @@ func main() {
 	if profile != nil {
 		log.Printf("[c2tool] operator %q -> %s", profile.Operator, profile.Path)
 	}
+	return srv
+}
 
-	if settings.ServerOnly {
-		log.Printf("[c2tool] server-only mode, gRPC on %s:%d; Ctrl-C to stop",
-			settings.MultiplayerHost, settings.MultiplayerPort)
-		<-ctx.Done()
-		return
-	}
-
-	// ---- web console --------------------------------------------------------
+// newConsole builds the web console and, when the settings ask for it, attaches
+// it to the profile the launcher just wrote.
+func newConsole(settings config.Config) *api.Server {
 	web := api.New()
 	// The process-identification endpoint receives the target's process list, so
 	// whether it is used at all is a deployment decision rather than a per-click
@@ -137,18 +203,19 @@ func main() {
 			log.Printf("[c2tool] web console attached to the embedded server")
 		}
 	}
+	return web
+}
 
-	// ---- console login ------------------------------------------------------
-	//
-	// One account, one record.
-	//
-	// Precedence is: an explicit override (flag or environment), otherwise the
-	// stored record, otherwise a freshly generated password. The winner is then
-	// written back, so the record, the running console and the next launch
-	// always converge on the same password. Without that write-back an operator
-	// could set C2TOOL_AUTH_PASS once and have it silently ignored on the next
-	// start in favour of whatever the record happened to hold.
-	credPath := *authFile
+// configureAuth resolves the console account and installs it on the server.
+//
+// One account, one record. The precedence is: an explicit override (flag or
+// environment), otherwise the stored record, otherwise a freshly generated
+// password. The winner is then written back, so the record, the running console
+// and the next launch always converge on the same password. Without that
+// write-back an operator could set C2TOOL_AUTH_PASS once and have it silently
+// ignored on the next start in favour of whatever the record happened to hold.
+func configureAuth(web *api.Server, base string, settings config.Config, passOverride, authFile string) {
+	credPath := authFile
 	if credPath == "" {
 		credPath = filepath.Join(base, "console-auth")
 	}
@@ -157,43 +224,53 @@ func main() {
 	if !settings.Auth.Enabled {
 		log.Printf("[c2tool] WARNING: authentication is disabled in %s; anyone who can reach %s gets full control",
 			config.Path(base), settings.Addr)
-	} else {
-		// Precedence, and the order matters:
-		//
-		//   username: the stored record wins, so a rename made from the console is
-		//             not reverted by the next restart.
-		//   password: an explicit -auth-pass / C2TOOL_AUTH_PASS wins over the
-		//             record, then the record, then a generated one.
-		//
-		// The password used to follow the username's rule -- the record overwrote
-		// whatever the operator passed. That made `-auth-pass X` silently do
-		// nothing once a record existed, so an operator who set a password and
-		// restarted was still asked for the old one. From the outside that is
-		// indistinguishable from the console changing their password, and it is
-		// the opposite of what the comment below claims the write-back prevents.
-		resolved := resolveAccount(settings.Auth.User, passOverride, store)
-		user, pass, wasGenerated := resolved.user, resolved.pass, resolved.generated
-		if user == "" {
-			user = "operator"
-		}
-
-		cfg := &api.BasicAuth{User: user, Pass: pass, Realm: settings.Auth.Realm}
-		// A change made from the console lands in the same record the browser
-		// logs in against, so a restart asks for the same password.
-		cfg.Persist = store.Save
-
-		// Persist the account that won. Skipped when the record already matches,
-		// so a normal restart does not rewrite the file on every boot.
-		if storedUser, storedPass, found, _ := store.Load(); !found || storedUser != user || storedPass != pass {
-			if err := store.Save(user, pass); err != nil {
-				log.Printf("[c2tool] WARNING: cannot persist credentials to %s: %v", credPath, err)
-			}
-		}
-		web.SetBasicAuth(cfg)
-
-		printCredentials(user, pass, credPath, config.Path(base), settings.Addr, consoleScheme(settings), wasGenerated)
+		return
 	}
 
+	// Precedence, and the order matters:
+	//
+	//   username: the stored record wins, so a rename made from the console is
+	//             not reverted by the next restart.
+	//   password: an explicit -auth-pass / C2TOOL_AUTH_PASS wins over the
+	//             record, then the record, then a generated one.
+	//
+	// The password used to follow the username's rule -- the record overwrote
+	// whatever the operator passed. That made `-auth-pass X` silently do
+	// nothing once a record existed, so an operator who set a password and
+	// restarted was still asked for the old one. From the outside that is
+	// indistinguishable from the console changing their password, and it is
+	// the opposite of what the comment below claims the write-back prevents.
+
+	resolved := resolveAccount(settings.Auth.User, passOverride, store)
+	user, pass, wasGenerated := resolved.user, resolved.pass, resolved.generated
+	if user == "" {
+		user = "operator"
+	}
+
+	cfg := &api.BasicAuth{User: user, Pass: pass, Realm: settings.Auth.Realm}
+	// A change made from the console lands in the same record the browser
+	// logs in against, so a restart asks for the same password.
+	cfg.Persist = store.Save
+
+	// Persist the account that won. Skipped when the record already matches,
+	// so a normal restart does not rewrite the file on every boot.
+	if storedUser, storedPass, found, _ := store.Load(); !found || storedUser != user || storedPass != pass {
+		if err := store.Save(user, pass); err != nil {
+			log.Printf("[c2tool] WARNING: cannot persist credentials to %s: %v", credPath, err)
+		}
+	}
+	web.SetBasicAuth(cfg)
+
+	printCredentials(user, pass, credPath, config.Path(base), settings.Addr, consoleScheme(settings), wasGenerated)
+}
+
+// serveConsole binds the listener, serves the console and shuts it down when the
+// context is cancelled.
+//
+// stop is the cancel function for that context: a serve error in either branch
+// below has to bring the whole process down, and cancelling the context is how
+// that is signalled.
+func serveConsole(ctx context.Context, stop context.CancelFunc, web *api.Server, base string, settings config.Config) {
 	// ---- cleartext policy ---------------------------------------------------
 	//
 	// Checked before the listener exists, so a refusal leaves no port bound and

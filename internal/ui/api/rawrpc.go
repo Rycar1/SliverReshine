@@ -174,13 +174,7 @@ func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
 	// caller could ask for a year and the handler would hold a context, a
 	// goroutine and an open response for that long -- and the HTTP server has no
 	// write timeout, so nothing else would cut it short either.
-	timeout := defaultRPCTimeout
-	if req.Timeout > 0 {
-		timeout = time.Duration(req.Timeout) * time.Second
-		if timeout > maxRPCTimeout {
-			timeout = maxRPCTimeout
-		}
-	}
+	timeout := clampRPCTimeout(req.Timeout)
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
@@ -276,6 +270,29 @@ const (
 	defaultRPCTimeout = 60 * time.Second
 	maxRPCTimeout     = 10 * time.Minute
 )
+
+// clampRPCTimeout turns a request's timeout field into the duration the handler
+// will honour.
+//
+// The field is caller-controlled, so it cannot be trusted: without the cap a
+// request asking for a year would hold a context, a goroutine and an open
+// response for a year, and nothing downstream would cut it short either, since
+// the HTTP server has no write timeout. A non-positive value means "use the
+// default" rather than "no timeout", so 0 and negative numbers cannot opt out
+// of the cap.
+//
+// The comparison happens in seconds before the multiplication on purpose: a
+// value like math.MaxInt would overflow time.Duration and wrap negative, which
+// context.WithTimeout reads as an already-expired deadline.
+func clampRPCTimeout(seconds int) time.Duration {
+	if seconds <= 0 {
+		return defaultRPCTimeout
+	}
+	if int64(seconds) >= int64(maxRPCTimeout/time.Second) {
+		return maxRPCTimeout
+	}
+	return time.Duration(seconds) * time.Second
+}
 
 // maxStreamMessages bounds how much a streaming call can buffer. Several
 // streams (events, beacons, the loot feed) never terminate on their own, so the

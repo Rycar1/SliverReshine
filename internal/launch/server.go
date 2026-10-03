@@ -452,15 +452,25 @@ func (s *Server) spawn(ctx context.Context) error {
 		// discarded: this was `_ = cmd.Wait()`, so a daemon that died from a
 		// signal or a non-zero exit was indistinguishable from one that stopped
 		// cleanly, and nothing recorded why.
-		err := cmd.Wait()
-		s.mu.Lock()
-		s.exited = true
-		s.exitErr = err
-		s.mu.Unlock()
+		s.publishExit(cmd.Wait())
 		logFile.Close()
 	}()
 	log.Printf("[launch] sliver daemon started (pid %d), log: %s", cmd.Process.Pid, s.opts.LogPath)
 	return nil
+}
+
+// publishExit records how the daemon stopped.
+//
+// It exists as a method so the write side and the read side
+// (daemonExited/daemonExitReason) share one lock, and so a test can drive the
+// pair concurrently under -race. Reading Cmd.ProcessState instead was a data
+// race: Wait writes it from this goroutine while the launcher reads it from
+// another, and both sides only testing it does not make the access safe.
+func (s *Server) publishExit(err error) {
+	s.mu.Lock()
+	s.exited = true
+	s.exitErr = err
+	s.mu.Unlock()
 }
 
 // requireFreePort fails when something is already listening on the gRPC address.

@@ -2,13 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
 import { bytesToText } from '../lib/binary'
+import { fmtLocalTime } from '../lib/format'
 import type { BeaconTask } from '../lib/types'
 import '../pages/pages.css'
-
-function fmtTime(ts: number): string {
-  if (!ts) return '-'
-  return new Date(ts * 1000).toLocaleString()
-}
 
 export default function BeaconTasksModal({
   beaconId,
@@ -82,7 +78,7 @@ export default function BeaconTasksModal({
                       {task.State}
                     </span>
                     <span className="mono task-desc">{task.Description}</span>
-                    <span className="task-time">{fmtTime(task.CreatedAt)}</span>
+                    <span className="task-time">{fmtLocalTime(task.CreatedAt)}</span>
                   </button>
                 ))}
               </div>

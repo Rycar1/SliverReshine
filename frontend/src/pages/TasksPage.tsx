@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
 import { bytesToText } from '../lib/binary'
+import { fmtLocalTime, taskTone } from '../lib/format'
 import type { Beacon, BeaconTask } from '../lib/types'
 import DataTable, { type Column } from '../components/common/DataTable'
 import StatusBadge from '../components/common/StatusBadge'
@@ -11,17 +12,6 @@ import './pages.css'
 interface Row {
   task: BeaconTask
   beaconName: string
-}
-
-function fmtTime(ts: number): string {
-  if (!ts) return '-'
-  return new Date(ts * 1000).toLocaleString()
-}
-
-function taskTone(state: string): 'green' | 'red' | 'yellow' {
-  if (state === 'completed') return 'green'
-  if (state === 'failed') return 'red'
-  return 'yellow'
 }
 
 export default function TasksPage() {
@@ -102,14 +92,14 @@ export default function TasksPage() {
       label: t('tasks.thCreated'),
       sortable: true,
       sortValue: (r) => r.task.CreatedAt,
-      render: (r) => fmtTime(r.task.CreatedAt),
+      render: (r) => fmtLocalTime(r.task.CreatedAt),
     },
     {
       key: 'completed',
       label: t('tasks.thCompleted'),
       sortable: true,
       sortValue: (r) => r.task.CompletedAt || 0,
-      render: (r) => fmtTime(r.task.CompletedAt),
+      render: (r) => fmtLocalTime(r.task.CompletedAt),
     },
   ]
 
@@ -156,11 +146,11 @@ export default function TasksPage() {
               </div>
               <div className="side-row">
                 <span className="side-label">{t('tasks.thCreated')}</span>
-                <span className="side-value">{fmtTime(selected.task.CreatedAt)}</span>
+                <span className="side-value">{fmtLocalTime(selected.task.CreatedAt)}</span>
               </div>
               <div className="side-row">
                 <span className="side-label">{t('tasks.thCompleted')}</span>
-                <span className="side-value">{fmtTime(selected.task.CompletedAt)}</span>
+                <span className="side-value">{fmtLocalTime(selected.task.CompletedAt)}</span>
               </div>
             </div>
             <div className="task-content">

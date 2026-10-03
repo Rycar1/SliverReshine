@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
+import { taskTone } from '../lib/format'
 import { bytesToText } from '../lib/binary'
 import type { Beacon, BeaconTask } from '../lib/types'
 import InlineEdit from '../components/InlineEdit'
@@ -27,12 +28,6 @@ function fmtTime(ts: string | number, t: TFunc): string {
   if (diff < 3600) return t('time.minutesAgo', { count: Math.round(diff / 60) })
   if (diff < 86400) return t('time.hoursAgo', { count: Math.round(diff / 3600) })
   return t('time.daysAgo', { count: Math.round(diff / 86400) })
-}
-
-function taskTone(state: string): 'green' | 'red' | 'yellow' {
-  if (state === 'completed') return 'green'
-  if (state === 'failed') return 'red'
-  return 'yellow'
 }
 
 export default function BeaconDetailPage() {

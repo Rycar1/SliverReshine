@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
 import type { LootEntry } from '../lib/types'
 import { base64ToBytes, fileToBase64, triggerDownload } from '../lib/binary'
+import { fmtSize } from '../lib/format'
 import DataTable, { type Column } from '../components/common/DataTable'
 import StatusBadge from '../components/common/StatusBadge'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -11,12 +12,9 @@ import { useToast } from '../components/common/Toast'
 import EmptyState from '../components/common/EmptyState'
 import './pages.css'
 
-function fmtSize(size: number): string {
-  if (!size) return '-'
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`
-  return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`
+// Loot sizes are unknown when zero, so a dash is shown instead of "0 B".
+function fmtLootSize(size: number): string {
+  return size ? fmtSize(size) : '-'
 }
 
 function toneForType(t: string): 'green' | 'blue' | 'yellow' {
@@ -89,7 +87,7 @@ export default function LootPage() {
       setFullEntry(full)
       const b64 = full.DataB64 || ''
       setContent(
-        (entry.FileType || '').includes('TEXT') ? new TextDecoder('utf-8', { fatal: false }).decode(base64ToBytes(b64)) : `${t('loot.binaryHint')} (${fmtSize(b64.length * 0.75)})`,
+        (entry.FileType || '').includes('TEXT') ? new TextDecoder('utf-8', { fatal: false }).decode(base64ToBytes(b64)) : `${t('loot.binaryHint')} (${fmtLootSize(b64.length * 0.75)})`,
       )
     } catch (e) {
       setContent(`${t('common.failed')}: ${(e as Error).message}`)
@@ -214,7 +212,7 @@ export default function LootPage() {
       label: t('loot.thSize'),
       sortable: true,
       sortValue: (l) => l.Size || 0,
-      render: (l) => <span className="mono">{fmtSize(l.Size)}</span>,
+      render: (l) => <span className="mono">{fmtLootSize(l.Size)}</span>,
     },
   ]
 
@@ -320,7 +318,7 @@ export default function LootPage() {
             </div>
             <div className="drow">
               <span className="dlabel">{t('loot.thSize')}</span>
-              <span className="dvalue mono">{fmtSize(selected.Size)}</span>
+              <span className="dvalue mono">{fmtLootSize(selected.Size)}</span>
             </div>
             {selected.File && (
               <div className="drow">

@@ -2,23 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
 import { bytesToBase64, bytesToText, triggerDownload } from '../../lib/binary'
+import { fmtLocalTime, fmtSize } from '../../lib/format'
 import { joinPath, parentOf } from '../../lib/paths'
 import type { DirView, GrepOut } from '../../lib/types'
 import ConfirmDialog from '../common/ConfirmDialog'
 import { useToast } from '../common/Toast'
 import '../../pages/pages.css'
-
-function fmtSize(size: number): string {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`
-  return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`
-}
-
-function fmtTime(ms: number): string {
-  if (!ms) return '-'
-  return new Date(ms * 1000).toLocaleString()
-}
 
 export default function FilesTab({
   sessionId,
@@ -343,7 +332,7 @@ export default function FilesTab({
                 </td>
                 <td className="mono">{f.IsDir ? '-' : fmtSize(f.Size)}</td>
                 <td>{f.IsDir ? 'dir' : f.Mode || 'file'}</td>
-                <td className="mono">{fmtTime(f.ModTime)}</td>
+                <td className="mono">{fmtLocalTime(f.ModTime)}</td>
                 <td>
                   <div className="fs-actions">
                     <button type="button" className="btn sm" onClick={() => view(f.Name, f.IsDir)}>

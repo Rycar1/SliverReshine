@@ -94,7 +94,19 @@ func (c *Client) sessionCodePage(sessionID string) uint32 {
 		cp = parseCodePage(res.Stdout)
 	}
 
+	storeCodePage(sessionID, cp)
+	return cp
+}
+
+// storeCodePage records a session's code page, evicting the whole map when the
+// bound is reached.
+//
+// Split out of sessionCodePage so a test can exercise the eviction rule directly.
+// A test that copied this logic would pass with the bound removed from the
+// production path, which is the failure mode it exists to catch.
+func storeCodePage(sessionID string, cp uint32) {
 	codePageMu.Lock()
+	defer codePageMu.Unlock()
 	if len(codePageCache) >= maxCodePageCacheEntries {
 		// Drop the whole map rather than evicting one entry: choosing a victim
 		// needs an LRU this cache does not justify, and a cold map only costs a
@@ -102,8 +114,6 @@ func (c *Client) sessionCodePage(sessionID string) uint32 {
 		codePageCache = map[string]uint32{}
 	}
 	codePageCache[sessionID] = cp
-	codePageMu.Unlock()
-	return cp
 }
 
 // parseCodePage pulls the number out of a chcp reply. A reply with no digits

@@ -456,7 +456,30 @@ func (s *Server) Routes() http.Handler {
 	// The body limit is applied in the middleware chain rather than in each
 	// handler, so a new endpoint cannot forget it. Every route below the mux reads
 	// r.Body, and an unbounded read is a way for one client to exhaust the console.
-	return withSecurityHeaders(basicAuth(s.auth, withBodyLimit(withCSRF(withCORS(withLogging(mux))))))
+	return s.wrap(mux)
+}
+
+// wrap applies the middleware chain to a mux.
+//
+// Split out of Routes so a test can drive the real chain -- including the auth
+// layer -- with a handler that panics. Testing withRecover on its own would pass
+// even if Routes forgot to install it, which is exactly the mistake worth
+// catching: a guard that is written but not wired looks identical to no guard at
+// all from the outside.
+//
+// Order, outermost first: security headers, auth, body limit, CSRF, CORS,
+// logging, recover, mux. withRecover sits inside withLogging so the access log
+// records the 500 instead of losing the request, and outside the mux so every
+// registered handler is covered. See recover.go for why net/http's own
+// per-connection recover is not enough.
+func (s *Server) wrap(mux http.Handler) http.Handler {
+	return withSecurityHeaders(basicAuth(
+		s.auth,
+		withBodyLimit(
+			withCSRF(
+				withCORS(
+					withLogging(
+						withRecover(mux)))))))
 }
 
 // RoutePatterns returns the full HTTP contract (method + path pattern) of the

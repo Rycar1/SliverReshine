@@ -99,15 +99,35 @@ func (c *Client) BeaconTaskContent(taskID string) (*BeaconTaskView, error) {
 	return beaconTaskToView(resp), nil
 }
 
-// ReconfigureSession changes the reconnect interval of a session (seconds).
+// ReconfigureSession changes the reconnect interval of a session.
+//
+// The argument is in SECONDS, because that is what the form collects, and it is
+// converted to the nanoseconds the wire field holds. The proto field is a
+// time.Duration and the implant does time.Duration(interval) then time.Sleep, so
+// passing the raw seconds made the interval 1e9 times too short: a request for
+// 60 s gave the implant 60 ns, turning its reconnect loop into a hot loop while
+// the console reported "reconnect every 60s". The official client converts too
+// (int64(time.Duration) from time.ParseDuration).
+//
+// The error is checked rather than returned blind, and the RPC's own Response.Err
+// is surfaced, so a rejected reconfiguration is not reported as success.
 func (c *Client) ReconfigureSession(sessionID string, reconnectSeconds int64) error {
+	if reconnectSeconds < 0 {
+		return errors.New("reconnect interval cannot be negative")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	_, err := c.RPC.Reconfigure(ctx, &sliverpb.ReconfigureReq{
-		ReconnectInterval: reconnectSeconds,
+	resp, err := c.RPC.Reconfigure(ctx, &sliverpb.ReconfigureReq{
+		ReconnectInterval: reconnectSeconds * int64(time.Second),
 		Request:           &commonpb.Request{SessionID: sessionID},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if resp.GetResponse().GetErr() != "" {
+		return errors.New(resp.GetResponse().GetErr())
+	}
+	return nil
 }
 
 // OpenSessionFromBeacon instructs a beacon to open a new interactive session

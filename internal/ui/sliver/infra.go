@@ -7,6 +7,7 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -63,9 +64,27 @@ func (c *Client) HTTPC2Profile(name string) (*clientpb.HTTPC2Config, error) {
 }
 
 // SaveHTTPC2Profile stores a profile, optionally overwriting an existing one.
+//
+// The two nested messages are checked here, not just the outer one. Sliver's
+// SaveHTTPC2Profile validates the config with CheckHTTPC2ConfigErrors, whose very
+// first statement is `len(config.ServerConfig.Cookies)` -- an unconditional
+// dereference. A request that supplies a profile without ServerConfig or
+// ImplantConfig therefore panics inside the server, and the server is a child
+// process (internal/launch starts it with exec.Command) that recovers only to
+// call os.Exit(99). One malformed request from an authenticated operator takes
+// down every session, beacon and listener on the engagement.
+//
+// The console is the only place that can prevent this: the check has to happen
+// before the RPC is sent.
 func (c *Client) SaveHTTPC2Profile(cfg *clientpb.HTTPC2Config, overwrite bool) error {
 	if cfg == nil {
 		return errors.New("no profile supplied")
+	}
+	if cfg.ServerConfig == nil {
+		return errors.New("profile has no serverConfig: the server dereferences it before validating")
+	}
+	if cfg.ImplantConfig == nil {
+		return errors.New("profile has no implantConfig: the server dereferences it before validating")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
 	defer cancel()
@@ -230,8 +249,13 @@ func (c *Client) ShellcodeEncode(encoder, arch string, data []byte, iterations u
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
 	defer cancel()
+	enc, err := shellcodeEncoderFromString(encoder)
+	if err != nil {
+		return nil, err
+	}
+
 	resp, err := c.RPC.ShellcodeEncoder(ctx, &clientpb.ShellcodeEncodeReq{
-		Encoder:      shellcodeEncoderFromString(encoder),
+		Encoder:      enc,
 		Architecture: arch,
 		Iterations:   iterations,
 		BadChars:     badChars,
@@ -246,13 +270,73 @@ func (c *Client) ShellcodeEncode(encoder, arch string, data []byte, iterations u
 	return resp.Data, nil
 }
 
-// shellcodeEncoderFromString maps a name to the enum. Unknown names fall back to
-// the zero value, which the server rejects with a readable error.
-func shellcodeEncoderFromString(s string) clientpb.ShellcodeEncoder {
-	if v, ok := clientpb.ShellcodeEncoder_value[s]; ok {
-		return clientpb.ShellcodeEncoder(v)
+// ShellcodeEncoder is one encoder the server offers.
+//
+// The advertised Names are lowercase ("xor", "shikata_ga_nai"); the protobuf
+// enum values are uppercase ("XOR", "SHIKATA_GA_NAI"). These are two different
+// name spaces and they used to be confused -- see shellcodeEncoderFromString.
+type ShellcodeEncoder struct {
+	Enum  string
+	Names []string
+}
+
+// knownShellcodeEncoders maps each protobuf enum onto the names the server
+// advertises for it.
+//
+// It is a hardcoded table because the authoritative mapping is the server's own
+// shellcodeEncoderEnums, which is unexported and unreachable from here. The
+// console cannot import it, so it is mirrored -- with a test that fails if the
+// two ever disagree about a name the console accepts.
+var knownShellcodeEncoders = []ShellcodeEncoder{
+	{Enum: "SHIKATA_GA_NAI", Names: []string{"shikata_ga_nai"}},
+	{Enum: "XOR", Names: []string{"xor"}},
+	{Enum: "XOR_DYNAMIC", Names: []string{"xor_dynamic"}},
+}
+
+// shellcodeEncoderFromString resolves an operator-supplied encoder name to the
+// enum the RPC expects.
+//
+// This used to look the name up in clientpb.ShellcodeEncoder_value, whose keys
+// are the ENUM names. Every lowercase name the console itself advertises -- and
+// therefore every name the UI offers and its placeholder suggests -- missed that
+// map and fell through to the zero value, ShellcodeEncoder_NONE. The server's
+// response to NONE is to return the input unchanged:
+//
+//	if req.Encoder == clientpb.ShellcodeEncoder_NONE {
+//	    resp.Data = req.Data
+//	    return resp, nil
+//	}
+//
+// So the operator got HTTP 200, a success toast, and their own unencoded bytes
+// back, then handed raw shellcode to a loader. Nothing reported a failure.
+//
+// Both spellings are accepted here, and an unrecognised name is an error rather
+// than a silent NONE. Falling back is exactly what made the old behaviour
+// invisible.
+func shellcodeEncoderFromString(s string) (clientpb.ShellcodeEncoder, error) {
+	name := strings.TrimSpace(s)
+	if name == "" {
+		return 0, errors.New("no encoder named")
 	}
-	return clientpb.ShellcodeEncoder(0)
+
+	for _, e := range knownShellcodeEncoders {
+		if strings.EqualFold(name, e.Enum) {
+			return clientpb.ShellcodeEncoder(clientpb.ShellcodeEncoder_value[e.Enum]), nil
+		}
+		for _, alias := range e.Names {
+			if strings.EqualFold(name, alias) {
+				return clientpb.ShellcodeEncoder(clientpb.ShellcodeEncoder_value[e.Enum]), nil
+			}
+		}
+	}
+
+	valid := make([]string, 0, len(knownShellcodeEncoders))
+	for _, e := range knownShellcodeEncoders {
+		valid = append(valid, e.Names[0])
+	}
+	sort.Strings(valid)
+	return 0, fmt.Errorf("unknown encoder %q; the server offers %s",
+		s, strings.Join(valid, ", "))
 }
 
 // ---------------------------------------------------------------------------

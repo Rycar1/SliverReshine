@@ -99,8 +99,44 @@ func (s *Server) handleFsCd(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"Path": path})
 }
 
+// handleFsCat returns a file's contents as JSON, for the in-console viewer.
+//
+// It used to be a literal alias for handleFsDownload, which was correct until the
+// download endpoint changed contract: that endpoint now streams raw bytes as an
+// attachment (see below), so fsCat inherited it and started returning
+// application/octet-stream with the file's bytes as the body. The frontend still
+// calls fsCat through request<T>() and reads `res.Data` as base64, so the viewer
+// broke -- it either surfaced a JSON parse error or rendered nonsense, depending
+// on whether the file happened to be parseable JSON.
+//
+// The two endpoints want different things and now say so: cat is base64 in JSON
+// for display, download is the bytes themselves for saving.
 func (s *Server) handleFsCat(w http.ResponseWriter, r *http.Request) {
-	s.handleFsDownload(w, r)
+	id, c := s.sessionID(w, r)
+	if c == nil {
+		return
+	}
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		writeErr(w, http.StatusBadRequest, "missing path")
+		return
+	}
+
+	b64, name, err := c.Download(id, path)
+	if err != nil {
+		writeClientError(w, err)
+		return
+	}
+
+	// Name falls back to the last path element so the viewer always has a title,
+	// matching what the operator asked for rather than blank.
+	if name == "" {
+		name = headerSafeFilename("", path)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"Data": b64,
+		"Name": name,
+	})
 }
 
 // handleFsDownload streams a file from the target to the browser.

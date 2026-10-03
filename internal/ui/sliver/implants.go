@@ -405,6 +405,20 @@ func buildImplantConfig(req *GenerateRequest, isBeacon bool) *clientpb.ImplantCo
 	if req.Interval == 0 {
 		req.Interval = 60
 	}
+	// Interval and Jitter arrive from the form in SECONDS, and the wire fields are
+	// nanoseconds. ReconnectInterval is a time.Duration, BeaconInterval and
+	// BeaconJitter are compared against minBeaconInterval via time.Duration too --
+	// the official client sends int64(time.Duration) for each:
+	//
+	//	ReconnectInterval:   reconnectInterval * int64(time.Second)
+	//	config.BeaconInterval = int64(interval)          // interval is a Duration
+	//	config.BeaconJitter   = int64(beaconJitter * time.Second)
+	//
+	// Assigning the raw seconds made every one of them 1e9 times too small, so a
+	// 60 s reconnect interval became 60 ns and the implant's reconnect loop became
+	// a hot loop. The build reported success either way.
+	intervalNanos := req.Interval * int64(time.Second)
+	jitterNanos := req.Jitter * int64(time.Second)
 
 	// A validated request cannot reach the default below with an unknown name,
 	// so the EXECUTABLE fallback is reached only when the caller left the field
@@ -422,16 +436,16 @@ func buildImplantConfig(req *GenerateRequest, isBeacon bool) *clientpb.ImplantCo
 		Evasion:            req.Evasion,
 		ObfuscateSymbols:   req.Obfuscate,
 		IsBeacon:           isBeacon,
-		BeaconInterval:     req.Interval,
-		BeaconJitter:       req.Jitter,
+		BeaconInterval:     intervalNanos,
+		BeaconJitter:       jitterNanos,
 		HTTPC2ConfigName:   "default",
 		ConnectionStrategy: "sequential",
 	}
 	if isBeacon {
-		cfg.BeaconInterval = req.Interval
-		cfg.BeaconJitter = req.Jitter
+		cfg.BeaconInterval = intervalNanos
+		cfg.BeaconJitter = jitterNanos
 	} else {
-		cfg.ReconnectInterval = req.Interval
+		cfg.ReconnectInterval = intervalNanos
 	}
 	if req.MaxErrors != 0 {
 		cfg.MaxConnectionErrors = uint32(req.MaxErrors)

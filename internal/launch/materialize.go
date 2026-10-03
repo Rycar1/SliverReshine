@@ -56,32 +56,8 @@ func MaterializeServer() (string, error) {
 	target := filepath.Join(dir, name)
 
 	if st, err := os.Stat(target); err == nil && st.Size() > 0 {
-		// The file is verified against the payload it claims to be, not merely
-		// inspected for an executable header.
-		//
-		// The name is content-addressed and the launcher logs it, so an attacker
-		// who can create a file in this directory knows exactly what to call it.
-		// Four magic bytes are then trivially satisfied by any PE or ELF, and the
-		// file is executed as `sliver-server daemon`, `unpack` and `operator`.
-		// MkdirAll(0o700) does not narrow anything on Windows (Chmod there only
-		// toggles the read-only bit) and never tightens a pre-existing directory.
-		//
-		// Hashing the whole file costs one pass over it at startup, which is the
-		// price of not exec'ing an arbitrary binary.
-		if err := verifyExecutableFormat(target); err == nil {
-			if err := verifyExtractedContent(target); err == nil {
-				// A failed chmod is not fatal -- on Windows it only toggles the
-				// read-only bit -- but on unix it leaves a server that cannot be
-				// executed, and the launcher would otherwise report only that
-				// the process exited. Logging it names the cause here.
-				if err := os.Chmod(target, 0o755); err != nil {
-					log.Printf("[launch] could not mark %s executable: %v", target, err)
-				}
-				return target, nil
-			} else {
-				log.Printf("[launch] discarding %s: %v", target, err)
-				_ = os.Remove(target)
-			}
+		if reuseExtractedServer(target) {
+			return target, nil
 		}
 		// A file that exists but is neither a host executable nor the expected
 		// content is a leftover from an earlier build, a truncated extraction, or
@@ -92,9 +68,51 @@ func MaterializeServer() (string, error) {
 		_ = os.Remove(target)
 	}
 
+	if err := extractEmbeddedServer(dir, target); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// reuseExtractedServer reports whether the file already extracted at target is
+// the server this launcher carries, marking it executable when it is.
+//
+// The file is verified against the payload it claims to be, not merely
+// inspected for an executable header.
+//
+// The name is content-addressed and the launcher logs it, so an attacker who
+// can create a file in this directory knows exactly what to call it. Four magic
+// bytes are then trivially satisfied by any PE or ELF, and the file is executed
+// as `sliver-server daemon`, `unpack` and `operator`. MkdirAll(0o700) does not
+// narrow anything on Windows (Chmod there only toggles the read-only bit) and
+// never tightens a pre-existing directory.
+//
+// Hashing the whole file costs one pass over it at startup, which is the price
+// of not exec'ing an arbitrary binary.
+func reuseExtractedServer(target string) bool {
+	if err := verifyExecutableFormat(target); err != nil {
+		return false
+	}
+	if err := verifyExtractedContent(target); err != nil {
+		log.Printf("[launch] discarding %s: %v", target, err)
+		return false
+	}
+	// A failed chmod is not fatal -- on Windows it only toggles the read-only
+	// bit -- but on unix it leaves a server that cannot be executed, and the
+	// launcher would otherwise report only that the process exited. Logging it
+	// names the cause here.
+	if err := os.Chmod(target, 0o755); err != nil {
+		log.Printf("[launch] could not mark %s executable: %v", target, err)
+	}
+	return true
+}
+
+// extractEmbeddedServer unpacks the embedded payload into target, verifying
+// the result before it is handed back as the server to execute.
+func extractEmbeddedServer(dir, target string) error {
 	log.Printf("[launch] extracting embedded sliver server -> %s", target)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
+		return err
 	}
 	// A unique temp name in the same directory, created with O_EXCL so an
 	// existing file or a symlink placed at a predictable path cannot be
@@ -103,15 +121,15 @@ func MaterializeServer() (string, error) {
 	// its inode rewritten with the extracted server.
 	tmp, err := tempExtractPath(dir)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if err := writeGzip(embed.Payload, tmp); err != nil {
 		_ = os.Remove(tmp)
-		return "", fmt.Errorf("extract embedded server: %w", err)
+		return fmt.Errorf("extract embedded server: %w", err)
 	}
 	if err := verifyExecutableFormat(tmp); err != nil {
 		_ = os.Remove(tmp)
-		return "", fmt.Errorf("embedded server payload does not match this host: %w (build carries %s)",
+		return fmt.Errorf("embedded server payload does not match this host: %w (build carries %s)",
 			err, embeddedPlatforms())
 	}
 	// The freshly written file is checked against the payload too, so a truncated
@@ -119,16 +137,13 @@ func MaterializeServer() (string, error) {
 	// reused and executed on every later start.
 	if err := verifyExtractedContent(tmp); err != nil {
 		_ = os.Remove(tmp)
-		return "", fmt.Errorf("extracted server does not match the embedded payload: %w", err)
+		return fmt.Errorf("extracted server does not match the embedded payload: %w", err)
 	}
 	if err := os.Rename(tmp, target); err != nil {
 		_ = os.Remove(tmp)
-		return "", err
+		return err
 	}
-	if err := os.Chmod(target, 0o755); err != nil {
-		return "", err
-	}
-	return target, nil
+	return os.Chmod(target, 0o755)
 }
 
 // embeddedPlatforms renders the platforms this launcher carries, for error

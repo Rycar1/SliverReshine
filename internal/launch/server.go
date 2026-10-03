@@ -20,11 +20,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -107,8 +109,17 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 	if err := s.unpack(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.requireFreePort(s.opts.MultiplayerHost, s.opts.MultiplayerPort); err != nil {
+	port, moved, err := s.pickFreePort()
+	if err != nil {
 		return nil, err
+	}
+	if moved {
+		// A busy gRPC port used to be fatal, and the failure it produced was
+		// invisible: the console started, served its UI and reported the server
+		// unreachable. Moving to a free port keeps the launch working, and the
+		// profile is regenerated below against the port actually bound.
+		log.Printf("[launch] gRPC port %d is in use; switched to %d", s.opts.MultiplayerPort, port)
+		s.opts.MultiplayerPort = port
 	}
 	if err := s.spawn(ctx); err != nil {
 		return nil, err
@@ -127,7 +138,7 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 		return nil, fmt.Errorf("operator profile was not written to %s: %w", s.ProfilePath, err)
 	}
 
-	log.Printf("[launch] sliver server ready (gRPC %s:%d)", opts.MultiplayerHost, opts.MultiplayerPort)
+	log.Printf("[launch] sliver server ready (gRPC %s:%d)", s.opts.MultiplayerHost, s.opts.MultiplayerPort)
 	return s, nil
 }
 
@@ -527,6 +538,53 @@ func (s *Server) requireFreePort(host string, port int) error {
 	return portInUseError(addr, err, describeListener(port))
 }
 
+// pickFreePort returns the port the daemon should be started on, and whether it
+// had to move off the configured one.
+//
+// requireFreePort is still the check; it is just no longer a fatal one. Refusing
+// to start on a busy port was the failure the operator could not see: the
+// console served its UI and reported the server unreachable, and the reason was
+// in neither the launcher output nor the daemon log.
+func (s *Server) pickFreePort() (int, bool, error) {
+	if err := s.requireFreePort(s.opts.MultiplayerHost, s.opts.MultiplayerPort); err == nil {
+		return s.opts.MultiplayerPort, false, nil
+	}
+	port, err := FreeRandomPort(s.opts.MultiplayerHost)
+	if err != nil {
+		return 0, false, err
+	}
+	return port, true, nil
+}
+
+// FreeRandomPort returns a port on host that was free a moment ago.
+//
+// Candidates are drawn at random rather than walked upwards, so a restart does
+// not collide with whatever the previous run left behind and two instances
+// starting together do not race each other to the same next number. The final
+// fallback is the OS allocator (":0"), used only when the whole random range is
+// somehow unusable.
+//
+// The port is free when it is probed, not when it is used: the caller binds it a
+// moment later, and something can take it in between. That race is inherent to
+// any pre-flight check and is the same one requireFreePort documents.
+func FreeRandomPort(host string) (int, error) {
+	for attempt := 0; attempt < 32; attempt++ {
+		port := 1024 + rand.IntN(65535-1024)
+		ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+		if err != nil {
+			continue
+		}
+		ln.Close()
+		return port, nil
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+	if err != nil {
+		return 0, fmt.Errorf("no free port on %s: %w", host, err)
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port, nil
+}
+
 // describeListener names the process holding port, or "" when it cannot be
 // determined.
 //
@@ -615,9 +673,18 @@ func (s *Server) waitForPort(ctx context.Context) error {
 // straight into the config dir the web console scans.
 func (s *Server) generateProfile(ctx context.Context) error {
 	target := filepath.Join(s.opts.ConfigDir, profileName+".json")
-	if _, err := os.Stat(target); err == nil {
-		log.Printf("[launch] operator profile already present: %s", target)
-		return nil
+	if existing, err := ReadProfile(target); err == nil {
+		if existing.LHost == s.opts.MultiplayerHost && existing.LPort == s.opts.MultiplayerPort {
+			log.Printf("[launch] operator profile already present: %s", target)
+			return nil
+		}
+		// The profile points at a listener the daemon is not serving: the port
+		// moved after a fallback, or the operator edited mpPort. Reusing it
+		// makes auto-connect dial an address nothing answers, and the console
+		// reports the server unreachable -- the same symptom as a dead daemon,
+		// from a completely different cause.
+		log.Printf("[launch] operator profile %s targets %s:%d, regenerating for %s:%d",
+			target, existing.LHost, existing.LPort, s.opts.MultiplayerHost, s.opts.MultiplayerPort)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -714,6 +781,19 @@ func (s *Server) PID() int {
 		return 0
 	}
 	return s.cmd.Process.Pid
+}
+
+// MultiplayerPort reports the gRPC port the daemon was actually started on.
+//
+// It can differ from the port in the options the caller passed: Start moves to a
+// free port when the configured one is already held. Anything that prints the
+// address, or that decides whether a profile is still valid, has to read it back
+// from here rather than from its own copy of the options.
+func (s *Server) MultiplayerPort() int {
+	if s == nil {
+		return 0
+	}
+	return s.opts.MultiplayerPort
 }
 
 // BinaryPath reports which sliver-server binary the launcher is using.

@@ -198,3 +198,78 @@ func TestListeningPIDRejectsImpossiblePorts(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// FreeRandomPort / pickFreePort: a busy port moves the launch instead of
+// killing it
+// ---------------------------------------------------------------------------
+
+// The port has to come back bindable, not merely non-zero: the daemon binds it
+// a moment later, and a number the OS will not hand out is worse than no
+// fallback at all.
+func TestFreeRandomPortReturnsABindablePort(t *testing.T) {
+	port, err := FreeRandomPort("127.0.0.1")
+	if err != nil {
+		t.Fatalf("FreeRandomPort: %v", err)
+	}
+	if port < 1024 || port > 65535 {
+		t.Fatalf("FreeRandomPort returned %d, outside the unprivileged range", port)
+	}
+
+	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", fmt.Sprint(port)))
+	if err != nil {
+		t.Fatalf("the port FreeRandomPort returned (%d) is not bindable: %v", port, err)
+	}
+	ln.Close()
+}
+
+// The happy path must not move: a free configured port is used as-is, so a
+// normal launch keeps the address the operator expects.
+func TestPickFreePortKeepsAFreePort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	s := &Server{opts: Options{MultiplayerHost: "127.0.0.1", MultiplayerPort: port}}
+	got, moved, err := s.pickFreePort()
+	if err != nil {
+		t.Fatalf("pickFreePort on a free port: %v", err)
+	}
+	if moved || got != port {
+		t.Errorf("pickFreePort moved off a free port: got %d moved=%v, want %d moved=false", got, moved, port)
+	}
+}
+
+// The regression: a taken gRPC port used to be fatal. It must now come back
+// with a different, bindable port and moved=true, which is what Start turns
+// into "switch the daemon and regenerate the profile".
+func TestPickFreePortMovesOffATakenPort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	taken := ln.Addr().(*net.TCPAddr).Port
+
+	s := &Server{opts: Options{MultiplayerHost: "127.0.0.1", MultiplayerPort: taken}}
+	got, moved, err := s.pickFreePort()
+	if err != nil {
+		t.Fatalf("pickFreePort on a taken port: %v", err)
+	}
+	if !moved {
+		t.Fatal("pickFreePort kept a port something else holds; the daemon would fail to bind " +
+			"and the console would report the server unreachable")
+	}
+	if got == taken {
+		t.Fatalf("pickFreePort returned the taken port %d", taken)
+	}
+
+	probe, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", fmt.Sprint(got)))
+	if err != nil {
+		t.Fatalf("the fallback port %d is not bindable: %v", got, err)
+	}
+	probe.Close()
+}

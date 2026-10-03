@@ -24,6 +24,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -87,8 +88,19 @@ func run(o options) {
 	defer stop()
 
 	// ---- embedded C2 server -------------------------------------------------
+	//
+	// The daemon's lifetime is owned here, by the defer below. Stopping it
+	// anywhere earlier -- in particular inside startEmbeddedServer, which is
+	// called from here -- killed the server the moment the launcher had it
+	// running. The only symptom was a console that served its UI and said the
+	// server was unreachable, because auto-connect timed out ten seconds later
+	// against a process that no longer existed.
 	srv := startEmbeddedServer(ctx, base, settings)
 	defer srv.Stop()
+
+	// The launcher can move the daemon off a busy gRPC port, so everything
+	// after this point follows the port it actually bound.
+	settings.MultiplayerPort = srv.MultiplayerPort()
 
 	if settings.ServerOnly {
 		log.Printf("[c2tool] server-only mode, gRPC on %s:%d; Ctrl-C to stop",
@@ -99,8 +111,27 @@ func run(o options) {
 
 	// ---- web console --------------------------------------------------------
 	web := newConsole(settings)
+
+	// Checked before the listener exists, so a refusal leaves no port bound and
+	// nothing to clean up. The warning inside serveConsole is advisory; this is
+	// the version an operator can opt into when they want the process held to
+	// their TLS policy rather than merely reminded of it.
+	if err := checkCleartextPolicy(settings); err != nil {
+		srv.Stop()
+		log.Fatalf("[c2tool] %v", err)
+	}
+
+	listener, err := listenConsole(settings.Addr)
+	if err != nil {
+		srv.Stop()
+		log.Fatalf("[c2tool] cannot listen on %s: %v", settings.Addr, err)
+	}
+	// The banner and the browser prompt have to name the address that is really
+	// serving; after a port fallback the configured port is no longer it.
+	settings.Addr = listener.Addr().String()
+
 	configureAuth(web, base, settings, passOverride, o.authFile)
-	serveConsole(ctx, stop, web, base, settings)
+	serveConsole(ctx, stop, web, base, settings, listener)
 }
 
 // resolveHome resolves the state directory and creates it.
@@ -177,8 +208,11 @@ func startEmbeddedServer(ctx context.Context, base string, settings config.Confi
 	if err != nil {
 		log.Fatalf("[c2tool] %v", err)
 	}
-	defer srv.Stop()
 
+	// No Stop here: the server's lifetime belongs to run(), which defers it.
+	// A defer in this function fires on return -- immediately after the daemon
+	// starts -- and kills it. That is the bug this comment exists to prevent
+	// from coming back; TestEmbeddedServerLifecycleBelongsToRun enforces it.
 	profile, _ := launch.ReadProfile(srv.ProfilePath)
 	if profile != nil {
 		log.Printf("[c2tool] operator %q -> %s", profile.Operator, profile.Path)
@@ -264,27 +298,71 @@ func configureAuth(web *api.Server, base string, settings config.Config, passOve
 	printCredentials(user, pass, credPath, config.Path(base), settings.Addr, consoleScheme(settings), wasGenerated)
 }
 
-// serveConsole binds the listener, serves the console and shuts it down when the
-// context is cancelled.
+// listenConsole binds the console listener, moving to a random free port when
+// the configured one is already held.
+//
+// A taken console port used to be fatal: the process logged "cannot listen" and
+// exited, even though the embedded server it had just started was healthy. The
+// fallback keeps the console reachable, and the port it chose is what the banner
+// prints.
+//
+// Only the port changes. The host is preserved exactly as configured, including
+// the wildcard 0.0.0.0 default, because the fallback is about the port being
+// free and never about how far the console is exposed.
+func listenConsole(addr string) (net.Listener, error) {
+	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		return ln, nil
+	}
+
+	port, pickErr := launch.FreeRandomPort(hostOf(addr))
+	if pickErr != nil {
+		return nil, err
+	}
+	fallback, ok := consoleFallbackAddr(addr, port)
+	if !ok {
+		return nil, err
+	}
+	ln, fbErr := net.Listen("tcp", fallback)
+	if fbErr != nil {
+		return nil, err
+	}
+	log.Printf("[c2tool] console address %s is in use; switched to %s", addr, fallback)
+	return ln, nil
+}
+
+// consoleFallbackAddr replaces the port in addr while keeping the host, so a
+// fallback never widens or narrows the interface the console listens on.
+func consoleFallbackAddr(addr string, port int) (string, bool) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", false
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port)), true
+}
+
+// hostOf returns the host part of a host:port address, or the address itself
+// when it does not split (which the caller treats as "no fallback possible").
+func hostOf(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
+}
+
+// serveConsole serves the console on an already-bound listener and shuts it
+// down when the context is cancelled.
+//
+// The listener is passed in rather than created here so the address it ended up
+// on is known before the login banner is printed. That address can differ from
+// the configured one: listenConsole moves to a free port when the configured
+// port is taken, and the banner has to name the port that is really serving.
 //
 // stop is the cancel function for that context: a serve error in either branch
 // below has to bring the whole process down, and cancelling the context is how
 // that is signalled.
-func serveConsole(ctx context.Context, stop context.CancelFunc, web *api.Server, base string, settings config.Config) {
-	// ---- cleartext policy ---------------------------------------------------
-	//
-	// Checked before the listener exists, so a refusal leaves no port bound and
-	// nothing to clean up. The warning below is advisory; this is the version an
-	// operator can opt into when they want the process to hold them to it.
-	if err := checkCleartextPolicy(settings); err != nil {
-		log.Fatalf("[c2tool] %v", err)
-	}
-
-	listener, err := net.Listen("tcp", settings.Addr)
-	if err != nil {
-		log.Fatalf("[c2tool] cannot listen on %s: %v", settings.Addr, err)
-	}
-
+func serveConsole(ctx context.Context, stop context.CancelFunc, web *api.Server, base string, settings config.Config, listener net.Listener) {
 	httpSrv := newHTTPServer(listener.Addr().String(), web.Routes())
 
 	scheme := "http"

@@ -377,7 +377,20 @@ func mustStayInside(parent, child string) error {
 
 // RunAlias executes an installed alias against a session, dispatching to
 // ExecuteAssembly / SpawnDll / Sideload based on the manifest.
+//
+// The name is validated first. It arrives as a URL path segment, and Go's
+// ServeMux hands back the percent-decoded value -- so "%2F" is a real separator
+// by the time filepath.Join sees it, and a name of ".." resolves the manifest
+// read to the directory above AliasDir. RemoveAlias and ReadProfile both guard
+// this same kind of value; this was the call site that was missed.
+//
+// The guard also closes the second half: the manifest's own file path is joined
+// onto AliasDir below, so an escaped manifest could name a binary anywhere.
 func (c *Client) RunAlias(sessionID, name, args, process, arch, method, class string) (*AliasView, map[string]any, error) {
+	if err := validateArtifactName(name); err != nil {
+		return nil, nil, fmt.Errorf("invalid alias name: %w", err)
+	}
+
 	data, err := os.ReadFile(aliasManifestPath(name))
 	if err != nil {
 		return nil, nil, fmt.Errorf("alias %q is not installed", name)

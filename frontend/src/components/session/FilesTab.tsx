@@ -6,6 +6,7 @@ import { fmtLocalTime, fmtSize } from '../../lib/format'
 import { joinPath, parentOf } from '../../lib/paths'
 import type { DirView, GrepOut } from '../../lib/types'
 import ConfirmDialog from '../common/ConfirmDialog'
+import StatusBanners from '../common/StatusBanners'
 import { useToast } from '../common/Toast'
 import '../../pages/pages.css'
 
@@ -285,19 +286,7 @@ export default function FilesTab({
             </p>
           </div>
         )}
-        {error && <div className="error-banner">{error}</div>}
-        {message && (
-          <div
-            className="error-banner"
-            style={{
-              borderColor: 'var(--green)',
-              color: 'var(--green)',
-              background: 'var(--success-bg)',
-            }}
-          >
-            {message}
-          </div>
-        )}
+        <StatusBanners error={error} message={message} />
       </div>
 
       {loading ? (

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
 import type { PortForward, RportFwdListener } from '../../lib/types'
 import { useToast } from '../common/Toast'
+import StatusBanners from '../common/StatusBanners'
 
 /**
  * Both port-forwarding directions live here, because they are two answers to
@@ -150,19 +151,7 @@ export default function PortfwdTab({ sessionId }: { sessionId: string }) {
             </button>
           </div>
         </div>
-        {error && <div className="error-banner">{error}</div>}
-        {message && (
-          <div
-            className="error-banner"
-            style={{
-              borderColor: 'var(--green)',
-              color: 'var(--green)',
-              background: 'var(--success-bg)',
-            }}
-          >
-            {message}
-          </div>
-        )}
+        <StatusBanners error={error} message={message} />
         <table className="data">
           <thead>
             <tr>

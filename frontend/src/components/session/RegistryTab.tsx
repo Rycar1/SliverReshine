@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
 import ConfirmDialog from '../common/ConfirmDialog'
+import StatusBanners from '../common/StatusBanners'
 
 const HIVES = ['HKEY_LOCAL_MACHINE', 'HKEY_CURRENT_USER', 'HKEY_CLASSES_ROOT', 'HKEY_USERS', 'HKEY_CURRENT_CONFIG']
 
@@ -132,19 +133,7 @@ export default function RegistryTab({ sessionId, os }: { sessionId: string; os: 
           </button>
         </div>
       </div>
-      {error && <div className="error-banner">{error}</div>}
-      {message && (
-        <div
-          className="error-banner"
-          style={{
-            borderColor: 'var(--green)',
-            color: 'var(--green)',
-            background: 'var(--success-bg)',
-          }}
-        >
-          {message}
-        </div>
-      )}
+      <StatusBanners error={error} message={message} />
 
       {loading ? (
         <div className="empty">{t('common.loading')}</div>

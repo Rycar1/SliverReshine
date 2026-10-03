@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
 import type { SocksProxy, Session } from '../lib/types'
+import StatusBanners from '../components/common/StatusBanners'
 import './pages.css'
 
 export default function SocksPage() {
@@ -92,19 +93,7 @@ export default function SocksPage() {
           </button>
         </div>
       </div>
-      {error && <div className="error-banner">{error}</div>}
-      {message && (
-        <div
-          className="error-banner"
-          style={{
-            borderColor: 'var(--green)',
-            color: 'var(--green)',
-            background: 'var(--success-bg)',
-          }}
-        >
-          {message}
-        </div>
-      )}
+      <StatusBanners error={error} message={message} />
 
       <div className="card">
         <div className="card-title">{t('socks.new')}</div>

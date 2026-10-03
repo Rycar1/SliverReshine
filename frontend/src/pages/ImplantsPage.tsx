@@ -5,6 +5,7 @@ import { base64ToBytes, triggerDownload } from '../lib/binary'
 import { parseC2Url } from '../lib/c2'
 import type { CompilerInfo, ImplantBuild, ImplantConfig, ImplantProfile, Job, Session } from '../lib/types'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import StatusBanners from '../components/common/StatusBanners'
 import { useToast } from '../components/common/Toast'
 import './pages.css'
 
@@ -407,19 +408,7 @@ export default function ImplantsPage() {
           </button>
         </div>
       </div>
-      {error && <div className="error-banner">{error}</div>}
-      {message && (
-        <div
-          className="error-banner"
-          style={{
-            borderColor: 'var(--green)',
-            color: 'var(--green)',
-            background: 'var(--success-bg)',
-          }}
-        >
-          {message}
-        </div>
-      )}
+      <StatusBanners error={error} message={message} />
 
       {compiler && (
         <div className="compiler-strip">

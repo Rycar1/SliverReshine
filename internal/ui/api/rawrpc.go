@@ -196,6 +196,17 @@ func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Refuse a request that would make the embedded server panic. The typed
+	// routes check the same shapes, but this endpoint calls the method directly
+	// and bypasses those checks, so the same input is rejected on one route and
+	// fatal on the other. See rpcguard.go.
+	if msg, ok := in.Interface().(proto.Message); ok {
+		if err := checkNilNestedFields(method.Name, msg); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	results := call.Call([]reflect.Value{reflect.ValueOf(ctx), in})
 	if len(results) < 2 {
 		writeErr(w, http.StatusInternalServerError, "unexpected RPC signature")

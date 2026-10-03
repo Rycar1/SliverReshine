@@ -115,13 +115,16 @@ func shellQuoteWindows(s string) (string, error) {
 	return `"` + s + `"`, nil
 }
 
-// cmdOperators are the tokens that are meant to be interpreted by cmd.exe rather
-// than passed through as data. They are what makes scripts such as
+// isCmdOperator reports whether tok is meant to be interpreted by cmd.exe rather
+// than passed through as data. Those tokens are what makes scripts such as
 // `net user x p /add && net localgroup Administrators x /add` work, so they must
 // not be protected.
-var cmdOperators = map[string]bool{
-	"&": true, "&&": true, "|": true, "||": true,
-	"<": true, ">": true, ">>": true,
+func isCmdOperator(tok string) bool {
+	switch tok {
+	case "&", "&&", "|", "||", "<", ">", ">>":
+		return true
+	}
+	return false
 }
 
 // protectCmdToken makes one argv element survive cmd.exe's parsing intact.
@@ -160,7 +163,7 @@ var cmdOperators = map[string]bool{
 // metacharacters is untouched too, so an ordinary path is byte-identical to what
 // it was before.
 func protectCmdToken(tok string) string {
-	if tok == "" || cmdOperators[tok] {
+	if tok == "" || isCmdOperator(tok) {
 		return tok
 	}
 	if !strings.ContainsAny(tok, `&|<>^`) {

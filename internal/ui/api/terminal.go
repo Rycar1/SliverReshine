@@ -120,19 +120,32 @@ func sameOriginHandshake(config *websocket.Config, r *http.Request) error {
 	return nil
 }
 
-// shellShortcuts maps the names an operator can put in the terminal URL onto the
-// paths an implant can execute.
+// shellShortcut maps a name an operator can put in the terminal URL onto the
+// path an implant can execute. The second result reports whether the name is one
+// this console offers.
 //
 // A name is offered rather than a bare path because the useful choice is "don't
 // use PowerShell", not "use C:\Windows\System32\cmd.exe" -- the operator should
 // not have to know the layout of a Windows install to work around a shell that
 // will not start.
-var shellShortcuts = map[string]string{
-	"cmd":        "C:\\Windows\\System32\\cmd.exe",
-	"powershell": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-	"pwsh":       "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
-	"sh":         "/bin/sh",
-	"bash":       "/bin/bash",
+//
+// It is a function rather than a package-level map so the table cannot be
+// widened at runtime: the value it returns is executed on a target, so the set
+// of accepted names is part of the console's surface, not a cache.
+func shellShortcut(name string) (string, bool) {
+	switch name {
+	case "cmd":
+		return `C:\Windows\System32\cmd.exe`, true
+	case "powershell":
+		return `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, true
+	case "pwsh":
+		return `C:\Program Files\PowerShell\7\pwsh.exe`, true
+	case "sh":
+		return "/bin/sh", true
+	case "bash":
+		return "/bin/bash", true
+	}
+	return "", false
 }
 
 // shellPathFor turns the ?shell= query value into a path the implant will run,
@@ -150,7 +163,7 @@ func shellPathFor(name string) string {
 	if name == "" {
 		return ""
 	}
-	if p, ok := shellShortcuts[strings.ToLower(name)]; ok {
+	if p, ok := shellShortcut(strings.ToLower(name)); ok {
 		return p
 	}
 	if isAbsolutePath(name) {

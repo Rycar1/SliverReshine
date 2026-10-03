@@ -150,10 +150,11 @@ func TestSameOrigin(t *testing.T) {
 // The terminal WebSocket does its own origin check, so it is exempt from this
 // one. Pinned here so the exemption is a decision rather than an accident.
 func TestCSRFExemptionIsOnlyTheTerminalSocket(t *testing.T) {
-	if len(csrfExempt) != 1 {
-		t.Fatalf("csrfExempt has %d entries, want exactly 1", len(csrfExempt))
+	exempt := csrfExemptPrefixes()
+	if len(exempt) != 1 {
+		t.Fatalf("csrfExemptPrefixes() has %d entries, want exactly 1", len(exempt))
 	}
-	if !csrfExempt["/ws/sessions/"] {
+	if exempt[0] != "/ws/sessions/" {
 		t.Errorf("the terminal socket is no longer exempt; the WebSocket handshake check must cover it")
 	}
 }

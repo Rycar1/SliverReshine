@@ -33,15 +33,21 @@ import (
 // own docs, and the Go tests send no Origin at all, and refusing them would
 // break every scripted deployment to close a browser-only hole.
 
-// csrfExempt lists the paths that may be reached without the checks above.
+// csrfExemptPrefixes lists the path prefixes that may be reached without the
+// checks above.
 //
 // The terminal WebSocket is the only one, and only because the WebSocket
 // handshake performs its own origin check before the connection is upgraded --
 // see handleTerminalWS. Everything under /api is covered, including the reads:
 // a cross-origin read leaks the session list, and there is no cost to protecting
 // it.
-var csrfExempt = map[string]bool{
-	"/ws/sessions/": true,
+//
+// This returns a fresh slice on every call instead of reading a package-level
+// map. The allowlist is a security boundary, and a map in package scope is one
+// stray assignment away from being widened by any code in this package; a
+// function can only be changed by editing it.
+func csrfExemptPrefixes() []string {
+	return []string{"/ws/sessions/"}
 }
 
 // withSecurityHeaders sets the response headers a browser needs to treat this
@@ -82,7 +88,7 @@ func withCSRF(next http.Handler) http.Handler {
 			return
 		}
 
-		for prefix := range csrfExempt {
+		for _, prefix := range csrfExemptPrefixes() {
 			if strings.HasPrefix(r.URL.Path, prefix) {
 				next.ServeHTTP(w, r)
 				return

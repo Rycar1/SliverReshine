@@ -163,15 +163,15 @@ func TestEventToView_JobNoDomains(t *testing.T) {
 
 func TestConfigToView(t *testing.T) {
 	c := &clientpb.ImplantConfig{
-		GOOS:             "windows",
-		GOARCH:           "amd64",
-		Format:           clientpb.OutputFormat_EXECUTABLE,
-		Debug:            true,
-		Evasion:          false,
-		ObfuscateSymbols: true,
-		IsBeacon:         false,
-		BeaconInterval:   60,
-		BeaconJitter:     20,
+		GOOS:                "windows",
+		GOARCH:              "amd64",
+		Format:              clientpb.OutputFormat_EXECUTABLE,
+		Debug:               true,
+		Evasion:             false,
+		ObfuscateSymbols:    true,
+		IsBeacon:            false,
+		BeaconInterval:      60,
+		BeaconJitter:        20,
 		MaxConnectionErrors: 500,
 		C2: []*clientpb.ImplantC2{
 			{URL: "mtls://1.2.3.4:8888", Priority: 1},

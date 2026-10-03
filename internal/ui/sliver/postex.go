@@ -308,9 +308,9 @@ type GrepMatch struct {
 
 // GrepFileResult groups matches by file.
 type GrepFileResult struct {
-	Path    string      `json:"Path"`
-	IsBinary bool       `json:"IsBinary"`
-	Matches []GrepMatch `json:"Matches"`
+	Path     string      `json:"Path"`
+	IsBinary bool        `json:"IsBinary"`
+	Matches  []GrepMatch `json:"Matches"`
 }
 
 // Grep searches file contents across the target's filesystem. This is the

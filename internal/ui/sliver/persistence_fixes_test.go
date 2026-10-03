@@ -17,7 +17,7 @@ func TestShellArgvStaysPure(t *testing.T) {
 	for _, a := range win {
 		if strings.Contains(a, "chcp") {
 			t.Errorf("shellArgv added the code-page prologue: %q", win)
-	}
+		}
 	}
 
 	posix := shellArgv(platformLinux, "crontab -l")

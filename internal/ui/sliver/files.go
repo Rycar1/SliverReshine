@@ -23,9 +23,9 @@ type FileInfoView struct {
 
 // DirView is the JSON shape for a directory listing.
 type DirView struct {
-	Path  string         `json:"Path"`
-	Exists bool          `json:"Exists"`
-	Files []FileInfoView `json:"Files"`
+	Path   string         `json:"Path"`
+	Exists bool           `json:"Exists"`
+	Files  []FileInfoView `json:"Files"`
 }
 
 func dirToView(d *sliverpb.Ls) *DirView {

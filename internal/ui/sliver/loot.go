@@ -184,7 +184,7 @@ func (c *Client) findCred(id string) (*clientpb.Credential, error) {
 
 // LootAddRequest is the JSON body for adding a loot entry.
 type LootAddRequest struct {
-	Type         string `json:"type"`          // "file" (default) | "credential"
+	Type         string `json:"type"` // "file" (default) | "credential"
 	Name         string `json:"name"`
 	FileName     string `json:"file_name"`
 	FileType     string `json:"file_type"` // "text" | "binary"

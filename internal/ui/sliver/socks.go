@@ -60,10 +60,10 @@ type SocksProxy struct {
 
 // SocksManager manages active SOCKS5 proxies for a client connection.
 type SocksManager struct {
-	client   *Client
-	mu       sync.Mutex
-	proxies  map[uint64]*SocksProxy
-	nextID   atomic.Uint64
+	client  *Client
+	mu      sync.Mutex
+	proxies map[uint64]*SocksProxy
+	nextID  atomic.Uint64
 }
 
 // NewSocksManager creates an empty manager bound to the given client.

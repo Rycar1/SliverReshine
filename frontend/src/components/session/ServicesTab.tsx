@@ -1,20 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
+import { fileToBase64 } from '../../lib/binary'
 import type { CallExtensionResult, SSHCommandResult } from '../../lib/types'
 import CredentialPicker from '../common/CredentialPicker'
-
-function toBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1] || '')
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
 
 export default function ServicesTab({ sessionId, os }: { sessionId: string; os: string }) {
   const { t } = useTranslation()
@@ -134,7 +123,7 @@ export default function ServicesTab({ sessionId, os }: { sessionId: string; os: 
     setBusy(true)
     setError('')
     try {
-      const b64 = await toBase64(extFile)
+      const b64 = await fileToBase64(extFile)
       await api.registerExtension(sessionId, {
         name: extName.trim(),
         os: extOs.trim(),

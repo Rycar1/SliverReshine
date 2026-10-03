@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
 import type { LootEntry } from '../lib/types'
-import { base64ToBytes, triggerDownload } from '../lib/binary'
+import { base64ToBytes, fileToBase64, triggerDownload } from '../lib/binary'
 import DataTable, { type Column } from '../components/common/DataTable'
 import StatusBadge from '../components/common/StatusBadge'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -27,18 +27,6 @@ function toneForType(t: string): 'green' | 'blue' | 'yellow' {
 
 function isTextFile(name: string): boolean {
   return /\.(txt|log|json|csv|xml|yml|yaml|ini|conf|sh|bat|ps1|py|md|html?|js|ts)$/i.test(name)
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1] || '')
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
 }
 
 export default function LootPage() {

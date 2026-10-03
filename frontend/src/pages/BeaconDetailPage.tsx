@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
+import { bytesToText } from '../lib/binary'
 import type { Beacon, BeaconTask } from '../lib/types'
 import InlineEdit from '../components/InlineEdit'
 import DataTable, { type Column } from '../components/common/DataTable'
@@ -32,17 +33,6 @@ function taskTone(state: string): 'green' | 'red' | 'yellow' {
   if (state === 'completed') return 'green'
   if (state === 'failed') return 'red'
   return 'yellow'
-}
-
-function decodeResponse(b64?: string): string {
-  if (!b64) return ''
-  try {
-    const bin = atob(b64)
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-  } catch {
-    return b64
-  }
 }
 
 export default function BeaconDetailPage() {
@@ -131,7 +121,7 @@ export default function BeaconDetailPage() {
     setContent('')
     try {
       const full = await api.beaconTaskContent(task.BeaconID, task.ID)
-      setContent(decodeResponse(full.ResponseB64))
+      setContent(bytesToText(full.ResponseB64))
     } catch (e) {
       setContent(`${t('common.failed')}: ${(e as Error).message}`)
     } finally {

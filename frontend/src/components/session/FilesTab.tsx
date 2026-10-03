@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
-import { bytesToText, triggerDownload } from '../../lib/binary'
+import { bytesToBase64, bytesToText, triggerDownload } from '../../lib/binary'
 import { joinPath, parentOf } from '../../lib/paths'
 import type { DirView, GrepOut } from '../../lib/types'
 import ConfirmDialog from '../common/ConfirmDialog'
@@ -106,7 +106,7 @@ export default function FilesTab({
     if (!file) return
     try {
       const buf = await file.arrayBuffer()
-      const b64 = arrayBufferToBase64(buf)
+      const b64 = bytesToBase64(new Uint8Array(buf))
       await api.fsUpload(sessionId, joinPath(path, file.name, sep), b64)
       setMessage(t('files.uploaded', { name: file.name }))
       refresh()
@@ -476,14 +476,4 @@ export default function FilesTab({
       </ConfirmDialog>
     </div>
   )
-}
-
-function arrayBufferToBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf)
-  let binary = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-  }
-  return btoa(binary)
 }

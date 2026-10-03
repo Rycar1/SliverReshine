@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
+import { fileToBase64 } from '../lib/binary'
 import type { Alias, Session } from '../lib/types'
 import DataTable, { type Column } from '../components/common/DataTable'
 import StatusBadge from '../components/common/StatusBadge'
@@ -9,18 +10,6 @@ import DetailDrawer from '../components/common/DetailDrawer'
 import { useToast } from '../components/common/Toast'
 import EmptyState from '../components/common/EmptyState'
 import './pages.css'
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1] || '')
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
 
 export default function AliasesPage() {
   const { t } = useTranslation()

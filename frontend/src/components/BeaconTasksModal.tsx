@@ -1,23 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
+import { bytesToText } from '../lib/binary'
 import type { BeaconTask } from '../lib/types'
 import '../pages/pages.css'
 
 function fmtTime(ts: number): string {
   if (!ts) return '-'
   return new Date(ts * 1000).toLocaleString()
-}
-
-function decodeResponse(b64?: string): string {
-  if (!b64) return ''
-  try {
-    const bin = atob(b64)
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-  } catch {
-    return b64
-  }
 }
 
 export default function BeaconTasksModal({
@@ -102,7 +92,7 @@ export default function BeaconTasksModal({
                     <span className="mono">{selected.ID}</span>
                     <span>{t('tasks.content')}</span>
                   </div>
-                  <pre>{decodeResponse(selected.ResponseB64) || t('tasks.none')}</pre>
+                  <pre>{bytesToText(selected.ResponseB64) || t('tasks.none')}</pre>
                 </div>
               )}
             </>

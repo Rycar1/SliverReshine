@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../lib/api'
+import { bytesToText } from '../lib/binary'
 import type { Beacon, BeaconTask } from '../lib/types'
 import DataTable, { type Column } from '../components/common/DataTable'
 import StatusBadge from '../components/common/StatusBadge'
@@ -15,17 +16,6 @@ interface Row {
 function fmtTime(ts: number): string {
   if (!ts) return '-'
   return new Date(ts * 1000).toLocaleString()
-}
-
-function decodeResponse(b64?: string): string {
-  if (!b64) return ''
-  try {
-    const bin = atob(b64)
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-  } catch {
-    return b64
-  }
 }
 
 function taskTone(state: string): 'green' | 'red' | 'yellow' {
@@ -80,7 +70,7 @@ export default function TasksPage() {
     setContent('')
     try {
       const full = await api.beaconTaskContent(row.task.BeaconID, row.task.ID)
-      setContent(decodeResponse(full.ResponseB64))
+      setContent(bytesToText(full.ResponseB64))
     } catch (e) {
       setContent(`${t('common.failed')}: ${(e as Error).message}`)
     } finally {

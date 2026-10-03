@@ -1,18 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
-
-function toBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1] || '')
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
+import { fileToBase64 } from '../../lib/binary'
 
 export default function AdvancedTab({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation()
@@ -187,8 +176,8 @@ export default function AdvancedTab({ sessionId }: { sessionId: string }) {
     setHjError('')
     setHjMsg('')
     try {
-      const refB64 = hjRefFile ? await toBase64(hjRefFile) : ''
-      const targetB64 = hjTargetFile ? await toBase64(hjTargetFile) : ''
+      const refB64 = hjRefFile ? await fileToBase64(hjRefFile) : ''
+      const targetB64 = hjTargetFile ? await fileToBase64(hjTargetFile) : ''
       await api.hijackDll(sessionId, {
         reference_dll_path: hjRefPath.trim(),
         target_location: hjTarget.trim(),
@@ -210,7 +199,7 @@ export default function AdvancedTab({ sessionId }: { sessionId: string }) {
     setRdiError('')
     setRdiShellcode(null)
     try {
-      const b64 = await toBase64(rdiFile)
+      const b64 = await fileToBase64(rdiFile)
       const res = await api.shellcodeRdi({
         data_b64: b64,
         function_name: rdiFunction.trim(),
@@ -244,7 +233,7 @@ export default function AdvancedTab({ sessionId }: { sessionId: string }) {
     setScError('')
     setScMsg('')
     try {
-      const b64 = await toBase64(scFile)
+      const b64 = await fileToBase64(scFile)
       await api.execShellcode(sessionId, { data_b64: b64, pid: Number(scPid) || 0, rwx_pages: scRwx })
       setScMsg(t('advanced.shellcodeOk'))
     } catch (e) {
@@ -280,7 +269,7 @@ export default function AdvancedTab({ sessionId }: { sessionId: string }) {
     setError('')
     setOutput('')
     try {
-      const b64 = await toBase64(file)
+      const b64 = await fileToBase64(file)
       let res: { output?: string; result?: string }
       if (mode === 'assembly') {
         const r = await api.execAssembly(sessionId, b64, args, process)

@@ -102,3 +102,21 @@ func TestDecodeWindowsOutputLeavesValidUTF8Alone(t *testing.T) {
 		}
 	}
 }
+
+// sessionCodePage caches per session so a console does not re-probe chcp on
+// every command. The hit path is the hot path of every decoded command and must
+// not touch the client at all.
+func TestSessionCodePageReturnsTheCachedPage(t *testing.T) {
+	restore := swapCodePageCache(t)
+	defer restore()
+
+	const sessionID = "cache-hit-session"
+	storeCodePage(sessionID, 936)
+
+	// A nil client proves the hit path performs no RPC: dereferencing it would
+	// panic, so returning the cached value is the assertion that no probe ran.
+	var c *Client
+	if got := c.sessionCodePage(sessionID); got != 936 {
+		t.Errorf("sessionCodePage returned %d, want the cached 936", got)
+	}
+}

@@ -157,3 +157,33 @@ func TestC2AddressIsAUsableURL(t *testing.T) {
 		}
 	}
 }
+
+// validatePortString is the second half of the same guard as validateHost: the
+// port is interpolated into the same URL, so a non-digit there is the same
+// injection with a different shape.
+func TestValidatePortString(t *testing.T) {
+	for _, p := range []string{"1", "80", "443", "8080", "65535", "00080"} {
+		if err := validatePortString(p); err != nil {
+			t.Errorf("validatePortString(%q) rejected a valid port: %v", p, err)
+		}
+	}
+
+	rejected := map[string]string{
+		"":       "a trailing colon with no port",
+		"0":      "zero",
+		"00":     "zero written with padding",
+		"65536":  "one past the top of the range",
+		"99999":  "well past the range",
+		"80a":    "a non-digit",
+		"8 0":    "a space",
+		"-80":    "a sign",
+		"80; id": "a shell separator",
+		"$PORT":  "a shell expansion",
+		"8.0":    "a dot",
+	}
+	for p, why := range rejected {
+		if err := validatePortString(p); err == nil {
+			t.Errorf("validatePortString(%q) accepted it (%s)", p, why)
+		}
+	}
+}

@@ -44,98 +44,138 @@ func execPrompt(cwd string) string {
 //
 // Input arrives as raw keystrokes rather than lines, so the console also has to
 // do the local echo and line editing that a remote shell would normally provide.
+// That editor is execSession, below.
 func (s *Server) runExecTerminal(ws *websocket.Conn, c *sliver.Client, sessionID string) {
-	cwd, err := c.Pwd(sessionID)
-	if err != nil {
-		// A working directory is not required to run a command; the target has
-		// one whether or not we can read it.
-		cwd = ""
-	}
-
-	_ = writeWS(ws, wsMsgData, []byte(
-		"[*] exec mode: no shell is used, each line is run directly.\r\n"+
-			"[*] Pipes, redirection, globbing and command chaining are not available.\r\n"+
-			"[*] cd / pwd / exit are handled here. Type \"exit\" to close.\r\n\r\n"))
+	e := newExecSession(ws, c, sessionID)
+	e.banner()
 
 	reader := newWSFrameReader(ws)
-	var line strings.Builder
-
 	for {
-		header, err := reader.readFull(5)
+		msgType, payload, err := nextFrame(reader)
 		if err != nil {
 			return
 		}
-		length := int(be32(header[1:]))
-		if length > maxWSFramePayload {
-			if err := reader.skip(int64(length)); err != nil {
-				return
-			}
-			continue
-		}
-		payload, err := reader.readFull(length)
-		if err != nil {
-			return
-		}
-
-		switch header[0] {
+		switch msgType {
 		case wsMsgClose:
 			return
 		case wsMsgResize:
 			// Nothing to resize: there is no remote terminal.
 			continue
 		case wsMsgData:
-			for _, b := range payload {
-				switch b {
-				case '\r', '\n':
-					// Enter. Echo the newline, run the line, print a new prompt.
-					_ = writeWS(ws, wsMsgData, []byte("\r\n"))
-					cmdLine := strings.TrimSpace(line.String())
-					line.Reset()
-					if cmdLine == "" {
-						_ = writeWS(ws, wsMsgData, []byte(execPrompt(cwd)))
-						continue
-					}
-					res := c.RunExecLine(sessionID, cmdLine, &cwd)
-					if sliver.IsExecExit(res) {
-						// Fatal: the operator asked to leave. Sending a plain close made
-						// the browser treat "exit" as a dropped connection and reopen the
-						// terminal, so the only way out was to close the tab.
-						_ = writeWS(ws, wsMsgFatal, []byte("[*] exit\r\n"))
-						return
-					}
-					_ = writeWS(ws, wsMsgData, []byte(formatExecResult(res)))
-					if cwd == "" || res.Handled {
-						// A cd may have moved the working directory; refresh it so
-						// the prompt tells the truth.
-						if p, perr := c.Pwd(sessionID); perr == nil {
-							cwd = p
-						}
-					}
-					_ = writeWS(ws, wsMsgData, []byte(execPrompt(cwd)))
-				case 0x7f, 0x08:
-					// Backspace: erase locally, since nothing remote is echoing.
-					cur := line.String()
-					if cur == "" {
-						continue
-					}
-					line.Reset()
-					line.WriteString(cur[:len(cur)-1])
-					_ = writeWS(ws, wsMsgData, []byte("\b \b"))
-				case 0x03:
-					// Ctrl+C: there is no foreground process group to signal.
-					// Clearing the line is the honest approximation.
-					line.Reset()
-					_ = writeWS(ws, wsMsgData, []byte("^C\r\n"+execPrompt(cwd)))
-				default:
-					if b < 0x20 && b != '\t' {
-						continue
-					}
-					line.WriteByte(b)
-					_ = writeWS(ws, wsMsgData, []byte{b})
-				}
+			if e.handleData(payload) {
+				return
 			}
 		}
 	}
+}
+
+// execSession is the console-side line editor exec mode needs, because there is
+// no remote shell to provide one.
+type execSession struct {
+	ws   *websocket.Conn
+	c    *sliver.Client
+	id   string
+	cwd  string
+	line strings.Builder
+}
+
+// newExecSession starts an editor for one terminal. The working directory is
+// read once up front so the first prompt can show it.
+func newExecSession(ws *websocket.Conn, c *sliver.Client, sessionID string) *execSession {
+	cwd, err := c.Pwd(sessionID)
+	if err != nil {
+		// A working directory is not required to run a command; the target has
+		// one whether or not we can read it.
+		cwd = ""
+	}
+	return &execSession{ws: ws, c: c, id: sessionID, cwd: cwd}
+}
+
+// banner prints the one-time notice that this is not a shell.
+func (e *execSession) banner() {
+	_ = writeWS(e.ws, wsMsgData, []byte(
+		"[*] exec mode: no shell is used, each line is run directly.\r\n"+
+			"[*] Pipes, redirection, globbing and command chaining are not available.\r\n"+
+			"[*] cd / pwd / exit are handled here. Type \"exit\" to close.\r\n\r\n"))
+}
+
+// handleData consumes one frame of keystrokes. It reports whether the operator
+// asked to leave, in which case the terminal must end.
+func (e *execSession) handleData(payload []byte) (done bool) {
+	for _, b := range payload {
+		if e.handleKey(b) {
+			return true
+		}
+	}
+	return false
+}
+
+// handleKey applies one keystroke to the line buffer, echoing it locally.
+func (e *execSession) handleKey(b byte) (done bool) {
+	switch b {
+	case '\r', '\n':
+		// Enter. Echo the newline, run the line, print a new prompt.
+		return e.submit()
+	case 0x7f, 0x08:
+		e.backspace()
+	case 0x03:
+		// Ctrl+C: there is no foreground process group to signal. Clearing the
+		// line is the honest approximation.
+		e.line.Reset()
+		_ = writeWS(e.ws, wsMsgData, []byte("^C\r\n"+execPrompt(e.cwd)))
+	default:
+		if b < 0x20 && b != '\t' {
+			return false
+		}
+		e.line.WriteByte(b)
+		_ = writeWS(e.ws, wsMsgData, []byte{b})
+	}
+	return false
+}
+
+// submit runs the buffered line and prints its result.
+func (e *execSession) submit() (done bool) {
+	_ = writeWS(e.ws, wsMsgData, []byte("\r\n"))
+	cmdLine := strings.TrimSpace(e.line.String())
+	e.line.Reset()
+	if cmdLine == "" {
+		e.prompt()
+		return false
+	}
+	res := e.c.RunExecLine(e.id, cmdLine, &e.cwd)
+	if sliver.IsExecExit(res) {
+		// Fatal: the operator asked to leave. Sending a plain close made the
+		// browser treat "exit" as a dropped connection and reopen the terminal,
+		// so the only way out was to close the tab.
+		_ = writeWS(e.ws, wsMsgFatal, []byte("[*] exit\r\n"))
+		return true
+	}
+	_ = writeWS(e.ws, wsMsgData, []byte(formatExecResult(res)))
+	if e.cwd == "" || res.Handled {
+		// A cd may have moved the working directory; refresh it so the prompt
+		// tells the truth.
+		if p, err := e.c.Pwd(e.id); err == nil {
+			e.cwd = p
+		}
+	}
+	e.prompt()
+	return false
+}
+
+// backspace erases one byte locally, since nothing remote is echoing.
+func (e *execSession) backspace() {
+	cur := e.line.String()
+	if cur == "" {
+		return
+	}
+	e.line.Reset()
+	e.line.WriteString(cur[:len(cur)-1])
+	_ = writeWS(e.ws, wsMsgData, []byte("\b \b"))
+}
+
+// prompt writes the synthetic prompt for the current working directory.
+func (e *execSession) prompt() {
+	_ = writeWS(e.ws, wsMsgData, []byte(execPrompt(e.cwd)))
 }
 
 // formatExecResult renders one command's outcome the way a shell would.
@@ -160,11 +200,6 @@ func formatExecResult(res sliver.ExecLineResult) string {
 		fmt.Fprintf(&b, "[exit %d]\r\n", res.ExitCode)
 	}
 	return b.String()
-}
-
-// be32 reads a big-endian uint32 without pulling in encoding/binary for one call.
-func be32(b []byte) uint32 {
-	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
 }
 
 // stageShellForCopyMode prepares a shell in the target's temp directory and

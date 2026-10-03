@@ -253,6 +253,10 @@ func (r *wsFrameReader) skip(n int64) error {
 // default is not always the one that works: a Windows target whose PowerShell
 // never becomes interactive leaves the operator with a blank terminal and no way
 // to try cmd.exe, which is both the workaround and the diagnosis.
+//
+// The body is a list of phases -- dispatch, tunnel, shell, pump -- so the two
+// directions of the bridge live in their own functions instead of in two halves
+// of one 180-line loop.
 func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, shellPath, mode string) {
 	// exec mode uses no tunnel at all, so it never reaches the shell path below.
 	// Dispatching here rather than in the WebSocket handler keeps the two modes
@@ -274,22 +278,7 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 	}
 	defer tm.Close()
 
-	// Only enable PTY for unix-like sessions.
-	enablePTY := false
-	windowsSession := false
-	if sessions, err := c.Sessions(); err == nil {
-		for _, s := range sessions {
-			if s.ID == sessionID {
-				if s.OS == "linux" || s.OS == "darwin" {
-					enablePTY = true
-				}
-				if s.OS == "windows" {
-					windowsSession = true
-				}
-				break
-			}
-		}
-	}
+	enablePTY, windowsSession := terminalTargetProfile(c, sessionID)
 
 	// shell-copy stages a shell in the target's temp directory and runs that
 	// instead. It survives path-based policy (execution allowed from temp but
@@ -344,47 +333,98 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 	// A unix session is unaffected: its PTY echoes as the operator types.
 
 	// Tunnel -> WS: forward implant output to the browser.
-	go func() {
-		buf := make([]byte, 8192)
-		for {
-			n, err := tunnel.Read(buf)
-			if n > 0 {
-				out := codec.Decode(buf[:n])
-				if len(out) > 0 {
-					if werr := writeWS(ws, wsMsgData, out); werr != nil {
-						return
-					}
-				}
-			}
-			if err != nil {
-				_ = writeWS(ws, wsMsgClose, []byte{})
-				return
-			}
-		}
-	}()
+	go forwardTunnelToWS(ws, tunnel, codec)
 
 	// WS -> tunnel: forward browser keystrokes to the implant.
-	reader := newWSFrameReader(ws)
+	pumpWSToTunnel(ws, tm, tunnel, sessionID, codec, windowsSession)
+}
+
+// nextFrame reads one [type][len][payload] frame from the browser.
+//
+// A frame whose declared length exceeds maxWSFramePayload is discarded without
+// being buffered. The length is read straight off the wire, so it is
+// attacker-controlled, and reading it into the frame reader is what would let
+// one client exhaust the console's memory.
+//
+// The error is the read error that ended the connection: io.EOF for a clean
+// close, anything else for a connection that broke.
+func nextFrame(r *wsFrameReader) (msgType uint8, payload []byte, err error) {
 	for {
-		header, err := reader.readFull(5)
-		if err != nil {
-			if err != io.EOF {
-				_, _ = tunnel.Write([]byte("exit\n"))
-			}
-			return
+		header, rerr := r.readFull(5)
+		if rerr != nil {
+			return 0, nil, rerr
 		}
-		msgType := header[0]
 		length := binary.BigEndian.Uint32(header[1:])
-		// Oversized frame: discard it without buffering. The length is read
-		// straight off the wire, so it is attacker-controlled; reading it into
-		// r.buf is what would let one client exhaust the console's memory.
 		if length > maxWSFramePayload {
-			if err := reader.skip(int64(length)); err != nil {
-				return
+			if serr := r.skip(int64(length)); serr != nil {
+				return 0, nil, serr
 			}
 			continue
 		}
-		payload, err := reader.readFull(int(length))
+		body, berr := r.readFull(int(length))
+		if berr != nil {
+			return 0, nil, berr
+		}
+		return header[0], body, nil
+	}
+}
+
+// terminalTargetProfile reports what the session's OS means for the tunnel:
+// whether a PTY can be requested, and whether the keystroke rewrite for a
+// console-less Windows shell is needed.
+//
+// A session that cannot be found is treated as neither: the tunnel still opens
+// and the operator gets the conservative behaviour rather than a refusal.
+func terminalTargetProfile(c *sliver.Client, sessionID string) (enablePTY, windowsSession bool) {
+	sessions, err := c.Sessions()
+	if err != nil {
+		return false, false
+	}
+	for _, s := range sessions {
+		if s.ID != sessionID {
+			continue
+		}
+		switch s.OS {
+		case "linux", "darwin":
+			enablePTY = true
+		case "windows":
+			windowsSession = true
+		}
+		return enablePTY, windowsSession
+	}
+	return false, false
+}
+
+// forwardTunnelToWS copies implant output to the browser until the tunnel ends,
+// transcoding the target's code page to UTF-8 on the way.
+func forwardTunnelToWS(ws *websocket.Conn, tunnel *sliver.TunnelIO, codec *sliver.ConsoleCodec) {
+	buf := make([]byte, 8192)
+	for {
+		n, err := tunnel.Read(buf)
+		if n > 0 {
+			out := codec.Decode(buf[:n])
+			if len(out) > 0 {
+				if werr := writeWS(ws, wsMsgData, out); werr != nil {
+					return
+				}
+			}
+		}
+		if err != nil {
+			_ = writeWS(ws, wsMsgClose, []byte{})
+			return
+		}
+	}
+}
+
+// pumpWSToTunnel reads browser frames and applies them to the shell tunnel until
+// the connection ends.
+//
+// A connection that breaks is passed on to the shell as "exit": the alternative
+// leaves a half-typed command sitting at a prompt nobody is watching.
+func pumpWSToTunnel(ws *websocket.Conn, tm *sliver.TunnelManager, tunnel *sliver.TunnelIO, sessionID string, codec *sliver.ConsoleCodec, windowsSession bool) {
+	reader := newWSFrameReader(ws)
+	for {
+		msgType, payload, err := nextFrame(reader)
 		if err != nil {
 			if err != io.EOF {
 				_, _ = tunnel.Write([]byte("exit\n"))
@@ -393,32 +433,7 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 		}
 		switch msgType {
 		case wsMsgResize:
-			var dims struct {
-				Cols int `json:"cols"`
-				Rows int `json:"rows"`
-			}
-			if err := json.Unmarshal(payload, &dims); err != nil {
-				// A malformed resize is not worth closing the terminal over; the
-				// shell still works at whatever size it already had.
-				continue
-			}
-			// Forward it. This used to parse the frame and drop it, so a remote
-			// shell never learned the window size and full-screen programs laid
-			// themselves out for 80x24.
-			//
-			// Clamped to what the wire type holds before the conversion -- a
-			// negative or oversized value would otherwise wrap on the uint16
-			// cast and resize the terminal to nonsense.
-			if dims.Rows <= 0 || dims.Cols <= 0 {
-				continue
-			}
-			if dims.Rows > 0xffff {
-				dims.Rows = 0xffff
-			}
-			if dims.Cols > 0xffff {
-				dims.Cols = 0xffff
-			}
-			_ = tm.ResizeShell(sessionID, tunnel.ID, uint16(dims.Rows), uint16(dims.Cols))
+			applyResize(tm, sessionID, tunnel.ID, payload)
 		case wsMsgClose:
 			_, _ = tunnel.Write([]byte("exit\n"))
 			return
@@ -436,6 +451,36 @@ func (s *Server) runTerminal(ws *websocket.Conn, c *sliver.Client, sessionID, sh
 			}
 		}
 	}
+}
+
+// applyResize forwards a browser resize frame to the shell.
+//
+// This used to parse the frame and drop it, so a remote shell never learned the
+// window size and full-screen programs laid themselves out for 80x24.
+//
+// A malformed frame is ignored rather than closing the terminal over: the shell
+// still works at whatever size it already had.
+func applyResize(tm *sliver.TunnelManager, sessionID string, tunnelID uint64, payload []byte) {
+	var dims struct {
+		Cols int `json:"cols"`
+		Rows int `json:"rows"`
+	}
+	if err := json.Unmarshal(payload, &dims); err != nil {
+		return
+	}
+	// Clamped to what the wire type holds before the conversion -- a negative or
+	// oversized value would otherwise wrap on the uint16 cast and resize the
+	// terminal to nonsense.
+	if dims.Rows <= 0 || dims.Cols <= 0 {
+		return
+	}
+	if dims.Rows > 0xffff {
+		dims.Rows = 0xffff
+	}
+	if dims.Cols > 0xffff {
+		dims.Cols = 0xffff
+	}
+	_ = tm.ResizeShell(sessionID, tunnelID, uint16(dims.Rows), uint16(dims.Cols))
 }
 
 // translateBackspace maps DEL (0x7f) to BS (0x08). xterm.js sends DEL for the

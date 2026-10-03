@@ -1,9 +1,7 @@
 package sliver
 
 import (
-	"context"
 	"encoding/base64"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -56,7 +54,7 @@ func websiteToView(w *clientpb.Website, withData bool) *WebsiteView {
 
 // Websites lists all websites hosted on the server.
 func (c *Client) Websites() ([]WebsiteView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.Websites(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -73,7 +71,7 @@ func (c *Client) Websites() ([]WebsiteView, error) {
 
 // Website fetches a single website by name (including content data).
 func (c *Client) Website(name string) (*WebsiteView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.Website(ctx, &clientpb.Website{Name: name})
 	if err != nil {
@@ -101,7 +99,7 @@ func (c *Client) WebsiteAddContent(name string, req *WebsiteContentRequest) (*We
 	if contentType == "" {
 		contentType = "text/html; charset=utf-8"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WebsiteAddContent(ctx, &clientpb.WebsiteAddContent{
 		Name: name,
@@ -125,7 +123,7 @@ func (c *Client) WebsiteUpdateContent(name string, req *WebsiteContentRequest) (
 	if contentType == "" {
 		contentType = "text/html; charset=utf-8"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WebsiteUpdateContent(ctx, &clientpb.WebsiteAddContent{
 		Name: name,
@@ -141,7 +139,7 @@ func (c *Client) WebsiteUpdateContent(name string, req *WebsiteContentRequest) (
 
 // WebsiteRemoveContent removes one or more content entries from a website.
 func (c *Client) WebsiteRemoveContent(name string, paths []string) (*WebsiteView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.WebsiteRemoveContent(ctx, &clientpb.WebsiteRemoveContent{Name: name, Paths: paths})
 	if err != nil {
@@ -152,7 +150,7 @@ func (c *Client) WebsiteRemoveContent(name string, paths []string) (*WebsiteView
 
 // WebsiteRemove deletes a website entirely.
 func (c *Client) WebsiteRemove(name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	_, err := c.RPC.WebsiteRemove(ctx, &clientpb.Website{Name: name})
 	return err

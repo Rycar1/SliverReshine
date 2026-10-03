@@ -1,11 +1,9 @@
 package sliver
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -70,7 +68,7 @@ func credToView(cred *clientpb.Credential) *LootView {
 
 // LootAll lists all loot (files and credentials) stored on the server.
 func (c *Client) LootAll() ([]LootView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 
 	out := make([]LootView, 0)
@@ -135,7 +133,7 @@ func (c *Client) LootContent(id string) (*LootView, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.LootContent(ctx, &clientpb.Loot{ID: id})
 	if err != nil {
@@ -151,12 +149,12 @@ func (c *Client) LootRemove(id string) error {
 		return err
 	}
 	if cred != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := rpcCtx(rpcDefault)
 		defer cancel()
 		_, err := c.RPC.CredsRm(ctx, &clientpb.Credentials{Credentials: []*clientpb.Credential{cred}})
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err = c.RPC.LootRm(ctx, &clientpb.Loot{ID: id})
 	return err
@@ -168,7 +166,7 @@ func (c *Client) findCred(id string) (*clientpb.Credential, error) {
 	if id == "" {
 		return nil, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.Creds(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -196,7 +194,7 @@ type LootAddRequest struct {
 
 // LootAdd stores a new loot entry (file or credential) on the server.
 func (c *Client) LootAdd(req *LootAddRequest) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	switch strings.ToLower(req.Type) {
 	case "credential":
@@ -247,7 +245,7 @@ func (c *Client) LootRename(id, name string) error {
 		if err != nil {
 			return err
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := rpcCtx(rpcDefault)
 		defer cancel()
 		cred.Collection = name
 		_, err := c.RPC.CredsUpdate(ctx, &clientpb.Credentials{Credentials: []*clientpb.Credential{cred}})
@@ -255,7 +253,7 @@ func (c *Client) LootRename(id, name string) error {
 	} else if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err := c.RPC.LootUpdate(ctx, &clientpb.Loot{ID: id, Name: name})
 	return err

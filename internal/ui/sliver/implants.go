@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -99,7 +98,7 @@ func configToView(c *clientpb.ImplantConfig, name string) *ImplantConfigView {
 
 // ImplantBuilds lists stored implant builds.
 func (c *Client) ImplantBuilds() ([]ImplantBuildView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.ImplantBuilds(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -169,7 +168,7 @@ type ImplantProfileView struct {
 
 // ImplantProfiles lists saved implant profiles.
 func (c *Client) ImplantProfiles() ([]ImplantProfileView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.ImplantProfiles(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -191,7 +190,7 @@ func (c *Client) SaveImplantProfile(name string, req *GenerateRequest, isBeacon 
 		return fmt.Errorf("profile name is required")
 	}
 	cfg := buildImplantConfig(req, isBeacon)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err := c.RPC.SaveImplantProfile(ctx, &clientpb.ImplantProfile{Name: name, Config: cfg})
 	return err
@@ -218,7 +217,7 @@ func (c *Client) DeleteImplantProfile(name string) error {
 	if !found {
 		return fmt.Errorf("implant profile %q not found", name)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err = c.RPC.DeleteImplantProfile(ctx, &clientpb.DeleteReq{Name: name})
 	return err
@@ -594,7 +593,7 @@ func (c *Client) GenerateImplant(req *GenerateRequest) (map[string]any, error) {
 
 // runGenerate issues one Generate RPC under the console's build deadline.
 func (c *Client) runGenerate(name string, cfg *clientpb.ImplantConfig) (*clientpb.Generate, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	return c.RPC.Generate(ctx, &clientpb.GenerateReq{Config: cfg, Name: name})
 }
@@ -674,7 +673,7 @@ func implantBuildResponse(resp *clientpb.Generate, cfg *clientpb.ImplantConfig, 
 // Sliver v1.15.16 没有 KillSession RPC 方法 — 服务端在 implant
 // 断开后自动清理 session 记录，无需显式调用。
 func (c *Client) KillSession(id string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err := c.RPC.Kill(ctx, &sliverpb.KillReq{
 		Force: true,
@@ -710,7 +709,7 @@ type CompilerView struct {
 
 // CompilerInfo fetches the Sliver server's compiler targets and cross-compilers.
 func (c *Client) CompilerInfo() (*CompilerView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.GetCompiler(ctx, &commonpb.Empty{})
 	if err != nil {

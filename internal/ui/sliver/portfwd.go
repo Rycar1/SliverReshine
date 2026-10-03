@@ -1,12 +1,10 @@
 package sliver
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
@@ -200,7 +198,7 @@ func (pf *PortForward) handleConn(conn net.Conn) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 
 	// The reply is kept because the server's Portfwd handler does not route

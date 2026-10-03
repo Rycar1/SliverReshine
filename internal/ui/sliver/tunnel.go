@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/rpcpb"
@@ -103,7 +102,7 @@ func (tm *TunnelManager) send(td *sliverpb.TunnelData) error {
 
 // CreateTunnel creates an RPC tunnel and binds it to a local TunnelIO.
 func (tm *TunnelManager) CreateTunnel(sessionID string) (*TunnelIO, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	t, err := tm.client.RPC.CreateTunnel(ctx, &sliverpb.Tunnel{SessionID: sessionID})
 	if err != nil {
@@ -159,7 +158,7 @@ func (tm *TunnelManager) StartShell(sessionID, shellPath string, enablePTY bool)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	shell, err := tm.client.RPC.Shell(ctx, &sliverpb.ShellReq{
 		EnablePTY: enablePTY,
@@ -228,7 +227,7 @@ func (tm *TunnelManager) closeAll() {
 // harmless -- the handler type-asserts and ignores what it cannot resize -- but
 // saying so here keeps the next reader from expecting Windows to reflow.
 func (tm *TunnelManager) ResizeShell(sessionID string, tunnelID uint64, rows, cols uint16) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	_, err := tm.client.RPC.ShellResize(ctx, &sliverpb.ShellResizeReq{
 		Rows:     uint32(rows),

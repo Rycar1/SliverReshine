@@ -1,9 +1,6 @@
 package sliver
 
 import (
-	"context"
-	"time"
-
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 )
 
@@ -19,7 +16,7 @@ type CanaryView struct {
 
 // Canaries lists the DNS canaries tracked by the server.
 func (c *Client) Canaries() ([]CanaryView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.Canaries(ctx, &commonpb.Empty{})
 	if err != nil {

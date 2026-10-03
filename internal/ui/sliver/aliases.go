@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
@@ -444,7 +442,7 @@ func (c *Client) RunAlias(sessionID, name, args, process, arch, method, class st
 	}
 	isDLL := strings.EqualFold(filepath.Ext(binRel), ".dll")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	request := &commonpb.Request{SessionID: sessionID}
 

@@ -1,11 +1,9 @@
 package sliver
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
@@ -25,7 +23,7 @@ type IfaceView struct {
 
 // Ifconfig returns network interfaces of the session.
 func (c *Client) Ifconfig(sessionID string) ([]IfaceView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Ifconfig(ctx, &sliverpb.IfconfigReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -67,7 +65,7 @@ type ProcessView struct {
 
 // Ps lists processes running on the session.
 func (c *Client) Ps(sessionID string) ([]ProcessView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Ps(ctx, &sliverpb.PsReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -102,7 +100,7 @@ func (c *Client) Ps(sessionID string) ([]ProcessView, error) {
 
 // KillProcess terminates a process on the session.
 func (c *Client) KillProcess(sessionID string, pid int32, force bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Terminate(ctx, &sliverpb.TerminateReq{
 		Pid:   pid,
@@ -134,7 +132,7 @@ type SockEntryView struct {
 
 // Netstat lists open network connections on the session.
 func (c *Client) Netstat(sessionID string) ([]SockEntryView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Netstat(ctx, &sliverpb.NetstatReq{
 		TCP: true,
@@ -185,7 +183,7 @@ type EnvView struct {
 
 // GetEnv lists environment variables of the session.
 func (c *Client) GetEnv(sessionID string) ([]EnvView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetEnv(ctx, &sliverpb.EnvReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -209,7 +207,7 @@ func (c *Client) GetEnv(sessionID string) ([]EnvView, error) {
 
 // SetEnv sets an environment variable on the session.
 func (c *Client) SetEnv(sessionID, key, value string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.SetEnv(ctx, &sliverpb.SetEnvReq{
 		Variable: &commonpb.EnvVar{Key: key, Value: value},
@@ -226,7 +224,7 @@ func (c *Client) SetEnv(sessionID, key, value string) error {
 
 // UnsetEnv removes an environment variable on the session.
 func (c *Client) UnsetEnv(sessionID, key string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.UnsetEnv(ctx, &sliverpb.UnsetEnvReq{
 		Name:    key,
@@ -261,7 +259,7 @@ func (c *Client) Execute(sessionID, path string, args []string) (*ExecResult, er
 
 // Screenshot takes a screenshot on the session and returns base64 PNG data.
 func (c *Client) Screenshot(sessionID string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Screenshot(ctx, &sliverpb.ScreenshotReq{
 		Request: &commonpb.Request{SessionID: sessionID},

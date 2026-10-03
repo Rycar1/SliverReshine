@@ -1,11 +1,9 @@
 package sliver
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 )
@@ -205,7 +203,7 @@ func validWebDeliveryFormat(f WebDeliveryFormat) bool {
 // created on the same port the URL names. Website ties the listener to the site
 // the stage was published on, so the GET is served from that content.
 func (c *Client) startHTTPListenerForDelivery(host string, port uint32, website string) (uint32, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := rpcCtx(rpcListenerStart)
 	defer cancel()
 
 	// Domain is what the implant's callback URIs are built from; Host is what

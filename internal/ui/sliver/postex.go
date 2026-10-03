@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -62,7 +61,7 @@ func credentialFromView(v CredentialView) *clientpb.Credential {
 
 // Creds lists every credential in the server vault.
 func (c *Client) Creds() ([]CredentialView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Creds(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -81,7 +80,7 @@ func (c *Client) CredsAdd(creds []CredentialView) error {
 	if len(creds) == 0 {
 		return errors.New("no credentials supplied")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	batch := &clientpb.Credentials{}
 	for _, v := range creds {
@@ -96,7 +95,7 @@ func (c *Client) CredsRm(ids []string) error {
 	if len(ids) == 0 {
 		return errors.New("no credential ids supplied")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	batch := &clientpb.Credentials{}
 	for _, id := range ids {
@@ -111,7 +110,7 @@ func (c *Client) CredsUpdate(creds []CredentialView) error {
 	if len(creds) == 0 {
 		return errors.New("no credentials supplied")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	batch := &clientpb.Credentials{}
 	for _, v := range creds {
@@ -123,7 +122,7 @@ func (c *Client) CredsUpdate(creds []CredentialView) error {
 
 // GetCredByID fetches a single credential.
 func (c *Client) GetCredByID(id string) (CredentialView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetCredByID(ctx, &clientpb.Credential{ID: id})
 	if err != nil {
@@ -135,7 +134,7 @@ func (c *Client) GetCredByID(id string) (CredentialView, error) {
 // CredsSniffHashType asks the server to identify an unknown hash's type, which
 // is what makes imported hashes catalogueable without knowing the format.
 func (c *Client) CredsSniffHashType(hash string) (CredentialView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.CredsSniffHashType(ctx, &clientpb.Credential{Hash: hash})
 	if err != nil {
@@ -155,7 +154,7 @@ func (c *Client) GetPlaintextCredsByHashType(hashType int32) ([]CredentialView, 
 }
 
 func (c *Client) credsByHashType(hashType int32, plaintextOnly bool) ([]CredentialView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	req := &clientpb.Credential{HashType: clientpb.HashType(hashType)}
 	var (
@@ -187,7 +186,7 @@ func (c *Client) credsByHashType(hashType int32, plaintextOnly bool) ([]Credenti
 
 // MemfilesAdd allocates a new memfile and returns its descriptor.
 func (c *Client) MemfilesAdd(sessionID string) (int64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MemfilesAdd(ctx, &sliverpb.MemfilesAddReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -203,7 +202,7 @@ func (c *Client) MemfilesAdd(sessionID string) (int64, error) {
 
 // MemfilesList lists the memfiles currently open in a session.
 func (c *Client) MemfilesList(sessionID string) (*DirView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MemfilesList(ctx, &sliverpb.MemfilesListReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -220,7 +219,7 @@ func (c *Client) MemfilesList(sessionID string) (*DirView, error) {
 
 // MemfilesRm closes a memfile by descriptor.
 func (c *Client) MemfilesRm(sessionID string, fd int64) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MemfilesRm(ctx, &sliverpb.MemfilesRmReq{
 		Fd:      fd,
@@ -241,7 +240,7 @@ func (c *Client) MemfilesRm(sessionID string, fd int64) error {
 
 // Chmod changes a file's mode, optionally recursively.
 func (c *Client) Chmod(sessionID, path, mode string, recursive bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Chmod(ctx, &sliverpb.ChmodReq{
 		Path:      path,
@@ -260,7 +259,7 @@ func (c *Client) Chmod(sessionID, path, mode string, recursive bool) error {
 
 // Chown changes file ownership (unix sessions only).
 func (c *Client) Chown(sessionID, path, uid, gid string, recursive bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Chown(ctx, &sliverpb.ChownReq{
 		Path:      path,
@@ -281,7 +280,7 @@ func (c *Client) Chown(sessionID, path, uid, gid string, recursive bool) error {
 // Chtimes rewrites access and modification timestamps, which is how collected
 // files are timestomped back to their original times to avoid standing out.
 func (c *Client) Chtimes(sessionID, path string, atime, mtime int64) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Chtimes(ctx, &sliverpb.ChtimesReq{
 		Path:    path,
@@ -317,7 +316,7 @@ type GrepFileResult struct {
 // primary "find secrets on disk" primitive: hunting config files, scripts and
 // logs for passwords and keys without pulling everything back first.
 func (c *Client) Grep(sessionID, pattern, path string, recursive bool, before, after int32) (*GrepOut, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*opTimeout)
+	ctx, cancel := rpcCtx(5 * opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Grep(ctx, &sliverpb.GrepReq{
 		SearchPattern: pattern,
@@ -380,7 +379,7 @@ func monitorToView(p *clientpb.MonitoringProvider) MonitorProviderView {
 
 // MonitorAddConfig registers a telemetry sink.
 func (c *Client) MonitorAddConfig(v MonitorProviderView) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MonitorAddConfig(ctx, &clientpb.MonitoringProvider{
 		ID: v.ID, Type: v.Type, APIKey: v.APIKey, APIPassword: v.APIPassword,
@@ -396,7 +395,7 @@ func (c *Client) MonitorAddConfig(v MonitorProviderView) error {
 
 // MonitorDelConfig removes a telemetry sink.
 func (c *Client) MonitorDelConfig(v MonitorProviderView) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MonitorDelConfig(ctx, &clientpb.MonitoringProvider{ID: v.ID, Type: v.Type})
 	if err != nil {
@@ -410,7 +409,7 @@ func (c *Client) MonitorDelConfig(v MonitorProviderView) error {
 
 // MonitorListConfig lists configured telemetry sinks.
 func (c *Client) MonitorListConfig() ([]MonitorProviderView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MonitorListConfig(ctx, &commonpb.Empty{})
 	if err != nil {

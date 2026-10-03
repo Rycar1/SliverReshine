@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -34,7 +33,7 @@ type C2ProfileView struct {
 
 // HTTPC2Profiles lists stored profiles.
 func (c *Client) HTTPC2Profiles() ([]C2ProfileView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetHTTPC2Profiles(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -54,7 +53,7 @@ func (c *Client) HTTPC2Profiles() ([]C2ProfileView, error) {
 
 // HTTPC2Profile fetches one profile in full.
 func (c *Client) HTTPC2Profile(name string) (*clientpb.HTTPC2Config, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetHTTPC2ProfileByName(ctx, &clientpb.C2ProfileReq{Name: name})
 	if err != nil {
@@ -86,7 +85,7 @@ func (c *Client) SaveHTTPC2Profile(cfg *clientpb.HTTPC2Config, overwrite bool) e
 	if cfg.ImplantConfig == nil {
 		return errors.New("profile has no implantConfig: the server dereferences it before validating")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	_, err := c.RPC.SaveHTTPC2Profile(ctx, &clientpb.HTTPC2ConfigReq{
 		Overwrite: overwrite,
@@ -110,7 +109,7 @@ type TrafficEncoderView struct {
 
 // TrafficEncoders lists registered traffic encoders.
 func (c *Client) TrafficEncoders() ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.TrafficEncoderMap(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -126,7 +125,7 @@ func (c *Client) TrafficEncoders() ([]string, error) {
 
 // TrafficEncodersWithID lists encoders together with their IDs.
 func (c *Client) TrafficEncodersWithID() (map[string]uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.TrafficEncoderMap(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -149,7 +148,7 @@ func (c *Client) TrafficEncoderAdd(name string, wasm []byte, skipTests bool) (*T
 	if len(wasm) == 0 {
 		return nil, errors.New("encoder wasm is empty")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*opTimeout)
+	ctx, cancel := rpcCtx(5 * opTimeout)
 	defer cancel()
 	resp, err := c.RPC.TrafficEncoderAdd(ctx, &clientpb.TrafficEncoder{
 		Wasm:      &commonpb.File{Name: name, Data: wasm},
@@ -202,7 +201,7 @@ func (c *Client) TrafficEncoderRm(name string) error {
 	if !ok {
 		return fmt.Errorf("no traffic encoder named %q", name)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	_, err = c.RPC.TrafficEncoderRm(ctx, &clientpb.TrafficEncoder{ID: id})
 	return err
@@ -223,7 +222,7 @@ type ShellcodeEncoderView struct {
 
 // ShellcodeEncoders lists encoder chains grouped by architecture.
 func (c *Client) ShellcodeEncoders() ([]ShellcodeEncoderView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.ShellcodeEncoderMap(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -247,7 +246,7 @@ func (c *Client) ShellcodeEncode(encoder, arch string, data []byte, iterations u
 	if len(data) == 0 {
 		return nil, errors.New("no shellcode supplied")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	enc, err := shellcodeEncoderFromString(encoder)
 	if err != nil {
@@ -349,7 +348,7 @@ func shellcodeEncoderFromString(s string) (clientpb.ShellcodeEncoder, error) {
 
 // WasmExtensions lists registered WASM extension names for a session.
 func (c *Client) WasmExtensions(sessionID string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.ListWasmExtensions(ctx, &sliverpb.ListWasmExtensionsReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -376,7 +375,7 @@ func (c *Client) RegisterWasmExtension(sessionID, name string, wasmGz []byte) er
 	if len(wasmGz) == 0 {
 		return errors.New("extension payload is empty")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegisterWasmExtension(ctx, &sliverpb.RegisterWasmExtensionReq{
 		Name:    name,
@@ -394,7 +393,7 @@ func (c *Client) RegisterWasmExtension(sessionID, name string, wasmGz []byte) er
 
 // ExecWasmExtension runs a registered WASM extension with arguments.
 func (c *Client) ExecWasmExtension(sessionID, name string, args []string) (string, string, uint32, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*opTimeout)
+	ctx, cancel := rpcCtx(5 * opTimeout)
 	defer cancel()
 	req := &sliverpb.ExecWasmExtensionReq{
 		Name:    name,
@@ -461,7 +460,7 @@ func splitAddr(addr string) (string, uint32) {
 // tunnelled back and dialled from the server, so the forward side must be
 // reachable from the operator's machine rather than from the target.
 func (c *Client) StartRportFwdListener(sessionID, bindAddr string, bindPort uint32, fwdAddr string, fwdPort uint32) (RportFwdListenerView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.StartRportFwdListener(ctx, &sliverpb.RportFwdStartListenerReq{
 		BindAddress:    joinAddr(bindAddr, bindPort),
@@ -479,7 +478,7 @@ func (c *Client) StartRportFwdListener(sessionID, bindAddr string, bindPort uint
 
 // StopRportFwdListener tears one down by ID.
 func (c *Client) StopRportFwdListener(sessionID string, id uint32) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.StopRportFwdListener(ctx, &sliverpb.RportFwdStopListenerReq{
 		ID:      id,
@@ -496,7 +495,7 @@ func (c *Client) StopRportFwdListener(sessionID string, id uint32) error {
 
 // RportFwdListeners lists the reverse port forwards on a session.
 func (c *Client) RportFwdListeners(sessionID string) ([]RportFwdListenerView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetRportFwdListeners(ctx, &sliverpb.RportFwdListenersReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -551,7 +550,7 @@ type CertificateView struct {
 
 // CertificateAuthority returns the server's CA material.
 func (c *Client) CertificateAuthority() ([]CertificateView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetCertificateAuthorityInfo(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -572,7 +571,7 @@ func (c *Client) CertificateAuthority() ([]CertificateView, error) {
 
 // Certificates lists issued certificates in the given category.
 func (c *Client) Certificates(category uint32, cn string) ([]CertificateView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetCertificateInfo(ctx, &clientpb.CertificatesReq{
 		CategoryFilters: category,
@@ -606,7 +605,7 @@ type TunnelView struct {
 
 // CreateTunnel opens a tunnel for a session and returns its ID.
 func (c *Client) CreateTunnel(sessionID string) (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.CreateTunnel(ctx, &sliverpb.Tunnel{SessionID: sessionID})
 	if err != nil {
@@ -617,7 +616,7 @@ func (c *Client) CreateTunnel(sessionID string) (uint64, error) {
 
 // CloseTunnel tears a tunnel down.
 func (c *Client) CloseTunnel(tunnelID uint64, sessionID string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	_, err := c.RPC.CloseTunnel(ctx, &sliverpb.Tunnel{TunnelID: tunnelID, SessionID: sessionID})
 	return err
@@ -641,7 +640,7 @@ type ServiceDetailView struct {
 // ServiceDetail returns the full configuration of one Windows service, which is
 // what identifies a hijackable unquoted service path.
 func (c *Client) ServiceDetail(sessionID, name, hostname string) (ServiceDetailView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.ServiceDetail(ctx, &sliverpb.ServiceDetailReq{
 		ServiceInfo: &sliverpb.ServiceInfoReq{ServiceName: name, Hostname: hostname},
@@ -670,7 +669,7 @@ func (c *Client) ServiceDetail(sessionID, name, hostname string) (ServiceDetailV
 
 // StartServiceByName starts a service by its service name rather than by path.
 func (c *Client) StartServiceByName(sessionID, name, hostname string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.StartServiceByName(ctx, &sliverpb.StartServiceByNameReq{
 		ServiceInfo: &sliverpb.ServiceInfoReq{ServiceName: name, Hostname: hostname},
@@ -693,7 +692,7 @@ func (c *Client) StartServiceByName(sessionID, name, hostname string) error {
 // encoder the implant used. Combined with offline parsing this is how SAM,
 // SECURITY and SYSTEM are collected for credential extraction.
 func (c *Client) RegistryReadHive(sessionID, rootHive, requestedHive string) ([]byte, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*opTimeout)
+	ctx, cancel := rpcCtx(5 * opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryReadHive(ctx, &sliverpb.RegistryReadHiveReq{
 		RootHive:      rootHive,

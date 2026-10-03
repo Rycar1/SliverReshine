@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"errors"
 	"time"
 
@@ -40,7 +39,7 @@ func beaconTaskToView(t *clientpb.BeaconTask) *BeaconTaskView {
 
 // RenameSession renames an interactive session.
 func (c *Client) RenameSession(sessionID, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err := c.RPC.Rename(ctx, &clientpb.RenameReq{
 		SessionID: sessionID,
@@ -51,7 +50,7 @@ func (c *Client) RenameSession(sessionID, name string) error {
 
 // RenameBeacon renames a beacon.
 func (c *Client) RenameBeacon(beaconID, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err := c.RPC.Rename(ctx, &clientpb.RenameReq{
 		BeaconID: beaconID,
@@ -62,7 +61,7 @@ func (c *Client) RenameBeacon(beaconID, name string) error {
 
 // RmBeacon removes a beacon from the server.
 func (c *Client) RmBeacon(beaconID string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err := c.RPC.RmBeacon(ctx, &clientpb.Beacon{ID: beaconID})
 	return err
@@ -70,7 +69,7 @@ func (c *Client) RmBeacon(beaconID string) error {
 
 // BeaconTasks lists the task queue of a beacon.
 func (c *Client) BeaconTasks(beaconID string) ([]BeaconTaskView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.GetBeaconTasks(ctx, &clientpb.Beacon{ID: beaconID})
 	if err != nil {
@@ -90,7 +89,7 @@ func (c *Client) BeaconTasks(beaconID string) ([]BeaconTaskView, error) {
 
 // BeaconTaskContent fetches the full content of a single beacon task.
 func (c *Client) BeaconTaskContent(taskID string) (*BeaconTaskView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.GetBeaconTaskContent(ctx, &clientpb.BeaconTask{ID: taskID})
 	if err != nil {
@@ -115,7 +114,7 @@ func (c *Client) ReconfigureSession(sessionID string, reconnectSeconds int64) er
 	if reconnectSeconds < 0 {
 		return errors.New("reconnect interval cannot be negative")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.Reconfigure(ctx, &sliverpb.ReconfigureReq{
 		ReconnectInterval: reconnectSeconds * int64(time.Second),
@@ -134,7 +133,7 @@ func (c *Client) ReconfigureSession(sessionID string, reconnectSeconds int64) er
 // on its next check-in. Returns true when the request was queued asynchronously
 // (beacon mode); the new session then appears in the session list on check-in.
 func (c *Client) OpenSessionFromBeacon(beaconID string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.OpenSession(ctx, &sliverpb.OpenSession{
 		C2S:     []string{},
@@ -149,7 +148,7 @@ func (c *Client) OpenSessionFromBeacon(beaconID string) (bool, error) {
 
 // CloseSession closes an interactive session without killing the remote process.
 func (c *Client) CloseSession(sessionID string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	_, err := c.RPC.CloseSession(ctx, &sliverpb.CloseSession{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -159,7 +158,7 @@ func (c *Client) CloseSession(sessionID string) error {
 
 // MonitorStart enables dead-session monitoring (watchtower) on the server.
 func (c *Client) MonitorStart() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.MonitorStart(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -173,7 +172,7 @@ func (c *Client) MonitorStart() error {
 
 // MonitorStop disables dead-session monitoring on the server.
 func (c *Client) MonitorStop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	_, err := c.RPC.MonitorStop(ctx, &commonpb.Empty{})
 	return err

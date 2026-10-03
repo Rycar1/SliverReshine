@@ -1,9 +1,7 @@
 package sliver
 
 import (
-	"context"
 	"errors"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -11,7 +9,7 @@ import (
 
 // Backdoor plants a payload in a file on the session (Windows only).
 func (c *Client) Backdoor(sessionID, filePath, profileName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Backdoor(ctx, &clientpb.BackdoorReq{
 		FilePath:    filePath,
@@ -31,7 +29,7 @@ func (c *Client) Backdoor(sessionID, filePath, profileName string) error {
 // ReferenceDLL and TargetDLL are optional in-memory payloads; when omitted the
 // reference DLL is downloaded from the session's reference_dll_path.
 func (c *Client) HijackDLL(sessionID, referenceDLLPath, targetLocation string, referenceDLL, targetDLL []byte, profileName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.HijackDLL(ctx, &clientpb.DllHijackReq{
 		ReferenceDLLPath: referenceDLLPath,
@@ -58,7 +56,7 @@ type ShellcodeRDIView struct {
 
 // ShellcodeRDI converts a DLL to position-independent shellcode (no session required).
 func (c *Client) ShellcodeRDI(data []byte, functionName, arguments string) (*ShellcodeRDIView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.ShellcodeRDI(ctx, &clientpb.ShellcodeRDIReq{
 		Data:         data,

@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -27,12 +26,6 @@ import (
 //
 // Sliver's own client makes the same distinction: it calls ExecuteWindows
 // whenever it wants a window hidden (client/command/exec/execute.go).
-
-const (
-	// execDefaultTimeout is the budget for a one-shot spawn that is not one of
-	// the long-running operations with a budget of its own.
-	execDefaultTimeout = 120 * time.Second
-)
 
 // errUnknownMessageType is what the server reports when the implant did not
 // understand the message it was sent. It is the signal that a target predates
@@ -176,7 +169,7 @@ func (c *Client) execRawOn(sessionID, osName, path string, args []string, op tim
 // execWindows starts the process with HideWindow set, so no console window
 // appears on the target's desktop.
 func (c *Client) execWindows(sessionID, path string, args []string, op time.Duration) (*ExecResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), op)
+	ctx, cancel := rpcCtx(op)
 	defer cancel()
 
 	resp, err := c.RPC.ExecuteWindows(ctx, &sliverpb.ExecuteWindowsReq{
@@ -196,7 +189,7 @@ func (c *Client) execWindows(sessionID, path string, args []string, op time.Dura
 // Windows it cannot suppress the console window -- see the note at the top of
 // this file.
 func (c *Client) execPlain(sessionID, path string, args []string, op time.Duration) (*ExecResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), op)
+	ctx, cancel := rpcCtx(op)
 	defer cancel()
 
 	resp, err := c.RPC.Execute(ctx, &sliverpb.ExecuteReq{

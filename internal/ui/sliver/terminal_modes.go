@@ -1,12 +1,10 @@
 package sliver
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 )
@@ -241,7 +239,7 @@ type sessionInfo struct {
 
 // sessionInfo looks a session up by ID.
 func (c *Client) sessionInfo(sessionID string) (*sessionInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	sessions, err := c.RPC.GetSessions(ctx, &commonpb.Empty{})
 	if err != nil {

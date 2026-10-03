@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
@@ -12,7 +11,7 @@ import (
 // of days past their next scheduled check-in. Mirrors the official client's
 // `beacons prune` command. Returns the number of beacons removed.
 func (c *Client) PruneBeacons(days int) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	beacons, err := c.RPC.GetBeacons(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -40,7 +39,7 @@ func (c *Client) PruneBeacons(days int) (int, error) {
 
 // PruneSessions kills all sessions flagged as dead. Returns the number pruned.
 func (c *Client) PruneSessions() (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	sessions, err := c.RPC.GetSessions(ctx, &commonpb.Empty{})
 	if err != nil {

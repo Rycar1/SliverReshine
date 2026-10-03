@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -17,7 +16,7 @@ type RegReadResult struct {
 
 // RegistryRead reads a registry value on a windows session.
 func (c *Client) RegistryRead(sessionID, hive, path, key string) (*RegReadResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryRead(ctx, &sliverpb.RegistryReadReq{
 		Hive:    hive,
@@ -38,7 +37,7 @@ func (c *Client) RegistryRead(sessionID, hive, path, key string) (*RegReadResult
 // valueType: "string" (default), "dword", "qword"
 // (Sliver v1.15.16 的 RegistryWriteReq 不含 BinaryValue 字段)
 func (c *Client) RegistryWrite(sessionID, hive, path, key, value, valueType string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	req := &sliverpb.RegistryWriteReq{
 		Hive:    hive,
@@ -68,7 +67,7 @@ func (c *Client) RegistryWrite(sessionID, hive, path, key, value, valueType stri
 
 // RegistryListSubKeys lists subkeys under a registry path on a windows session.
 func (c *Client) RegistryListSubKeys(sessionID, hive, path string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryListSubKeys(ctx, &sliverpb.RegistrySubKeyListReq{
 		Hive:    hive,
@@ -91,7 +90,7 @@ func (c *Client) RegistryListSubKeys(sessionID, hive, path string) ([]string, er
 
 // RegistryListValues lists value names under a registry path on a windows session.
 func (c *Client) RegistryListValues(sessionID, hive, path string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryListValues(ctx, &sliverpb.RegistryListValuesReq{
 		Hive:    hive,

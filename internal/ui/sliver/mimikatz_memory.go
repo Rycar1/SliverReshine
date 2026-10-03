@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -181,7 +180,7 @@ func u32(b []byte, off int) uint32 {
 // then does nothing, which is why the constant lives beside the loader rather
 // than at the call site.
 func (c *Client) rdiShellcode(dll []byte) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeoutExt)
+	ctx, cancel := rpcCtx(opTimeoutExt)
 	defer cancel()
 	resp, err := c.RPC.ShellcodeRDI(ctx, &clientpb.ShellcodeRDIReq{
 		Data:         dll,

@@ -1,10 +1,8 @@
 package sliver
 
 import (
-	"context"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -72,7 +70,7 @@ func pivotListenerToView(l *sliverpb.PivotListener) PivotListenerView {
 
 // PivotSessionListeners lists all pivot listeners running on the session.
 func (c *Client) PivotSessionListeners(sessionID string) ([]PivotListenerView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.PivotSessionListeners(ctx, &sliverpb.PivotListenersReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -92,7 +90,7 @@ func (c *Client) PivotSessionListeners(sessionID string) ([]PivotListenerView, e
 
 // PivotStartListener instructs the session to start a pivot listener.
 func (c *Client) PivotStartListener(sessionID, pivotType, bindAddress string) (PivotListenerView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.PivotStartListener(ctx, &sliverpb.PivotStartListenerReq{
 		Type:        pivotTypeFromString(pivotType),
@@ -110,7 +108,7 @@ func (c *Client) PivotStartListener(sessionID, pivotType, bindAddress string) (P
 
 // PivotStopListener instructs the session to stop a pivot listener.
 func (c *Client) PivotStopListener(sessionID string, id uint32) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	_, err := c.RPC.PivotStopListener(ctx, &sliverpb.PivotStopListenerReq{
 		ID:      id,
@@ -161,7 +159,7 @@ func pivotGraphEntryToView(e *clientpb.PivotGraphEntry) PivotGraphEntryView {
 
 // PivotGraph returns the server-wide pivot graph.
 func (c *Client) PivotGraph() (PivotGraphView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.PivotGraph(ctx, &commonpb.Empty{})
 	if err != nil {

@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -37,7 +36,7 @@ func privilegeToView(p *sliverpb.WindowsPrivilegeEntry) WindowsPrivilegeView {
 
 // GetPrivs lists the privilege information of the session's process.
 func (c *Client) GetPrivs(sessionID string) ([]WindowsPrivilegeView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.GetPrivs(ctx, &sliverpb.GetPrivsReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -67,7 +66,7 @@ func (c *Client) GetPrivs(sessionID string) ([]WindowsPrivilegeView, error) {
 //
 // Sliver only answers this on Windows: MsgGetPrivsReq has no handler elsewhere.
 func (c *Client) SessionIntegrity(sessionID string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetPrivs(ctx, &sliverpb.GetPrivsReq{
 		Request: requestFor(sessionID, 30*time.Second),
@@ -138,7 +137,7 @@ func (c *Client) ElevateToSystem(sessionID, hostingProcess string, wait time.Dur
 
 // CurrentTokenOwner retrieves the owner of the session's thread token.
 func (c *Client) CurrentTokenOwner(sessionID string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.CurrentTokenOwner(ctx, &sliverpb.CurrentTokenOwnerReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -167,7 +166,7 @@ func (c *Client) ExecuteToken(sessionID, path string, args []string, output bool
 // RunAs is used to reach a different user's context, so a window here is both a
 // giveaway and a visible artefact attributed to the wrong account.
 func (c *Client) RunAs(sessionID, username, processName, args string) (string, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), execDefaultTimeout)
+	ctx, cancel := rpcCtx(execDefaultTimeout)
 	defer cancel()
 	resp, err := c.RPC.RunAs(ctx, &sliverpb.RunAsReq{
 		Username:    username,

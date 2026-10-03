@@ -1,9 +1,7 @@
 package sliver
 
 import (
-	"context"
 	"errors"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -11,7 +9,7 @@ import (
 
 // Msf generates an MSF payload and executes it on the session.
 func (c *Client) Msf(sessionID, payload, lhost string, lport uint32, encoder string, iterations int32) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Msf(ctx, &clientpb.MSFReq{
 		Payload:    payload,
@@ -32,7 +30,7 @@ func (c *Client) Msf(sessionID, payload, lhost string, lport uint32, encoder str
 
 // MsfRemote injects an MSF payload into a remote process on the session.
 func (c *Client) MsfRemote(sessionID, payload, lhost string, lport uint32, encoder string, iterations int32, pid uint32) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.MsfRemote(ctx, &clientpb.MSFRemoteReq{
 		Payload:    payload,

@@ -1,7 +1,6 @@
 package sliver
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -71,7 +70,7 @@ func unixTimeString(sec int64) string {
 
 // Sessions lists active interactive sessions.
 func (c *Client) Sessions() ([]SessionView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.GetSessions(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -89,7 +88,7 @@ func (c *Client) Sessions() ([]SessionView, error) {
 
 // Beacons lists active beacons.
 func (c *Client) Beacons() ([]BeaconView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.GetBeacons(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -107,7 +106,7 @@ func (c *Client) Beacons() ([]BeaconView, error) {
 
 // Beacon fetches a single beacon by id.
 func (c *Client) Beacon(id string) (*BeaconView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.GetBeacon(ctx, &clientpb.Beacon{ID: id})
 	if err != nil {
@@ -122,7 +121,7 @@ func (c *Client) Beacon(id string) (*BeaconView, error) {
 
 // Jobs lists active listener jobs.
 func (c *Client) Jobs() ([]JobView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.GetJobs(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -165,7 +164,7 @@ func (c *Client) Jobs() ([]JobView, error) {
 // UI-created HTTP listener incapable of serving a stage -- the file was
 // published, the listener reported success, and every fetch returned 404.
 func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, website, domain string) (uint32, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	switch jobType {
 	case "mtls":
@@ -233,7 +232,7 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, webs
 
 // StopJob stops a job by ID.
 func (c *Client) StopJob(jobID uint32) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	_, err := c.RPC.KillJob(ctx, &clientpb.KillJobReq{ID: jobID})
 	return err
@@ -277,7 +276,7 @@ func eventToView(e *clientpb.Event) EventView {
 // empty because events rarely arrive within that window. We use 10s
 // to give events a reasonable chance to arrive.
 func (c *Client) Events() ([]EventView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	stream, err := c.RPC.Events(ctx, &commonpb.Empty{})
 	if err != nil {

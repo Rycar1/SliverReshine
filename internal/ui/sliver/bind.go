@@ -1,11 +1,9 @@
 package sliver
 
 import (
-	"context"
 	"errors"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 )
@@ -46,7 +44,7 @@ func (c *Client) DialBind(host string, port uint32) (BindListenerView, error) {
 		return BindListenerView{}, errors.New("port must be between 1 and 65535")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 
 	resp, err := c.RPC.DialBind(ctx, &clientpb.DialBindReq{Host: host, Port: port})

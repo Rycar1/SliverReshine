@@ -12,22 +12,6 @@ import (
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
 )
 
-// opTimeoutExt — extended operations use a longer timeout for assembly/DLL execution
-const opTimeoutExt = 120 * time.Second
-
-// Sliver multiplexes long-running operations over a single C2 channel whose
-// default ceiling is 30s (server/rpc/rpc.go minTimeout). A process dump has to
-// push the whole minidump through that same channel, and a migration has to
-// compile a fresh shellcode first, so both need their own budget.
-const (
-	// Builds a shellcode, then has the implant inject it.
-	migrateTimeout = 6 * time.Minute
-	// inject timeout sent through the implant (seconds, converted below).
-	migrateInjectTimeout = 4 * time.Minute
-	// Full-memory dumps of large processes legitimately take minutes.
-	dumpTimeout = 10 * time.Minute
-)
-
 // requestFor builds the commonpb.Request envelope for a session call.
 //
 // Timeout is in NANOSECONDS - the official client sends
@@ -52,7 +36,7 @@ type ExecAssemblyResult struct {
 }
 
 func (c *Client) ExecuteAssembly(sessionID string, assembly []byte, arguments, process string) (*ExecAssemblyResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeoutExt)
+	ctx, cancel := rpcCtx(opTimeoutExt)
 	defer cancel()
 	resp, err := c.RPC.ExecuteAssembly(ctx, &sliverpb.ExecuteAssemblyReq{
 		Assembly:  assembly,
@@ -92,7 +76,7 @@ type SideloadResult struct {
 // wrong path instead of at the flag that threw the output away. The process is
 // killed after the payload finishes either way, so nothing is left running.
 func (c *Client) Sideload(sessionID string, data []byte, processName, args, entryPoint string) (*SideloadResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeoutExt)
+	ctx, cancel := rpcCtx(opTimeoutExt)
 	defer cancel()
 	resp, err := c.RPC.Sideload(ctx, &sliverpb.SideloadReq{
 		Data:        data,
@@ -113,7 +97,7 @@ func (c *Client) Sideload(sessionID string, data []byte, processName, args, entr
 
 // --- SpawnDll — DLL injection ---
 func (c *Client) SpawnDll(sessionID string, data []byte, processName, args, entryPoint string) (*SideloadResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeoutExt)
+	ctx, cancel := rpcCtx(opTimeoutExt)
 	defer cancel()
 	resp, err := c.RPC.SpawnDll(ctx, &sliverpb.InvokeSpawnDllReq{
 		Data:        data,
@@ -150,7 +134,7 @@ func (c *Client) Migrate(sessionID string, pid uint32, procName string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), migrateTimeout)
+	ctx, cancel := rpcCtx(migrateTimeout)
 	defer cancel()
 	resp, err := c.RPC.Migrate(ctx, &clientpb.MigrateReq{
 		Pid:      pid,
@@ -174,7 +158,7 @@ func (c *Client) Migrate(sessionID string, pid uint32, procName string) error {
 // rawSession fetches the full session proto, which carries the OS, arch,
 // transport and active C2 that the migrate config has to reproduce.
 func (c *Client) rawSession(sessionID string) (*clientpb.Session, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 
 	sessions, err := c.RPC.GetSessions(ctx, &commonpb.Empty{})
@@ -238,7 +222,7 @@ type ProcessDumpResult struct {
 }
 
 func (c *Client) ProcessDump(sessionID string, pid int32) (*ProcessDumpResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), dumpTimeout)
+	ctx, cancel := rpcCtx(dumpTimeout)
 	defer cancel()
 	resp, err := c.RPC.ProcessDump(ctx, &sliverpb.ProcessDumpReq{
 		Pid:     pid,
@@ -262,7 +246,7 @@ func (c *Client) ProcessDump(sessionID string, pid int32) (*ProcessDumpResult, e
 
 // --- Impersonate — impersonate a user ---
 func (c *Client) Impersonate(sessionID, username string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Impersonate(ctx, &sliverpb.ImpersonateReq{
 		Username: username,
@@ -279,7 +263,7 @@ func (c *Client) Impersonate(sessionID, username string) error {
 
 // --- MakeToken — create a token with credentials ---
 func (c *Client) MakeToken(sessionID, username, password, domain string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MakeToken(ctx, &sliverpb.MakeTokenReq{
 		Username: username,
@@ -298,7 +282,7 @@ func (c *Client) MakeToken(sessionID, username, password, domain string) error {
 
 // --- RevToSelf — revert impersonation ---
 func (c *Client) RevToSelf(sessionID string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RevToSelf(ctx, &sliverpb.RevToSelfReq{
 		Request: &commonpb.Request{SessionID: sessionID},
@@ -319,7 +303,7 @@ func (c *Client) RevToSelf(sessionID string) error {
 // is nil. Always send a non-nil Config with the default HTTP C2 profile, mirroring
 // the official client (getsystem.go).
 func (c *Client) GetSystem(sessionID, hostingProcess string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.GetSystem(ctx, &clientpb.GetSystemReq{
 		HostingProcess: hostingProcess,
@@ -343,7 +327,7 @@ type PingResult struct {
 }
 
 func (c *Client) Ping(sessionID string) (*PingResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.Ping(ctx, &sliverpb.Ping{
 		Nonce:   int32(time.Now().UnixNano() & 0x7FFFFFFF),
@@ -360,7 +344,7 @@ func (c *Client) Ping(sessionID string) (*PingResult, error) {
 
 // --- DeleteImplantBuild — delete a built implant ---
 func (c *Client) DeleteImplantBuild(name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := rpcCtx(rpcDefault)
 	defer cancel()
 	_, err := c.RPC.DeleteImplantBuild(ctx, &clientpb.DeleteReq{Name: name})
 	return err
@@ -375,7 +359,7 @@ type RegenerateResult struct {
 }
 
 func (c *Client) Regenerate(implantName string) (*RegenerateResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Regenerate(ctx, &clientpb.RegenerateReq{ImplantName: implantName})
 	if err != nil {
@@ -414,7 +398,7 @@ type OperatorView struct {
 }
 
 func (c *Client) GetOperators() ([]OperatorView, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := rpcCtx(rpcQuick)
 	defer cancel()
 	resp, err := c.RPC.GetOperators(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -429,7 +413,7 @@ func (c *Client) GetOperators() ([]OperatorView, error) {
 
 // --- RegistryCreateKey — create a new registry key ---
 func (c *Client) RegistryCreateKey(sessionID, hive, path, key string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryCreateKey(ctx, &sliverpb.RegistryCreateKeyReq{
 		Hive:    hive,
@@ -448,7 +432,7 @@ func (c *Client) RegistryCreateKey(sessionID, hive, path, key string) error {
 
 // RegistryDeleteKey deletes a registry key or value on a windows session.
 func (c *Client) RegistryDeleteKey(sessionID, hive, path, key string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	ctx, cancel := rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryDeleteKey(ctx, &sliverpb.RegistryDeleteKeyReq{
 		Hive:    hive,

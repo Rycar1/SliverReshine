@@ -3,7 +3,6 @@ package sliver
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -34,7 +33,7 @@ func gzipEncode(data []byte) ([]byte, error) {
 
 // ExecuteShellcode injects raw shellcode into a process on the session.
 func (c *Client) ExecuteShellcode(sessionID string, data []byte, pid uint32, rwxPages bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Task(ctx, &sliverpb.TaskReq{
 		Data:     data,
@@ -54,7 +53,7 @@ func (c *Client) ExecuteShellcode(sessionID string, data []byte, pid uint32, rwx
 // profileBinary returns the implant binary bytes for a profile, reusing an existing
 // build when one exists and otherwise compiling a fresh implant.
 func (c *Client) profileBinary(profileName string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	profiles, err := c.RPC.ImplantProfiles(ctx, &commonpb.Empty{})
 	if err != nil {
@@ -133,7 +132,7 @@ func (c *Client) PsExec(sessionID, hostname, profileName, serviceName, serviceDe
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := rpcCtx(rpcLong)
 	defer cancel()
 	upload, err := c.RPC.Upload(ctx, &sliverpb.UploadReq{
 		Encoder: "gzip",

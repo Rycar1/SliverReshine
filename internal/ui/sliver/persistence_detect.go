@@ -40,6 +40,21 @@ func detectPersistence(module, stdout, stderr string, status uint32, name string
 	}
 	out := strings.TrimSpace(stdout)
 
+	switch {
+	case strings.HasPrefix(module, "win-"):
+		return detectPersistenceWindows(module, out, stderr, name)
+	case strings.HasPrefix(module, "linux-"):
+		return detectPersistenceLinux(module, out, name)
+	}
+	return false, ""
+}
+
+// detectPersistenceWindows answers presence for the Windows modules.
+//
+// It is the Windows half of detectPersistence, split out so the dispatcher
+// stays a dispatcher. Module names are win-prefixed by construction, which is
+// what the caller switches on.
+func detectPersistenceWindows(module, out, stderr, name string) (bool, string) {
 	switch module {
 	case "win-run-key", "win-run-key-hklm":
 		// reg query prints "<name>    REG_SZ    <data>"; the echoed key path can
@@ -180,6 +195,13 @@ func detectPersistence(module, stdout, stderr string, status uint32, name string
 			return false, ""
 		}
 		return false, ""
+	}
+	return false, ""
+}
+
+// detectPersistenceLinux answers presence for the POSIX modules.
+func detectPersistenceLinux(module, out, name string) (bool, string) {
+	switch module {
 	case "linux-cron":
 		for _, line := range splitLines(out) {
 			if strings.Contains(line, "@reboot") {

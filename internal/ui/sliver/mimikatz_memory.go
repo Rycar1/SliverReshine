@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
@@ -301,20 +300,28 @@ func (c *Client) runMimikatzInMemory(sessionID, command string, payload []byte, 
 
 // cleanupStagedFile removes a file this package wrote on the target.
 //
-// A failed cleanup is not an error to the caller: the harvest already succeeded,
-// and reporting "ran fine but could not tidy up" as a failure would throw away
-// usable credentials. The caller appends the note to the run log instead,
-// because a payload left on disk is something the operator needs to know about.
+// It goes through the Rm RPC rather than `cmd.exe /c del`. The shell form was
+// wrong in a way that made cleanup silently fail for every path: it built the
+// command with strconv.Quote, which is a *Go* string literal, so `C:\Temp\a.bin`
+// became `"C:\\Temp\\a.bin"`. cmd.exe has no backslash escape and does not strip
+// those quotes, so it looked for a path with doubled separators and reported
+// "The filename, directory name, or volume label syntax is incorrect." -- measured
+// against real cmd.exe for both a plain path and one containing a space.
+//
+// Quoting it the way cmd wants is not the fix either: a target-controlled path may
+// contain `&`, and an argument with no space is handed to cmd.exe bare, so the
+// rest of the path would run as a second command. Not passing a shell is the fix.
+//
+// A failed cleanup is still not an error to the caller: the harvest already
+// succeeded, and reporting "ran fine but could not tidy up" as a failure would
+// throw away usable credentials. The caller appends the note to the run log
+// instead, because a payload left on disk is something the operator needs to know
+// about.
 func (c *Client) cleanupStagedFile(sessionID, path string) string {
 	if path == "" {
 		return ""
 	}
-	// cmd.exe rather than a shell RPC: the delete has to work on a session with
-	// no interactive shell, and quoting a Windows path with spaces through a
-	// shell wrapper is one more place to get the escaping wrong.
-	_, err := c.executeWithTimeout(sessionID, "cmd.exe",
-		[]string{"/c", "del /f /q " + strconv.Quote(path)}, opTimeoutExt)
-	if err != nil {
+	if err := c.Rm(sessionID, path, false); err != nil {
 		return "载荷仍留在目标上：" + path + "（删除失败：" + err.Error() + "）"
 	}
 	return ""

@@ -56,15 +56,33 @@ func MaterializeServer() (string, error) {
 	target := filepath.Join(dir, name)
 
 	if st, err := os.Stat(target); err == nil && st.Size() > 0 {
+		// The file is verified against the payload it claims to be, not merely
+		// inspected for an executable header.
+		//
+		// The name is content-addressed and the launcher logs it, so an attacker
+		// who can create a file in this directory knows exactly what to call it.
+		// Four magic bytes are then trivially satisfied by any PE or ELF, and the
+		// file is executed as `sliver-server daemon`, `unpack` and `operator`.
+		// MkdirAll(0o700) does not narrow anything on Windows (Chmod there only
+		// toggles the read-only bit) and never tightens a pre-existing directory.
+		//
+		// Hashing the whole file costs one pass over it at startup, which is the
+		// price of not exec'ing an arbitrary binary.
 		if err := verifyExecutableFormat(target); err == nil {
-			_ = os.Chmod(target, 0o755)
-			return target, nil
+			if err := verifyExtractedContent(target); err == nil {
+				_ = os.Chmod(target, 0o755)
+				return target, nil
+			} else {
+				log.Printf("[launch] discarding %s: %v", target, err)
+				_ = os.Remove(target)
+			}
 		}
-		// A file that exists but is not an executable for this host is either
-		// a leftover from an earlier build or a truncated extraction. Both are
-		// safe to discard: the name is content-addressed, so re-extracting
-		// produces exactly the file this name promises.
-		log.Printf("[launch] discarding %s: not a %s executable, re-extracting", target, runtime.GOOS)
+		// A file that exists but is neither a host executable nor the expected
+		// content is a leftover from an earlier build, a truncated extraction, or
+		// something placed here deliberately. All are safe to discard: the name
+		// is content-addressed, so re-extracting produces exactly the file this
+		// name promises.
+		log.Printf("[launch] discarding %s: not a usable %s server, re-extracting", target, runtime.GOOS)
 		_ = os.Remove(target)
 	}
 
@@ -72,7 +90,15 @@ func MaterializeServer() (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	tmp := target + ".part"
+	// A unique temp name in the same directory, created with O_EXCL so an
+	// existing file or a symlink placed at a predictable path cannot be
+	// truncated or followed. The old name was target+".part" -- fixed, and
+	// written with O_CREATE|O_TRUNC|O_WRONLY, so a hardlink planted there had
+	// its inode rewritten with the extracted server.
+	tmp, err := tempExtractPath(dir)
+	if err != nil {
+		return "", err
+	}
 	if err := writeGzip(embed.Payload, tmp); err != nil {
 		_ = os.Remove(tmp)
 		return "", fmt.Errorf("extract embedded server: %w", err)
@@ -81,6 +107,13 @@ func MaterializeServer() (string, error) {
 		_ = os.Remove(tmp)
 		return "", fmt.Errorf("embedded server payload does not match this host: %w (build carries %s)",
 			err, embeddedPlatforms())
+	}
+	// The freshly written file is checked against the payload too, so a truncated
+	// or corrupted extraction is caught here rather than becoming a binary that is
+	// reused and executed on every later start.
+	if err := verifyExtractedContent(tmp); err != nil {
+		_ = os.Remove(tmp)
+		return "", fmt.Errorf("extracted server does not match the embedded payload: %w", err)
 	}
 	if err := os.Rename(tmp, target); err != nil {
 		_ = os.Remove(tmp)
@@ -109,6 +142,65 @@ var (
 	magicMachO   = []byte{0xFE, 0xED, 0xFA, 0xCE}
 	magicMachO64 = []byte{0xFE, 0xED, 0xFA, 0xCF}
 )
+
+// embeddedServerDigest is the SHA-256 of the *uncompressed* server binary the
+// launcher carries. It is computed once from the embedded payload, which is the
+// same bytes the extraction produces, so a reused file can be compared against it.
+var embeddedServerDigest, embeddedServerSize = func() ([]byte, int64) {
+	if len(embed.Payload) == 0 {
+		return nil, 0
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(embed.Payload))
+	if err != nil {
+		return nil, 0
+	}
+	defer zr.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, zr)
+	if err != nil {
+		return nil, 0
+	}
+	return h.Sum(nil), n
+}()
+
+// verifyExtractedContent reports whether the file at path is byte-identical to
+// the server this launcher carries.
+//
+// It exists because the extracted file is executed, and its name is derived from
+// the payload digest and printed in the log -- so the name is guessable and an
+// executable-header check is not a defence. A digest comparison is.
+//
+// When the launcher carries no payload, or the digest could not be computed,
+// there is nothing to compare against and the check does not fail: the caller
+// only reaches here in the embedded-server path, and refusing there would turn a
+// build without an embedded server into a startup failure.
+func verifyExtractedContent(path string) error {
+	if embeddedServerDigest == nil {
+		return nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if st.Size() != int64(embeddedServerSize) {
+		return fmt.Errorf("size is %d bytes, expected %d", st.Size(), embeddedServerSize)
+	}
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+	if !bytes.Equal(h.Sum(nil), embeddedServerDigest) {
+		return fmt.Errorf("sha256 does not match the embedded server")
+	}
+	return nil
+}
 
 // verifyExecutableFormat checks that path begins with a magic number the host
 // OS can execute.
@@ -365,6 +457,25 @@ func is32BitImage(head []byte, path string) bool {
 }
 
 // writeGzip decompresses a gzip stream to path.
+// tempExtractPath reserves a unique file in dir for the extraction.
+//
+// O_EXCL is the point: it fails if the path already exists, so a file or symlink
+// planted at the name cannot be opened and truncated. The name is unpredictable,
+// which is what makes the exclusive create meaningful rather than a race against
+// a guessable path.
+func tempExtractPath(dir string) (string, error) {
+	f, err := os.CreateTemp(dir, ".sliver-server-*.part")
+	if err != nil {
+		return "", err
+	}
+	name := f.Name()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
 func writeGzip(payload []byte, path string) error {
 	zr, err := gzip.NewReader(newByteReader(payload))
 	if err != nil {
@@ -372,7 +483,10 @@ func writeGzip(payload []byte, path string) error {
 	}
 	defer zr.Close()
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
+	// The file already exists -- it was created exclusively by tempExtractPath --
+	// so this opens it for writing without O_CREATE, and 0600 until the rename,
+	// rather than leaving a world-readable partially-written binary in place.
+	f, err := os.OpenFile(path, os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}

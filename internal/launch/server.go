@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,6 +53,16 @@ type Server struct {
 	cmd  *exec.Cmd
 	bin  string
 
+	// mu guards the exit state below. cmd.Wait() writes Cmd.ProcessState, and
+	// the launcher reads it from another goroutine to report "the daemon exited
+	// early" -- an unsynchronised read/write pair on the same field, which is a
+	// data race even though both sides only test it.
+	//
+	// The Wait goroutine publishes here instead, so no reader touches
+	// ProcessState at all.
+	mu      sync.Mutex
+	exited  bool
+	exitErr error
 	// ProfilePath is the generated sliver-client profile the console loads.
 	ProfilePath string
 	// Version is the version string read back from the generated profile
@@ -232,8 +243,19 @@ func (s *Server) run(ctx context.Context, timeout time.Duration, args ...string)
 // "no marker" as fine reuses a toolchain of unknown vintage.
 func (s *Server) toolchainStaleReason() string {
 	goRoot := filepath.Join(s.opts.StateDir, "go")
-	if _, err := os.Stat(filepath.Join(goRoot, "bin")); err != nil {
-		return "no unpacked toolchain"
+	// Both binaries are required, not just the directory. Testing the directory
+	// alone treats a tree that stopped after go.zip as complete, and the marker
+	// below then pins that state permanently: the next start sees a current
+	// marker and skips the unpack that would have repaired it. Checking
+	// completeness here means a broken tree re-unpacks on the next start even
+	// when its marker says it is current.
+	for _, tool := range []string{"go", "garble"} {
+		if runtime.GOOS == "windows" {
+			tool += ".exe"
+		}
+		if _, err := os.Stat(filepath.Join(goRoot, "bin", tool)); err != nil {
+			return fmt.Sprintf("toolchain incomplete: %s is missing", tool)
+		}
 	}
 
 	marker := filepath.Join(s.opts.StateDir, versionFile)
@@ -318,8 +340,29 @@ func (s *Server) unpack(ctx context.Context) error {
 			return fmt.Errorf("unpack failed: %w: %s", err, tail(out, 2000))
 		}
 	}
-	if _, err := os.Stat(filepath.Join(s.opts.StateDir, "go", "bin")); err != nil {
-		return fmt.Errorf("compiler assets missing after unpack: %w", err)
+	// The check is for the binaries that actually have to exist, not for the
+	// go/bin directory.
+	//
+	// `unpack` used to be judged by that directory alone, and it is created by
+	// the first of three extractions: setupGo unzips go.zip (which makes go/bin),
+	// then src.zip, then writes garble -- and it returns early on either of the
+	// last two. Setup then discards setupGo's error, logs setupZig's, and writes
+	// the version marker regardless, so a run that stopped after go.zip left
+	// go/bin present and the marker claiming the toolchain was current. The
+	// console reported "compiler assets ready", and the state was permanent:
+	// toolchainStaleReason compares against that marker, so the next start
+	// logged "already unpacked" and never retried.
+	//
+	// Every implant build then failed with a compiler error that named neither
+	// the cause nor the fix.
+	for _, tool := range []string{"go", "garble"} {
+		if runtime.GOOS == "windows" {
+			tool += ".exe"
+		}
+		p := filepath.Join(s.opts.StateDir, "go", "bin", tool)
+		if _, err := os.Stat(p); err != nil {
+			return fmt.Errorf("compiler assets incomplete after unpack: %s is missing: %w", tool, err)
+		}
 	}
 	// The embedded toolchain archives do not preserve the executable bit on
 	// every entry, and `go` in particular unpacks as 0644. Windows never
@@ -396,7 +439,15 @@ func (s *Server) spawn(ctx context.Context) error {
 	}
 	s.cmd = cmd
 	go func() {
-		_ = cmd.Wait()
+		// The result is published under the mutex, and kept rather than
+		// discarded: this was `_ = cmd.Wait()`, so a daemon that died from a
+		// signal or a non-zero exit was indistinguishable from one that stopped
+		// cleanly, and nothing recorded why.
+		err := cmd.Wait()
+		s.mu.Lock()
+		s.exited = true
+		s.exitErr = err
+		s.mu.Unlock()
 		logFile.Close()
 	}()
 	log.Printf("[launch] sliver daemon started (pid %d), log: %s", cmd.Process.Pid, s.opts.LogPath)
@@ -482,6 +533,24 @@ func portInUseError(addr string, cause error, holder string) error {
 	return fmt.Errorf("gRPC address %s is already in use by %s. %s", addr, holder, consequence)
 }
 
+// daemonExited reports whether the daemon process has been reaped.
+//
+// It reads state published by the Wait goroutine rather than Cmd.ProcessState,
+// because that field is written by Wait and reading it from here is a data race.
+func (s *Server) daemonExited() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exited
+}
+
+// daemonExitReason describes how the daemon stopped, for the error the operator
+// sees. A nil error means it exited on its own with status 0.
+func (s *Server) daemonExitReason() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exitErr
+}
+
 // waitForPort blocks until the multiplayer listener accepts connections.
 func (s *Server) waitForPort(ctx context.Context) error {
 	addr := net.JoinHostPort(s.opts.MultiplayerHost, fmt.Sprint(s.opts.MultiplayerPort))
@@ -495,8 +564,8 @@ func (s *Server) waitForPort(ctx context.Context) error {
 			conn.Close()
 			return nil
 		}
-		if s.cmd != nil && s.cmd.ProcessState != nil && s.cmd.ProcessState.Exited() {
-			return fmt.Errorf("sliver daemon exited early, see %s", s.opts.LogPath)
+		if s.daemonExited() {
+			return fmt.Errorf("sliver daemon exited early (%v), see %s", s.daemonExitReason(), s.opts.LogPath)
 		}
 		time.Sleep(400 * time.Millisecond)
 	}
@@ -554,10 +623,34 @@ func (s *Server) generateProfile(ctx context.Context) error {
 		}
 	}()
 
-	if err := cmd.Wait(); err != nil {
-		if _, statErr := os.Stat(target); statErr != nil {
-			return fmt.Errorf("operator generation failed: %w: %s", err, tail(buf.String(), 2000))
+	waitErr := cmd.Wait()
+
+	// Success is judged by whether the profile is complete and usable, not by
+	// whether the file happens to exist.
+	//
+	// The old check was: if the generator exited non-zero AND the file was
+	// absent, report failure. A generator that wrote a partial file and then
+	// died therefore returned nil and logged "operator profile generated",
+	// while the file failed to parse -- and the damage was permanent, because
+	// Start stats that path and skips regeneration on every later run. The file
+	// holds the operator's mTLS key and token.
+	//
+	// So the file is parsed here. A partial write fails that parse and the
+	// caller is told, rather than the console starting against a profile it
+	// cannot use.
+	if _, err := ReadProfile(target); err != nil {
+		how := "the generator reported success"
+		if waitErr != nil {
+			how = waitErr.Error()
 		}
+		return fmt.Errorf("operator profile at %s is not usable (%s): %w: %s",
+			target, how, err, tail(buf.String(), 2000))
+	}
+	if waitErr != nil {
+		// Usable but a non-zero exit: worth saying, since the generator may have
+		// signalled a problem with part of what it did.
+		log.Printf("[launch] operator generator exited non-zero (%v) but wrote a usable profile: %s",
+			waitErr, target)
 	}
 	log.Printf("[launch] operator profile generated: %s", target)
 	return nil

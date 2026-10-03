@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"c2tool/internal/ui/sliver"
@@ -32,6 +33,15 @@ func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
+		// A body past the middleware cap is not a malformed request, so it must
+		// not be answered with 400. Reporting it as 413 keeps the operator's
+		// client able to tell "my payload is too big" from "my JSON is wrong",
+		// which are fixed differently.
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeErr(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return false
+		}
 		writeErr(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return false
 	}

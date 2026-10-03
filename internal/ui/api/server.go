@@ -336,6 +336,17 @@ const maxRequestBody = 128 << 20
 func withBodyLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil {
+			// A declared length past the cap is refused before a single byte is
+			// read. MaxBytesReader below catches it too, but only after the
+			// handler has already pulled maxRequestBody into memory, and the
+			// point of the cap is that an oversized request costs nothing.
+			// ContentLength is -1 when the length is unknown (chunked), which
+			// falls through to MaxBytesReader as before.
+			if r.ContentLength > maxRequestBody {
+				writeErr(w, http.StatusRequestEntityTooLarge,
+					"request body too large")
+				return
+			}
 			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 		}
 		next.ServeHTTP(w, r)

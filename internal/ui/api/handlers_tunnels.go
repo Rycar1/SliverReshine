@@ -1,6 +1,7 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"net/http"
 	"strconv"
 )
@@ -54,20 +55,12 @@ func (s *Server) handleRportFwdStop(w http.ResponseWriter, r *http.Request) {
 // Certificates
 // ---------------------------------------------------------------------------
 
-func (s *Server) handleCACertificates(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCACertificates(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	certs, err := c.CertificateAuthority()
 	writeResult(w, map[string]any{"certificates": certs}, err)
 }
 
-func (s *Server) handleCertificates(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCertificates(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	category := uint32(0)
 	if v := r.URL.Query().Get("category"); v != "" {
 		n, err := strconv.ParseUint(v, 10, 32)

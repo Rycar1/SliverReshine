@@ -8,11 +8,7 @@ import (
 
 // --- Prune ---
 
-func (s *Server) handlePruneBeacons(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handlePruneBeacons(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Days int `json:"days"`
 	}
@@ -27,31 +23,19 @@ func (s *Server) handlePruneBeacons(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, map[string]any{"success": true, "pruned": pruned}, err)
 }
 
-func (s *Server) handlePruneSessions(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handlePruneSessions(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	pruned, err := c.PruneSessions()
 	writeResult(w, map[string]any{"success": true, "pruned": pruned}, err)
 }
 
 // --- Aliases ---
 
-func (s *Server) handleAliases(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleAliases(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	aliases, err := sliver.ListAliases()
 	writeResult(w, map[string]any{"aliases": aliases}, err)
 }
 
-func (s *Server) handleAliasInstall(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleAliasInstall(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		BundleB64 string `json:"bundle_b64"`
 	}
@@ -70,11 +54,7 @@ func (s *Server) handleAliasInstall(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "alias": alias})
 }
 
-func (s *Server) handleAliasRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleAliasRemove(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
 		writeErr(w, http.StatusBadRequest, "missing alias name")

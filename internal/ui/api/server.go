@@ -175,6 +175,29 @@ func (s *Server) clientFor(w http.ResponseWriter, r *http.Request) *sliver.Clien
 	return c.WithRequestContext(r.Context())
 }
 
+// withClient adapts a handler that needs a live sliver-server connection.
+//
+// These handlers all opened with the same two lines -- take the request-scoped
+// client, return a 503 if there is none -- which is the kind of repeated
+// conditional on the same shape the review flagged as a missing dispatcher.
+// Registering through this wrapper moves the requirement into the route table:
+// a handler that needs a client cannot be registered without one, and the 503
+// is written in exactly one place.
+//
+// The client is the request-scoped view from clientFor, so the deadline and
+// cancellation behaviour described there is unchanged. handleTunnelClose and
+// the sessionID-based handlers keep their own guard: they must validate the
+// request before deciding whether a connection is even relevant.
+func (s *Server) withClient(h func(c *sliver.Client, w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := s.clientFor(w, r)
+		if c == nil {
+			return
+		}
+		h(c, w, r)
+	}
+}
+
 // route is a single HTTP handler registration.
 type route struct {
 	method  string

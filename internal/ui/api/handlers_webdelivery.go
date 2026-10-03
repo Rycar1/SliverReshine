@@ -19,11 +19,7 @@ func (s *Server) handleWebDeliveryFormats(w http.ResponseWriter, r *http.Request
 //
 // It is a POST because it has side effects: an implant is built if the profile
 // has none, content is published, and a listener is started.
-func (s *Server) handleWebDelivery(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWebDelivery(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.WebDeliveryRequest
 	if !decodeBody(w, r, &req) {
 		return

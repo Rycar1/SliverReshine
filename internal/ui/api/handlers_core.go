@@ -8,38 +8,22 @@ import (
 	"c2tool/internal/ui/sliver"
 )
 
-func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleSessions(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	sessions, err := c.Sessions()
 	writeResult(w, map[string]any{"sessions": sessions}, err)
 }
 
-func (s *Server) handleBeacons(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleBeacons(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	beacons, err := c.Beacons()
 	writeResult(w, map[string]any{"beacons": beacons}, err)
 }
 
-func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleJobs(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	jobs, err := c.Jobs()
 	writeResult(w, map[string]any{"jobs": jobs}, err)
 }
 
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleEvents(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	events, err := c.Events()
 	if err != nil {
 		writeClientError(w, err)
@@ -52,11 +36,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
 }
 
-func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleKillSession(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeErr(w, http.StatusBadRequest, "invalid session id")
@@ -69,20 +49,12 @@ func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleBuilders(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleBuilders(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	builds, err := c.ImplantBuilds()
 	writeResult(w, map[string]any{"builders": builds}, err)
 }
 
-func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleGenerate(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.GenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid request body")
@@ -92,11 +64,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, result, err)
 }
 
-func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleListeners(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Type string `json:"type"`
 		Addr string `json:"addr"`
@@ -146,11 +114,7 @@ func (s *Server) handleListeners(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, map[string]any{"success": true, "job_id": jobID}, err)
 }
 
-func (s *Server) handleStopListener(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleStopListener(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 32)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid job id")

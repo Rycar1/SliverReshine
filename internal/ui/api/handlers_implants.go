@@ -70,11 +70,7 @@ func (s *Server) handleHijackDLL(w http.ResponseWriter, r *http.Request) {
 
 // --- Shellcode RDI ---
 
-func (s *Server) handleShellcodeRDI(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleShellcodeRDI(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DataB64      string `json:"data_b64"`
 		FunctionName string `json:"function_name"`

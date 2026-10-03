@@ -1,6 +1,7 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"net/http"
 	"strconv"
 )
@@ -18,12 +19,7 @@ import (
 // The list comes from the server's job table rather than from a dedicated RPC,
 // so a dialer started by any client shows up here and stopping one is the same
 // operation as stopping any other job.
-func (s *Server) handleBindList(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
-
+func (s *Server) handleBindList(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	listeners, err := c.BindListeners()
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
@@ -40,12 +36,7 @@ func (s *Server) handleBindList(w http.ResponseWriter, r *http.Request) {
 // start rather than the outcome is deliberate — waiting for the outcome would
 // hold the request open for an unbounded time on a target that is simply not
 // listening yet.
-func (s *Server) handleBindStart(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
-
+func (s *Server) handleBindStart(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Host string `json:"host"`
 		Port uint32 `json:"port"`
@@ -72,12 +63,7 @@ func (s *Server) handleBindStart(w http.ResponseWriter, r *http.Request) {
 // This gives up on reaching the target. It does not disconnect a session that
 // has already been established — that is the ordinary session controls' job,
 // and conflating the two would make "stop retrying" close a working channel.
-func (s *Server) handleBindStop(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
-
+func (s *Server) handleBindStop(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	raw := r.PathValue("id")
 	id, err := strconv.ParseUint(raw, 10, 32)
 	if err != nil {

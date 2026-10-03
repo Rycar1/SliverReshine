@@ -1,6 +1,7 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"net/http"
 )
 
@@ -51,11 +52,7 @@ func (s *Server) handleMsfRemote(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleMsfStage(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleMsfStage(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Arch     string   `json:"arch"`
 		Format   string   `json:"format"`

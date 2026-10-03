@@ -8,20 +8,12 @@ import (
 
 // --- Websites management ---
 
-func (s *Server) handleWebsites(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWebsites(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	websites, err := c.Websites()
 	writeResult(w, map[string]any{"websites": websites}, err)
 }
 
-func (s *Server) handleWebsite(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWebsite(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	website, err := c.Website(r.PathValue("name"))
 	if err != nil {
 		writeClientError(w, err)
@@ -34,11 +26,7 @@ func (s *Server) handleWebsite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, website)
 }
 
-func (s *Server) handleWebsiteAddContent(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWebsiteAddContent(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.WebsiteContentRequest
 	if !decodeBody(w, r, &req) {
 		return
@@ -47,11 +35,7 @@ func (s *Server) handleWebsiteAddContent(w http.ResponseWriter, r *http.Request)
 	writeResult(w, website, err)
 }
 
-func (s *Server) handleWebsiteUpdateContent(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWebsiteUpdateContent(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.WebsiteContentRequest
 	if !decodeBody(w, r, &req) {
 		return
@@ -60,11 +44,7 @@ func (s *Server) handleWebsiteUpdateContent(w http.ResponseWriter, r *http.Reque
 	writeResult(w, website, err)
 }
 
-func (s *Server) handleWebsiteRemoveContent(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWebsiteRemoveContent(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Paths []string `json:"paths"`
 	}
@@ -75,11 +55,7 @@ func (s *Server) handleWebsiteRemoveContent(w http.ResponseWriter, r *http.Reque
 	writeResult(w, website, err)
 }
 
-func (s *Server) handleWebsiteRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWebsiteRemove(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.WebsiteRemove(r.PathValue("name")); err != nil {
 		writeClientError(w, err)
 		return

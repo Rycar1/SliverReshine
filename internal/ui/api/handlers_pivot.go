@@ -1,6 +1,7 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"net/http"
 	"strconv"
 )
@@ -10,20 +11,12 @@ import (
 // handleTopology renders the aggregate network view. Unlike the pivot tree this
 // is not a single Sliver call: it is assembled console-side from every source
 // that describes a relationship, so it takes no parameters.
-func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleTopology(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	graph, err := c.TopologyGraph()
 	writeResult(w, graph, err)
 }
 
-func (s *Server) handlePivotGraph(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handlePivotGraph(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	graph, err := c.PivotGraph()
 	writeResult(w, graph, err)
 }

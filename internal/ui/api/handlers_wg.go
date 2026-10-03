@@ -1,6 +1,7 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"math"
 	"net/http"
 	"strconv"
@@ -8,20 +9,12 @@ import (
 
 // --- WireGuard tunnels ---
 
-func (s *Server) handleWGClientConfig(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWGClientConfig(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	cfg, err := c.GenerateWGClientConfig()
 	writeResult(w, cfg, err)
 }
 
-func (s *Server) handleWGUniqueIP(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleWGUniqueIP(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	ip, err := c.GenerateUniqueIP()
 	writeResult(w, map[string]string{"ip": ip}, err)
 }

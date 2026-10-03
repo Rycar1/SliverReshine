@@ -9,20 +9,12 @@ import (
 	"c2tool/internal/ui/sliver"
 )
 
-func (s *Server) handleMonitorProviders(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleMonitorProviders(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	providers, err := c.MonitorListConfig()
 	writeResult(w, map[string]any{"providers": providers}, err)
 }
 
-func (s *Server) handleMonitorAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleMonitorAdd(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.MonitorProviderView
 	if !decodeBody(w, r, &req) {
 		return
@@ -34,11 +26,7 @@ func (s *Server) handleMonitorAdd(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (s *Server) handleMonitorRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleMonitorRemove(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.MonitorProviderView
 	if !decodeBody(w, r, &req) {
 		return
@@ -54,29 +42,17 @@ func (s *Server) handleMonitorRemove(w http.ResponseWriter, r *http.Request) {
 // C2 profiles
 // ---------------------------------------------------------------------------
 
-func (s *Server) handleC2Profiles(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleC2Profiles(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	profiles, err := c.HTTPC2Profiles()
 	writeResult(w, map[string]any{"profiles": profiles}, err)
 }
 
-func (s *Server) handleC2Profile(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleC2Profile(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	cfg, err := c.HTTPC2Profile(r.PathValue("name"))
 	writeResult(w, cfg, err)
 }
 
-func (s *Server) handleC2ProfileSave(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleC2ProfileSave(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Overwrite bool                   `json:"overwrite"`
 		Profile   *clientpb.HTTPC2Config `json:"profile"`
@@ -95,20 +71,12 @@ func (s *Server) handleC2ProfileSave(w http.ResponseWriter, r *http.Request) {
 // Traffic encoders
 // ---------------------------------------------------------------------------
 
-func (s *Server) handleTrafficEncoders(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleTrafficEncoders(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	names, err := c.TrafficEncoders()
 	writeResult(w, map[string]any{"encoders": names}, err)
 }
 
-func (s *Server) handleTrafficEncoderAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleTrafficEncoderAdd(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name      string `json:"name"`
 		WasmB64   string `json:"wasm"`
@@ -126,11 +94,7 @@ func (s *Server) handleTrafficEncoderAdd(w http.ResponseWriter, r *http.Request)
 	writeResult(w, report, err)
 }
 
-func (s *Server) handleTrafficEncoderRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleTrafficEncoderRemove(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.TrafficEncoderRm(r.PathValue("name")); err != nil {
 		writeClientError(w, err)
 		return
@@ -142,20 +106,12 @@ func (s *Server) handleTrafficEncoderRemove(w http.ResponseWriter, r *http.Reque
 // Shellcode encoders
 // ---------------------------------------------------------------------------
 
-func (s *Server) handleShellcodeEncoders(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleShellcodeEncoders(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	encoders, err := c.ShellcodeEncoders()
 	writeResult(w, map[string]any{"encoders": encoders}, err)
 }
 
-func (s *Server) handleShellcodeEncode(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleShellcodeEncode(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Encoder    string `json:"encoder"`
 		Arch       string `json:"arch"`

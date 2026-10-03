@@ -24,11 +24,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleOverview aggregates top-level counts for the sidebar badges and dashboard.
-func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleOverview(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	type countResult struct {
 		key string
 		n   int

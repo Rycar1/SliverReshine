@@ -32,7 +32,7 @@ func (s *Server) apiRoutes() []route {
 func (s *Server) coreRoutes() []route {
 	return []route{
 		{"GET", "/api/info", s.handleInfo},
-		{"GET", "/api/overview", s.handleOverview},
+		{"GET", "/api/overview", s.withClient(s.handleOverview)},
 		{"POST", "/api/connect", s.handleConnect},
 		{"POST", "/api/disconnect", s.handleDisconnect},
 		{"GET", "/api/profiles", s.handleListProfiles},
@@ -43,8 +43,8 @@ func (s *Server) coreRoutes() []route {
 // sessionRoutes covers session lifecycle and its filesystem.
 func (s *Server) sessionRoutes() []route {
 	return []route{
-		{"GET", "/api/sessions", s.handleSessions},
-		{"POST", "/api/sessions/{id}/kill", s.handleKillSession},
+		{"GET", "/api/sessions", s.withClient(s.handleSessions)},
+		{"POST", "/api/sessions/{id}/kill", s.withClient(s.handleKillSession)},
 		{"GET", "/api/sessions/{id}/fs", s.handleFsList},
 		{"GET", "/api/sessions/{id}/fs/pwd", s.handleFsPwd},
 		{"POST", "/api/sessions/{id}/fs/cd", s.handleFsCd},
@@ -93,21 +93,21 @@ func (s *Server) sessionExtRoutes() []route {
 		{"GET", "/api/sessions/{id}/token-owner", s.handleCurrentTokenOwner},
 		{"POST", "/api/sessions/{id}/execute-token", s.handleExecuteToken},
 		{"POST", "/api/sessions/{id}/runas", s.handleRunAs},
-		{"GET", "/api/pivots/graph", s.handlePivotGraph},
+		{"GET", "/api/pivots/graph", s.withClient(s.handlePivotGraph)},
 		// Topology is the aggregate view: sessions, beacons, pivots and the
 		// console-side proxies flattened into one node/edge list. It supersedes the
 		// raw pivot tree for rendering, which is why both endpoints exist.
-		{"GET", "/api/topology", s.handleTopology},
+		{"GET", "/api/topology", s.withClient(s.handleTopology)},
 		// WebDelivery: publish a stage and hand back the one-liner that fetches it.
 		{"GET", "/api/webdelivery/formats", s.handleWebDeliveryFormats},
-		{"POST", "/api/webdelivery", s.handleWebDelivery},
+		{"POST", "/api/webdelivery", s.withClient(s.handleWebDelivery)},
 		// One-liner: turn a running listener into a command that gets a session.
-		{"GET", "/api/oneliner/targets", s.handleOneLinerTargets},
-		{"POST", "/api/oneliner", s.handleOneLiner},
+		{"GET", "/api/oneliner/targets", s.withClient(s.handleOneLinerTargets)},
+		{"POST", "/api/oneliner", s.withClient(s.handleOneLiner)},
 		// Builds for several platforms at once. Separate from /api/oneliner
 		// because it is materially more expensive -- one implant build per
 		// platform -- and a caller should have to ask for that.
-		{"POST", "/api/oneliner/all", s.handleOneLinerAll},
+		{"POST", "/api/oneliner/all", s.withClient(s.handleOneLinerAll)},
 		{"GET", "/api/sessions/{id}/pivots/listeners", s.handlePivotListeners},
 		{"POST", "/api/sessions/{id}/pivots/listeners", s.handlePivotStartListener},
 		{"DELETE", "/api/sessions/{id}/pivots/listeners/{pivotID}", s.handlePivotStopListener},
@@ -120,10 +120,10 @@ func (s *Server) sessionExtRoutes() []route {
 		{"POST", "/api/sessions/{id}/extensions/call", s.handleCallExtension},
 		{"POST", "/api/sessions/{id}/msf", s.handleMsf},
 		{"POST", "/api/sessions/{id}/msf/remote", s.handleMsfRemote},
-		{"POST", "/api/msf/stage", s.handleMsfStage},
+		{"POST", "/api/msf/stage", s.withClient(s.handleMsfStage)},
 		{"POST", "/api/sessions/{id}/backdoor", s.handleBackdoor},
 		{"POST", "/api/sessions/{id}/dll-hijack", s.handleHijackDLL},
-		{"POST", "/api/shellcode/rdi", s.handleShellcodeRDI},
+		{"POST", "/api/shellcode/rdi", s.withClient(s.handleShellcodeRDI)},
 	}
 }
 
@@ -140,7 +140,7 @@ func (s *Server) postExRoutes() []route {
 		{"POST", "/api/sessions/{id}/persistence/remove", s.handlePersistenceRemove},
 		{"GET", "/api/mimikatz/modules", s.handleMimikatzModules},
 		{"POST", "/api/sessions/{id}/mimikatz", s.handleMimikatzRun},
-		{"POST", "/api/mimikatz/parse", s.handleMimikatzParse},
+		{"POST", "/api/mimikatz/parse", s.withClient(s.handleMimikatzParse)},
 		{"POST", "/api/sessions/{id}/exec-shellcode", s.handleExecuteShellcode},
 		{"POST", "/api/sessions/{id}/psexec", s.handlePsExec},
 		{"POST", "/api/sessions/{id}/ping", s.handlePing},
@@ -153,66 +153,66 @@ func (s *Server) postExRoutes() []route {
 		{"POST", "/api/sessions/{id}/reg/delete-key", s.handleRegDeleteKey},
 		{"POST", "/api/sessions/{id}/reconfigure", s.handleReconfigure},
 		{"POST", "/api/sessions/{id}/close", s.handleCloseSession},
-		{"POST", "/api/monitor/start", s.handleMonitorStart},
-		{"POST", "/api/monitor/stop", s.handleMonitorStop},
-		{"POST", "/api/beacons/{id}/open-session", s.handleOpenSession},
+		{"POST", "/api/monitor/start", s.withClient(s.handleMonitorStart)},
+		{"POST", "/api/monitor/stop", s.withClient(s.handleMonitorStop)},
+		{"POST", "/api/beacons/{id}/open-session", s.withClient(s.handleOpenSession)},
 	}
 }
 
 // beaconRoutes covers port forwards, prune, aliases, beacons.
 func (s *Server) beaconRoutes() []route {
 	return []route{
-		{"GET", "/api/portfwd", s.handlePortfwdList},
-		{"POST", "/api/portfwd", s.handlePortfwdStart},
-		{"DELETE", "/api/portfwd/{port}", s.handlePortfwdStop},
+		{"GET", "/api/portfwd", s.withClient(s.handlePortfwdList)},
+		{"POST", "/api/portfwd", s.withClient(s.handlePortfwdStart)},
+		{"DELETE", "/api/portfwd/{port}", s.withClient(s.handlePortfwdStop)},
 
-		{"POST", "/api/beacons/prune", s.handlePruneBeacons},
-		{"POST", "/api/sessions/prune", s.handlePruneSessions},
-		{"GET", "/api/aliases", s.handleAliases},
-		{"POST", "/api/aliases", s.handleAliasInstall},
-		{"DELETE", "/api/aliases/{name}", s.handleAliasRemove},
+		{"POST", "/api/beacons/prune", s.withClient(s.handlePruneBeacons)},
+		{"POST", "/api/sessions/prune", s.withClient(s.handlePruneSessions)},
+		{"GET", "/api/aliases", s.withClient(s.handleAliases)},
+		{"POST", "/api/aliases", s.withClient(s.handleAliasInstall)},
+		{"DELETE", "/api/aliases/{name}", s.withClient(s.handleAliasRemove)},
 		{"POST", "/api/sessions/{id}/aliases/{name}/run", s.handleAliasRun},
 
-		{"GET", "/api/beacons", s.handleBeacons},
-		{"GET", "/api/beacons/{id}", s.handleBeacon},
-		{"POST", "/api/beacons/{id}/rename", s.handleRenameBeacon},
-		{"DELETE", "/api/beacons/{id}", s.handleRmBeacon},
-		{"GET", "/api/beacons/{id}/tasks", s.handleBeaconTasks},
-		{"GET", "/api/beacons/{id}/tasks/{taskID}", s.handleBeaconTaskContent},
-		{"POST", "/api/sessions/{id}/rename", s.handleRenameSession},
+		{"GET", "/api/beacons", s.withClient(s.handleBeacons)},
+		{"GET", "/api/beacons/{id}", s.withClient(s.handleBeacon)},
+		{"POST", "/api/beacons/{id}/rename", s.withClient(s.handleRenameBeacon)},
+		{"DELETE", "/api/beacons/{id}", s.withClient(s.handleRmBeacon)},
+		{"GET", "/api/beacons/{id}/tasks", s.withClient(s.handleBeaconTasks)},
+		{"GET", "/api/beacons/{id}/tasks/{taskID}", s.withClient(s.handleBeaconTaskContent)},
+		{"POST", "/api/sessions/{id}/rename", s.withClient(s.handleRenameSession)},
 	}
 }
 
 // implantRoutes covers implant profiles/builds, operators, hosts.
 func (s *Server) implantRoutes() []route {
 	return []route{
-		{"GET", "/api/implant-profiles", s.handleImplantProfiles},
-		{"POST", "/api/implant-profiles", s.handleSaveImplantProfile},
-		{"DELETE", "/api/implant-profiles/{name}", s.handleDeleteImplantProfile},
-		{"DELETE", "/api/implant-builds/{name}", s.handleDeleteImplantBuild},
-		{"POST", "/api/regenerate", s.handleRegenerate},
-		{"GET", "/api/operators", s.handleGetOperators},
-		{"GET", "/api/compiler", s.handleCompiler},
-		{"GET", "/api/hosts", s.handleHosts},
-		{"GET", "/api/hosts/{uuid}", s.handleHost},
-		{"DELETE", "/api/hosts/{uuid}", s.handleHostRm},
-		{"DELETE", "/api/hosts/{uuid}/iocs/{iocID}", s.handleHostIOCRm},
+		{"GET", "/api/implant-profiles", s.withClient(s.handleImplantProfiles)},
+		{"POST", "/api/implant-profiles", s.withClient(s.handleSaveImplantProfile)},
+		{"DELETE", "/api/implant-profiles/{name}", s.withClient(s.handleDeleteImplantProfile)},
+		{"DELETE", "/api/implant-builds/{name}", s.withClient(s.handleDeleteImplantBuild)},
+		{"POST", "/api/regenerate", s.withClient(s.handleRegenerate)},
+		{"GET", "/api/operators", s.withClient(s.handleGetOperators)},
+		{"GET", "/api/compiler", s.withClient(s.handleCompiler)},
+		{"GET", "/api/hosts", s.withClient(s.handleHosts)},
+		{"GET", "/api/hosts/{uuid}", s.withClient(s.handleHost)},
+		{"DELETE", "/api/hosts/{uuid}", s.withClient(s.handleHostRm)},
+		{"DELETE", "/api/hosts/{uuid}/iocs/{iocID}", s.withClient(s.handleHostIOCRm)},
 	}
 }
 
 // websiteRoutes covers websites, canaries, wireguard.
 func (s *Server) websiteRoutes() []route {
 	return []route{
-		{"GET", "/api/websites", s.handleWebsites},
-		{"GET", "/api/websites/{name}", s.handleWebsite},
-		{"POST", "/api/websites/{name}/content", s.handleWebsiteAddContent},
-		{"PUT", "/api/websites/{name}/content", s.handleWebsiteUpdateContent},
-		{"DELETE", "/api/websites/{name}/content", s.handleWebsiteRemoveContent},
-		{"DELETE", "/api/websites/{name}", s.handleWebsiteRemove},
-		{"GET", "/api/canaries", s.handleCanaries},
+		{"GET", "/api/websites", s.withClient(s.handleWebsites)},
+		{"GET", "/api/websites/{name}", s.withClient(s.handleWebsite)},
+		{"POST", "/api/websites/{name}/content", s.withClient(s.handleWebsiteAddContent)},
+		{"PUT", "/api/websites/{name}/content", s.withClient(s.handleWebsiteUpdateContent)},
+		{"DELETE", "/api/websites/{name}/content", s.withClient(s.handleWebsiteRemoveContent)},
+		{"DELETE", "/api/websites/{name}", s.withClient(s.handleWebsiteRemove)},
+		{"GET", "/api/canaries", s.withClient(s.handleCanaries)},
 
-		{"GET", "/api/wg/config", s.handleWGClientConfig},
-		{"GET", "/api/wg/ip", s.handleWGUniqueIP},
+		{"GET", "/api/wg/config", s.withClient(s.handleWGClientConfig)},
+		{"GET", "/api/wg/ip", s.withClient(s.handleWGUniqueIP)},
 		{"GET", "/api/sessions/{id}/wg/forwarders", s.handleWGForwarders},
 		{"POST", "/api/sessions/{id}/wg/forwarders", s.handleWGStartPortForward},
 		{"DELETE", "/api/sessions/{id}/wg/forwarders/{fwdID}", s.handleWGStopPortForward},
@@ -225,30 +225,30 @@ func (s *Server) websiteRoutes() []route {
 // infraRoutes covers socks, loot, jobs, events, builders, listeners.
 func (s *Server) infraRoutes() []route {
 	return []route{
-		{"GET", "/api/socks", s.handleSocksList},
-		{"POST", "/api/socks", s.handleSocksStart},
-		{"DELETE", "/api/socks/{id}", s.handleSocksStop},
+		{"GET", "/api/socks", s.withClient(s.handleSocksList)},
+		{"POST", "/api/socks", s.withClient(s.handleSocksStart)},
+		{"DELETE", "/api/socks/{id}", s.withClient(s.handleSocksStop)},
 
-		{"GET", "/api/loot", s.handleLootAll},
-		{"POST", "/api/loot", s.handleLootAdd},
-		{"POST", "/api/loot/{id}/rename", s.handleLootRename},
-		{"GET", "/api/loot/{id}", s.handleLootContent},
-		{"DELETE", "/api/loot/{id}", s.handleLootRemove},
-		{"GET", "/api/jobs", s.handleJobs},
-		{"GET", "/api/events", s.handleEvents},
-		{"GET", "/api/builders", s.handleBuilders},
-		{"POST", "/api/generate", s.handleGenerate},
-		{"POST", "/api/listeners", s.handleListeners},
-		{"DELETE", "/api/listeners/{id}", s.handleStopListener},
+		{"GET", "/api/loot", s.withClient(s.handleLootAll)},
+		{"POST", "/api/loot", s.withClient(s.handleLootAdd)},
+		{"POST", "/api/loot/{id}/rename", s.withClient(s.handleLootRename)},
+		{"GET", "/api/loot/{id}", s.withClient(s.handleLootContent)},
+		{"DELETE", "/api/loot/{id}", s.withClient(s.handleLootRemove)},
+		{"GET", "/api/jobs", s.withClient(s.handleJobs)},
+		{"GET", "/api/events", s.withClient(s.handleEvents)},
+		{"GET", "/api/builders", s.withClient(s.handleBuilders)},
+		{"POST", "/api/generate", s.withClient(s.handleGenerate)},
+		{"POST", "/api/listeners", s.withClient(s.handleListeners)},
+		{"DELETE", "/api/listeners/{id}", s.withClient(s.handleStopListener)},
 
 		// Forward (bind) listeners. Kept on their own paths rather than folded
 		// into /api/listeners because they are the opposite operation: nothing
 		// binds locally, and the server dials out. Mixing them into one
 		// collection would put a "port" on an entry that has none and invite
 		// exactly the confusion this split avoids.
-		{"GET", "/api/listeners/bind", s.handleBindList},
-		{"POST", "/api/listeners/bind", s.handleBindStart},
-		{"DELETE", "/api/listeners/bind/{id}", s.handleBindStop},
+		{"GET", "/api/listeners/bind", s.withClient(s.handleBindList)},
+		{"POST", "/api/listeners/bind", s.withClient(s.handleBindStart)},
+		{"DELETE", "/api/listeners/bind/{id}", s.withClient(s.handleBindStop)},
 	}
 }
 
@@ -260,7 +260,7 @@ func (s *Server) rawRPCRoutes() []route {
 		// "full Sliver feature set" claim hold for methods the UI never
 		// modelled (armory, crackstation, anything added upstream).
 		{"GET", "/api/rpc/methods", s.handleRPCMethods},
-		{"POST", "/api/rpc/call", s.handleRPCCall},
+		{"POST", "/api/rpc/call", s.withClient(s.handleRPCCall)},
 	}
 }
 
@@ -270,13 +270,13 @@ func (s *Server) advancedRoutes() []route {
 		// --- Post-exploitation surface normally only reachable from the TUI ---
 
 		// Credential vault: server-side store of harvested hashes and plaintexts.
-		{"GET", "/api/creds", s.handleCreds},
-		{"POST", "/api/creds", s.handleCredsAdd},
-		{"PUT", "/api/creds", s.handleCredsUpdate},
-		{"DELETE", "/api/creds", s.handleCredsRemove},
-		{"GET", "/api/creds/filter", s.handleCredsByHashType},
-		{"POST", "/api/creds/sniff", s.handleCredsSniff},
-		{"GET", "/api/creds/{id}", s.handleCredByID},
+		{"GET", "/api/creds", s.withClient(s.handleCreds)},
+		{"POST", "/api/creds", s.withClient(s.handleCredsAdd)},
+		{"PUT", "/api/creds", s.withClient(s.handleCredsUpdate)},
+		{"DELETE", "/api/creds", s.withClient(s.handleCredsRemove)},
+		{"GET", "/api/creds/filter", s.withClient(s.handleCredsByHashType)},
+		{"POST", "/api/creds/sniff", s.withClient(s.handleCredsSniff)},
+		{"GET", "/api/creds/{id}", s.withClient(s.handleCredByID)},
 
 		// Memfiles: anonymous in-memory files on the target (no disk artefact).
 		{"GET", "/api/sessions/{id}/memfiles", s.handleMemfilesList},
@@ -290,21 +290,21 @@ func (s *Server) advancedRoutes() []route {
 		{"POST", "/api/sessions/{id}/fs/grep", s.handleGrep},
 
 		// Keylogger telemetry sinks.
-		{"GET", "/api/monitor/providers", s.handleMonitorProviders},
-		{"POST", "/api/monitor/providers", s.handleMonitorAdd},
-		{"DELETE", "/api/monitor/providers", s.handleMonitorRemove},
+		{"GET", "/api/monitor/providers", s.withClient(s.handleMonitorProviders)},
+		{"POST", "/api/monitor/providers", s.withClient(s.handleMonitorAdd)},
+		{"DELETE", "/api/monitor/providers", s.withClient(s.handleMonitorRemove)},
 
 		// C2 profiles: reshape implant HTTP traffic.
-		{"GET", "/api/c2profiles", s.handleC2Profiles},
-		{"POST", "/api/c2profiles", s.handleC2ProfileSave},
-		{"GET", "/api/c2profiles/{name}", s.handleC2Profile},
+		{"GET", "/api/c2profiles", s.withClient(s.handleC2Profiles)},
+		{"POST", "/api/c2profiles", s.withClient(s.handleC2ProfileSave)},
+		{"GET", "/api/c2profiles/{name}", s.withClient(s.handleC2Profile)},
 
 		// Traffic and shellcode encoders.
-		{"GET", "/api/traffic-encoders", s.handleTrafficEncoders},
-		{"POST", "/api/traffic-encoders", s.handleTrafficEncoderAdd},
-		{"DELETE", "/api/traffic-encoders/{name}", s.handleTrafficEncoderRemove},
-		{"GET", "/api/shellcode-encoders", s.handleShellcodeEncoders},
-		{"POST", "/api/shellcode-encoders", s.handleShellcodeEncode},
+		{"GET", "/api/traffic-encoders", s.withClient(s.handleTrafficEncoders)},
+		{"POST", "/api/traffic-encoders", s.withClient(s.handleTrafficEncoderAdd)},
+		{"DELETE", "/api/traffic-encoders/{name}", s.withClient(s.handleTrafficEncoderRemove)},
+		{"GET", "/api/shellcode-encoders", s.withClient(s.handleShellcodeEncoders)},
+		{"POST", "/api/shellcode-encoders", s.withClient(s.handleShellcodeEncode)},
 
 		// WASM extensions (the sibling of the existing BOF support).
 		{"GET", "/api/sessions/{id}/wasm", s.handleWasmExtensions},
@@ -317,8 +317,8 @@ func (s *Server) advancedRoutes() []route {
 		{"DELETE", "/api/sessions/{id}/rportfwd/{fwdID}", s.handleRportFwdStop},
 
 		// Certificates.
-		{"GET", "/api/certificates/ca", s.handleCACertificates},
-		{"GET", "/api/certificates", s.handleCertificates},
+		{"GET", "/api/certificates/ca", s.withClient(s.handleCACertificates)},
+		{"GET", "/api/certificates", s.withClient(s.handleCertificates)},
 
 		// Tunnels.
 		{"POST", "/api/sessions/{id}/tunnel", s.handleTunnelCreate},

@@ -286,7 +286,7 @@ func TestRawRPCCallRefusesNilNestedBeforeInvoking(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/rpc/call", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 
-			s.handleRPCCall(rec, req)
+			s.withClient(s.handleRPCCall)(rec, req)
 
 			if spy.called[tc.method] {
 				t.Fatalf("the guarded %s request reached the real RPC. That is the whole bug: "+
@@ -326,7 +326,7 @@ func TestRawRPCCallAllowsValidRequestsThrough(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/rpc/call", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 
-			s.handleRPCCall(rec, req)
+			s.withClient(s.handleRPCCall)(rec, req)
 
 			if !spy.called[tc.method] {
 				t.Errorf("a valid request never reached the RPC (status %d, body %q); the "+

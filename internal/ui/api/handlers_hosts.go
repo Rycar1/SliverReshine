@@ -1,16 +1,13 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"net/http"
 )
 
 // --- Hosts / IOC management ---
 
-func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleHosts(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	hosts, err := c.Hosts()
 	if err != nil {
 		writeClientError(w, err)
@@ -23,11 +20,7 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
 }
 
-func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleHost(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	host, err := c.Host(r.PathValue("uuid"))
 	if err != nil {
 		writeClientError(w, err)
@@ -40,11 +33,7 @@ func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, host)
 }
 
-func (s *Server) handleHostRm(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleHostRm(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.HostRm(r.PathValue("uuid")); err != nil {
 		writeClientError(w, err)
 		return
@@ -52,11 +41,7 @@ func (s *Server) handleHostRm(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleHostIOCRm(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleHostIOCRm(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.HostIOCRm(r.PathValue("iocID")); err != nil {
 		writeClientError(w, err)
 		return

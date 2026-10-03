@@ -127,12 +127,7 @@ func (s *Server) handleMimikatzRun(w http.ResponseWriter, r *http.Request) {
 // Output captured on an engagement, or from a host the console has no session
 // on, is still worth mining. This path never touches a target and never writes
 // to the vault unless the caller asks: it is the reviewable half of the feature.
-func (s *Server) handleMimikatzParse(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
-
+func (s *Server) handleMimikatzParse(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Text    string `json:"text"`
 		Source  string `json:"source"`

@@ -1,16 +1,13 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"net/http"
 )
 
 // --- DNS canaries ---
 
-func (s *Server) handleCanaries(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCanaries(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	canaries, err := c.Canaries()
 	if err != nil {
 		writeClientError(w, err)

@@ -7,11 +7,7 @@ import (
 	"c2tool/internal/ui/sliver"
 )
 
-func (s *Server) handleCreds(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCreds(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	creds, err := c.Creds()
 	if err != nil {
 		writeClientError(w, err)
@@ -24,11 +20,7 @@ func (s *Server) handleCreds(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})
 }
 
-func (s *Server) handleCredsAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCredsAdd(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Credentials []sliver.CredentialView `json:"credentials"`
 		// Convenience form for a single entry typed straight into the UI.
@@ -58,11 +50,7 @@ func (s *Server) handleCredsAdd(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "added": len(batch)})
 }
 
-func (s *Server) handleCredsRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCredsRemove(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		IDs []string `json:"ids"`
 		ID  string   `json:"id"`
@@ -81,11 +69,7 @@ func (s *Server) handleCredsRemove(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (s *Server) handleCredsUpdate(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCredsUpdate(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Credentials []sliver.CredentialView `json:"credentials"`
 	}
@@ -99,20 +83,12 @@ func (s *Server) handleCredsUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (s *Server) handleCredByID(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCredByID(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	cred, err := c.GetCredByID(r.PathValue("id"))
 	writeResult(w, cred, err)
 }
 
-func (s *Server) handleCredsSniff(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCredsSniff(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Hash string `json:"hash"`
 	}
@@ -125,11 +101,7 @@ func (s *Server) handleCredsSniff(w http.ResponseWriter, r *http.Request) {
 
 // handleCredsByHashType serves both filtered variants: ?plaintext=1 narrows to
 
-func (s *Server) handleCredsByHashType(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCredsByHashType(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	hashType := int32(0)
 	if v := r.URL.Query().Get("type"); v != "" {
 		n, err := strconv.Atoi(v)

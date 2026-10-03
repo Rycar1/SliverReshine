@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"c2tool/internal/ui/sliver"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/rpcpb"
 	"google.golang.org/grpc"
@@ -145,12 +146,7 @@ func (s *Server) handleRPCMethods(w http.ResponseWriter, r *http.Request) {
 // Response (streaming):
 //
 //	{"ok":true,"messages":[{...},...],"count":N,"truncated":bool}
-func (s *Server) handleRPCCall(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
-
+func (s *Server) handleRPCCall(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Method  string          `json:"method"`
 		Request json.RawMessage `json:"request"`

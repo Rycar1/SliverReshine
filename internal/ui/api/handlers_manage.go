@@ -9,11 +9,7 @@ import (
 
 // --- Session / Beacon management ---
 
-func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleRenameSession(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
 	}
@@ -27,11 +23,7 @@ func (s *Server) handleRenameSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleRenameBeacon(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleRenameBeacon(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
 	}
@@ -45,11 +37,7 @@ func (s *Server) handleRenameBeacon(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleRmBeacon(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleRmBeacon(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.RmBeacon(r.PathValue("id")); err != nil {
 		writeClientError(w, err)
 		return
@@ -57,20 +45,12 @@ func (s *Server) handleRmBeacon(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleBeaconTasks(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleBeaconTasks(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	tasks, err := c.BeaconTasks(r.PathValue("id"))
 	writeResult(w, map[string]any{"tasks": tasks}, err)
 }
 
-func (s *Server) handleBeacon(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleBeacon(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	beacon, err := c.Beacon(r.PathValue("id"))
 	if err != nil {
 		// A beacon that does not exist is the caller's mistake, not a console
@@ -104,11 +84,7 @@ func (s *Server) handleReconfigure(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleOpenSession(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleOpenSession(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	async, err := c.OpenSessionFromBeacon(r.PathValue("id"))
 	writeResult(w, map[string]any{"success": true, "async": async}, err)
 }
@@ -125,11 +101,7 @@ func (s *Server) handleCloseSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleMonitorStart(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleMonitorStart(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.MonitorStart(); err != nil {
 		writeClientError(w, err)
 		return
@@ -137,11 +109,7 @@ func (s *Server) handleMonitorStart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleMonitorStop(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleMonitorStop(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.MonitorStop(); err != nil {
 		writeClientError(w, err)
 		return
@@ -149,31 +117,19 @@ func (s *Server) handleMonitorStop(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleBeaconTaskContent(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleBeaconTaskContent(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	task, err := c.BeaconTaskContent(r.PathValue("taskID"))
 	writeResult(w, task, err)
 }
 
 // --- Implant profiles ---
 
-func (s *Server) handleImplantProfiles(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleImplantProfiles(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	profiles, err := c.ImplantProfiles()
 	writeResult(w, map[string]any{"profiles": profiles}, err)
 }
 
-func (s *Server) handleSaveImplantProfile(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleSaveImplantProfile(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name     string                 `json:"name"`
 		IsBeacon bool                   `json:"is_beacon"`
@@ -189,11 +145,7 @@ func (s *Server) handleSaveImplantProfile(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleDeleteImplantProfile(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleDeleteImplantProfile(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	if err := c.DeleteImplantProfile(r.PathValue("name")); err != nil {
 		writeClientError(w, err)
 		return
@@ -201,30 +153,18 @@ func (s *Server) handleDeleteImplantProfile(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleCompiler(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleCompiler(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	compiler, err := c.CompilerInfo()
 	writeResult(w, compiler, err)
 }
 
 // --- SOCKS5 proxies ---
 
-func (s *Server) handleSocksList(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleSocksList(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"proxies": c.Socks().List()})
 }
 
-func (s *Server) handleSocksStart(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleSocksStart(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionID string `json:"session_id"`
 		BindAddr  string `json:"bind_addr"`
@@ -244,11 +184,7 @@ func (s *Server) handleSocksStart(w http.ResponseWriter, r *http.Request) {
 	}, err)
 }
 
-func (s *Server) handleSocksStop(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleSocksStop(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid proxy id")
@@ -263,11 +199,7 @@ func (s *Server) handleSocksStop(w http.ResponseWriter, r *http.Request) {
 
 // --- Loot ---
 
-func (s *Server) handleLootAll(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleLootAll(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var (
 		loot []sliver.LootView
 		err  error
@@ -288,11 +220,7 @@ func (s *Server) handleLootAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"loot": loot})
 }
 
-func (s *Server) handleLootAdd(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleLootAdd(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.LootAddRequest
 	if !decodeBody(w, r, &req) {
 		return
@@ -301,11 +229,7 @@ func (s *Server) handleLootAdd(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, map[string]any{"success": true, "id": id}, err)
 }
 
-func (s *Server) handleLootRename(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleLootRename(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
 	}
@@ -319,11 +243,7 @@ func (s *Server) handleLootRename(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleLootContent(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleLootContent(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeErr(w, http.StatusBadRequest, "missing loot id")
@@ -333,11 +253,7 @@ func (s *Server) handleLootContent(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, loot, err)
 }
 
-func (s *Server) handleLootRemove(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleLootRemove(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		writeErr(w, http.StatusBadRequest, "missing loot id")

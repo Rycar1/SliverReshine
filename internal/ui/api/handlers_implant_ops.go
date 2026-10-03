@@ -1,6 +1,7 @@
 package api
 
 import (
+	"c2tool/internal/ui/sliver"
 	"net/http"
 	"strconv"
 )
@@ -14,11 +15,7 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, res, err)
 }
 
-func (s *Server) handleDeleteImplantBuild(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleDeleteImplantBuild(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
 		writeErr(w, http.StatusBadRequest, "missing build name")
@@ -31,11 +28,7 @@ func (s *Server) handleDeleteImplantBuild(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleRegenerate(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleRegenerate(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ImplantName string `json:"implantName"`
 	}
@@ -46,29 +39,17 @@ func (s *Server) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, res, err)
 }
 
-func (s *Server) handleGetOperators(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleGetOperators(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	ops, err := c.GetOperators()
 	writeResult(w, map[string]any{"operators": ops}, err)
 }
 
-func (s *Server) handlePortfwdList(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handlePortfwdList(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	pfm, err := c.PortForwards()
 	writeResult(w, map[string]any{"forwards": pfm.List()}, err)
 }
 
-func (s *Server) handlePortfwdStart(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handlePortfwdStart(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionID  string `json:"session_id"`
 		BindAddr   string `json:"bind_addr"`
@@ -96,11 +77,7 @@ func (s *Server) handlePortfwdStart(w http.ResponseWriter, r *http.Request) {
 	}, err)
 }
 
-func (s *Server) handlePortfwdStop(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handlePortfwdStop(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	port, err := strconv.ParseUint(r.PathValue("port"), 10, 32)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid port")

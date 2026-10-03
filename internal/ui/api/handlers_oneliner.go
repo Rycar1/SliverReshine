@@ -23,11 +23,7 @@ import (
 // one-liner turned out to be.
 const defaultDeliverySite = "webdelivery"
 
-func (s *Server) handleOneLiner(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleOneLiner(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.OneLinerRequest
 	if !decodeBody(w, r, &req) {
 		return
@@ -43,11 +39,7 @@ func (s *Server) handleOneLiner(w http.ResponseWriter, r *http.Request) {
 // listener serve a file" is a property of the transport, and spelling that out in
 // one place keeps the frontend from re-deriving it and getting it wrong -- an
 // mTLS listener offered as a delivery target produces a command that cannot work.
-func (s *Server) handleOneLinerTargets(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
+func (s *Server) handleOneLinerTargets(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	jobs, err := c.Jobs()
 	if err != nil {
 		writeClientError(w, err)
@@ -77,12 +69,7 @@ func (s *Server) handleOneLinerTargets(w http.ResponseWriter, r *http.Request) {
 //
 // Platforms are taken from the body rather than hardcoded, but default to
 // Windows and Linux, which is what the button offers.
-func (s *Server) handleOneLinerAll(w http.ResponseWriter, r *http.Request) {
-	c := s.clientFor(w, r)
-	if c == nil {
-		return
-	}
-
+func (s *Server) handleOneLinerAll(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		sliver.OneLinerRequest
 		Platforms []string `json:"platforms"`

@@ -159,7 +159,16 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 // our own state directory makes builds independent of the ambient environment.
 func (s *Server) env() []string {
 	tmp := filepath.Join(s.opts.StateDir, "tmp")
-	_ = os.MkdirAll(tmp, 0o700)
+	// The error is reported rather than dropped. If this fails, GOTMPDIR points
+	// at a directory that does not exist, and every implant build fails with a
+	// compiler error naming neither the directory nor the permission problem --
+	// which is exactly the failure this variable exists to prevent. env() cannot
+	// return an error without changing every caller, so it says so instead of
+	// letting the operator diagnose it from a bare compiler message.
+	if err := os.MkdirAll(tmp, 0o700); err != nil {
+		log.Printf("[launch] WARNING: cannot create the build temp directory %s (%v); "+
+			"implant builds will fail until this is fixed", tmp, err)
+	}
 
 	env := os.Environ()
 	env = append(env,

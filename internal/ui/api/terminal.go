@@ -43,13 +43,20 @@ const (
 //
 //	0x01: raw terminal bytes (DEL -> BS and bare CR -> CRLF are rewritten for
 //	      Windows sessions)
-//	0x02: JSON {"cols":N,"rows":N} (resize; acked but not forwarded to PTY)
+//	0x02: JSON {"cols":N,"rows":N} (resize, forwarded to the shell)
 //	0x03: close (sends "exit" to the shell)
 //
 // Server -> client:
 //
 //	0x01: raw terminal bytes
 //	0x03: tunnel closed
+//	0x04: fatal -- the terminal will not recover, do not reconnect
+//
+// The 0x04 code and the resize forwarding were both added after this comment was
+// first written, and the comment kept describing the old behaviour: it listed only
+// 0x01 and 0x03 for the server, and claimed resize was "acked but not forwarded to
+// PTY" while the handler calls ResizeShell. A wire-format comment that disagrees
+// with the code is worse than none, because it is what the next reader trusts.
 func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	c := s.requireClient(w)
 	if c == nil {

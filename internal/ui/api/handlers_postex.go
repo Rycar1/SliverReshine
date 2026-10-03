@@ -775,7 +775,15 @@ func (s *Server) handleRegistryHive(w http.ResponseWriter, r *http.Request) {
 	// the encoder in a header so the caller knows how to decode what it received.
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Hive-Encoder", encoder)
-	w.Header().Set("Content-Disposition", `attachment; filename="`+req.RequestedHive+`.hive"`)
+	// The name is sanitised before it becomes a header value. It comes from the
+	// request body, and the other two download sites already run it through
+	// headerSafeFilename -- this one concatenated it raw, so a value containing a
+	// double quote closed the filename early and one containing CR or LF put those
+	// bytes on the wire inside the header value. The helper reduces the name to one
+	// path element and strips the header metacharacters; the fallback keeps the
+	// download nameable when the name is nothing but filtered characters.
+	hiveName := headerSafeFilename(req.RequestedHive, req.RootHive+".hive")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+hiveName+`"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
 }

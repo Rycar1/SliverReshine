@@ -281,6 +281,10 @@ func (s *Server) handleLootAll(w http.ResponseWriter, r *http.Request) {
 		writeClientError(w, err)
 		return
 	}
+	loot, ok := paginate(w, r, loot)
+	if !ok {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"loot": loot})
 }
 

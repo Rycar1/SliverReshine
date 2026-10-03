@@ -13,7 +13,15 @@ func (s *Server) handleCreds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	creds, err := c.Creds()
-	writeResult(w, map[string]any{"credentials": creds}, err)
+	if err != nil {
+		writeClientError(w, err)
+		return
+	}
+	creds, ok := paginate(w, r, creds)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})
 }
 
 func (s *Server) handleCredsAdd(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +150,10 @@ func (s *Server) handleCredsByHashType(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeClientError(w, err)
+		return
+	}
+	creds, ok := paginate(w, r, creds)
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})

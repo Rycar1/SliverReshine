@@ -12,7 +12,15 @@ func (s *Server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hosts, err := c.Hosts()
-	writeResult(w, map[string]any{"hosts": hosts}, err)
+	if err != nil {
+		writeClientError(w, err)
+		return
+	}
+	hosts, ok := paginate(w, r, hosts)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
 }
 
 func (s *Server) handleHost(w http.ResponseWriter, r *http.Request) {

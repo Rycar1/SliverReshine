@@ -515,7 +515,15 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	events, err := c.Events()
-	writeResult(w, map[string]any{"events": events}, err)
+	if err != nil {
+		writeClientError(w, err)
+		return
+	}
+	events, ok := paginate(w, r, events)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
 }
 
 func (s *Server) handleKillSession(w http.ResponseWriter, r *http.Request) {

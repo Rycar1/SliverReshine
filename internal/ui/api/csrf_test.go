@@ -158,3 +158,55 @@ func TestCSRFExemptionIsOnlyTheTerminalSocket(t *testing.T) {
 		t.Errorf("the terminal socket is no longer exempt; the WebSocket handshake check must cover it")
 	}
 }
+
+// A body-less DELETE carries no Content-Type -- that is what curl, the README's
+// PowerShell snippets and the console's own client send. Requiring JSON of it
+// answered the console's own traffic with a CSRF failure, a security control
+// refusing a request it exists to let through. DELETE is not a simple method, so
+// a browser always preflights a cross-origin one and the console answers no
+// preflight; the check is not what stops that request.
+func TestCSRFAllowsBodylessDelete(t *testing.T) {
+	req := httptest.NewRequest(http.MethodDelete, "/api/sessions/abc/fs", nil)
+	req.Header.Del("Content-Type")
+
+	rec := httptest.NewRecorder()
+	New().Routes().ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusUnsupportedMediaType {
+		t.Fatalf("a body-less DELETE was refused as a CSRF failure")
+	}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d (503 proves the handler ran)", rec.Code, http.StatusServiceUnavailable)
+	}
+}
+
+// Dropping the type check for DELETE must not drop the origin check with it: a
+// DELETE that does carry a foreign Origin is still refused.
+func TestCSRFStillRejectsForeignOriginOnDelete(t *testing.T) {
+	req := httptest.NewRequest(http.MethodDelete, "/api/sessions/abc/fs", nil)
+	req.Host = "console.example:8080"
+	req.Header.Del("Content-Type")
+	req.Header.Set("Origin", "http://evil.example")
+
+	rec := httptest.NewRecorder()
+	New().Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+// POST is the one mutating method a simple cross-origin request can carry, so
+// its type check must stay load-bearing.
+func TestCSRFStillRejectsFormPostAfterDeleteRelaxation(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions/abc/kill", strings.NewReader("x=1"))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Origin", "http://evil.example")
+
+	rec := httptest.NewRecorder()
+	New().Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnsupportedMediaType)
+	}
+}

@@ -95,7 +95,15 @@ func withCSRF(next http.Handler) http.Handler {
 			}
 		}
 
-		if !hasJSONContentType(r.Header.Get("Content-Type")) {
+		// Only POST needs this check. A cross-origin <form> or a simple fetch
+		// can send GET, HEAD or POST and nothing else, so POST is the one
+		// mutating method a forged request can carry without first earning a
+		// CORS preflight -- and the console answers no preflight. DELETE, PUT
+		// and PATCH are not simple methods: a browser always preflights them,
+		// so a cross-origin one never reaches a handler. Requiring JSON of
+		// those rejected the console's own traffic (a body-less DELETE sends
+		// no Content-Type at all) without closing anything.
+		if r.Method == http.MethodPost && !hasJSONContentType(r.Header.Get("Content-Type")) {
 			writeErr(w, http.StatusUnsupportedMediaType,
 				"Content-Type must be application/json; the console refuses cross-site form posts")
 			return

@@ -110,8 +110,20 @@ func (c *Client) WebDelivery(req WebDeliveryRequest) (*WebDeliveryResult, error)
 	}
 
 	website := strings.TrimSpace(req.Website)
+	websiteNamed := website != ""
 	if website == "" {
 		website = defaultWebDeliverySite
+	}
+
+	// A listener already bound to the port owns it: the server refuses a second
+	// bind, and a stage published to any website other than the one that
+	// listener serves is invisible to it. Publishing to the requested website
+	// regardless is how a delivery ended up handing the operator a URL that
+	// 404s while every step -- listener up, stage published -- reported success.
+	// So the running listener is reused and its website wins.
+	website, reuseJobID, reuseListener, err := c.deliverySiteForPort(req.Port, website, websiteNamed)
+	if err != nil {
+		return nil, err
 	}
 
 	format := req.Format
@@ -164,10 +176,20 @@ func (c *Client) WebDelivery(req WebDeliveryRequest) (*WebDeliveryResult, error)
 	result.URL = url
 	result.Command = webDeliveryCommand(format, url)
 
-	// The HTTP listener is what actually accepts the target's fetch. If one is
-	// already bound to the port, starting another fails; that is reported as a
-	// warning rather than an error, because the pre-existing listener is most
-	// likely the one the operator wants.
+	if reuseListener {
+		// The port is already served, so nothing is started and the stage went
+		// to that listener's website.
+		result.JobID = reuseJobID
+		result.Warning = fmt.Sprintf(
+			"reused the listener already serving %s:%d (job %d); the stage was published to its website",
+			host, req.Port, reuseJobID)
+		return result, nil
+	}
+
+	// The HTTP listener is what actually accepts the target's fetch. If the bind
+	// still fails -- the port was taken between the check and here -- that is
+	// reported as a warning rather than an error, because a listener the console
+	// did not see may be the one the operator wants.
 	jobID, err := c.startHTTPListenerForDelivery(host, req.Port, website)
 	if err != nil {
 		result.Warning = fmt.Sprintf(
@@ -179,6 +201,48 @@ func (c *Client) WebDelivery(req WebDeliveryRequest) (*WebDeliveryResult, error)
 	}
 
 	return result, nil
+}
+
+// deliverySiteForPort decides which website a stage must be published to.
+//
+// When a staging listener is already bound to the port, that listener owns it:
+// the server refuses a second bind, and content published to any website other
+// than the one the listener serves is invisible to it -- the fetch returns 404
+// while the publish reports success. The listener's own website is therefore
+// authoritative, and the listener is reused instead of restarted.
+//
+// requested is the website the caller asked for, and named says whether the
+// caller named one explicitly. An explicit name is honoured only when the
+// listener's website is unknown: an operator who names a website for a listener
+// this console did not start has nothing better to go on, and the alternative
+// is refusing a request they can make work. When the website is unknown and none
+// was named, the request is refused rather than published somewhere the
+// listener cannot see.
+func (c *Client) deliverySiteForPort(port uint32, requested string, named bool) (website string, jobID uint32, reuse bool, err error) {
+	jobs, err := c.Jobs()
+	if err != nil {
+		// The port's state is unknown; fall back to the caller's website and
+		// let the listener start report a conflict.
+		return requested, 0, false, nil
+	}
+	for i := range jobs {
+		j := jobs[i]
+		if j.Port != port || !j.CanStage {
+			continue
+		}
+		if site, known := c.listenerSite(j.ID); known {
+			return site, j.ID, true, nil
+		}
+		if named {
+			return requested, j.ID, true, nil
+		}
+		return "", 0, false, fmt.Errorf(
+			"port %d is already served by listener %q (job %d), but the website it serves is unknown: "+
+				"publishing to %q would be invisible to it and the delivery URL would return 404. "+
+				"Name the website explicitly, or start the listener from this console",
+			port, j.Name, j.ID, requested)
+	}
+	return requested, 0, false, nil
 }
 
 const (

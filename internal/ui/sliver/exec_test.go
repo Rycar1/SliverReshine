@@ -26,6 +26,7 @@ type rpcStub struct {
 	execWindows func(*sliverpb.ExecuteWindowsReq) (*sliverpb.Execute, error)
 	exec        func(*sliverpb.ExecuteReq) (*sliverpb.Execute, error)
 	getSessions func() (*clientpb.Sessions, error)
+	getJobs     func() (*clientpb.Jobs, error)
 
 	windowsCalls int32
 	plainCalls   int32
@@ -54,6 +55,13 @@ func (s *rpcStub) GetSessions(_ context.Context, _ *commonpb.Empty, _ ...grpc.Ca
 		return nil, errors.New("GetSessions is not expected in this test")
 	}
 	return s.getSessions()
+}
+
+func (s *rpcStub) GetJobs(_ context.Context, _ *commonpb.Empty, _ ...grpc.CallOption) (*clientpb.Jobs, error) {
+	if s.getJobs == nil {
+		return nil, errors.New("GetJobs is not expected in this test")
+	}
+	return s.getJobs()
 }
 
 // okExecute is a successful reply carrying stdout.

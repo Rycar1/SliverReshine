@@ -69,8 +69,10 @@ type Client struct {
 	// Only listeners started here are recorded. One started elsewhere (a previous
 	// run, the server CLI) has no entry, and the one-liner says so rather than
 	// guessing a name that would silently not match.
-	lsMu  sync.Mutex
-	lsMap map[uint32]string
+	lsMu     sync.Mutex
+	lsMap    map[uint32]string
+	lsLoaded bool
+	lsPath   string
 }
 
 // rememberListenerSite records which website a listener serves.
@@ -81,10 +83,12 @@ func (c *Client) rememberListenerSite(jobID uint32, website string) {
 	}
 	c.lsMu.Lock()
 	defer c.lsMu.Unlock()
+	c.loadListenerSitesLocked()
 	if c.lsMap == nil {
 		c.lsMap = map[uint32]string{}
 	}
 	c.lsMap[jobID] = website
+	c.persistListenerSitesLocked()
 }
 
 // listenerSite returns the website a listener serves and whether it is known.
@@ -94,6 +98,7 @@ func (c *Client) listenerSite(jobID uint32) (string, bool) {
 	}
 	c.lsMu.Lock()
 	defer c.lsMu.Unlock()
+	c.loadListenerSitesLocked()
 	site, ok := c.lsMap[jobID]
 	return site, ok
 }

@@ -16,6 +16,9 @@ type RegReadResult struct {
 
 // RegistryRead reads a registry value on a windows session.
 func (c *Client) RegistryRead(sessionID, hive, path, key string) (*RegReadResult, error) {
+	if err := c.requireWindows(sessionID, "the Windows registry"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryRead(ctx, &sliverpb.RegistryReadReq{
@@ -37,6 +40,9 @@ func (c *Client) RegistryRead(sessionID, hive, path, key string) (*RegReadResult
 // valueType: "string" (default), "dword", "qword"
 // (Sliver v1.15.16 的 RegistryWriteReq 不含 BinaryValue 字段)
 func (c *Client) RegistryWrite(sessionID, hive, path, key, value, valueType string) error {
+	if err := c.requireWindows(sessionID, "the Windows registry"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	req := &sliverpb.RegistryWriteReq{
@@ -67,6 +73,9 @@ func (c *Client) RegistryWrite(sessionID, hive, path, key, value, valueType stri
 
 // RegistryListSubKeys lists subkeys under a registry path on a windows session.
 func (c *Client) RegistryListSubKeys(sessionID, hive, path string) ([]string, error) {
+	if err := c.requireWindows(sessionID, "the Windows registry"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryListSubKeys(ctx, &sliverpb.RegistrySubKeyListReq{
@@ -90,6 +99,9 @@ func (c *Client) RegistryListSubKeys(sessionID, hive, path string) ([]string, er
 
 // RegistryListValues lists value names under a registry path on a windows session.
 func (c *Client) RegistryListValues(sessionID, hive, path string) ([]string, error) {
+	if err := c.requireWindows(sessionID, "the Windows registry"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryListValues(ctx, &sliverpb.RegistryListValuesReq{

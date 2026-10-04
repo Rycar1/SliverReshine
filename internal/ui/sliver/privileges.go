@@ -36,6 +36,9 @@ func privilegeToView(p *sliverpb.WindowsPrivilegeEntry) WindowsPrivilegeView {
 
 // GetPrivs lists the privilege information of the session's process.
 func (c *Client) GetPrivs(sessionID string) ([]WindowsPrivilegeView, error) {
+	if err := c.requireWindows(sessionID, "privilege enumeration"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.GetPrivs(ctx, &sliverpb.GetPrivsReq{
@@ -66,6 +69,9 @@ func (c *Client) GetPrivs(sessionID string) ([]WindowsPrivilegeView, error) {
 //
 // Sliver only answers this on Windows: MsgGetPrivsReq has no handler elsewhere.
 func (c *Client) SessionIntegrity(sessionID string) (string, error) {
+	if err := c.requireWindows(sessionID, "privilege enumeration"); err != nil {
+		return "", err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.GetPrivs(ctx, &sliverpb.GetPrivsReq{
@@ -137,6 +143,9 @@ func (c *Client) ElevateToSystem(sessionID, hostingProcess string, wait time.Dur
 
 // CurrentTokenOwner retrieves the owner of the session's thread token.
 func (c *Client) CurrentTokenOwner(sessionID string) (string, error) {
+	if err := c.requireWindows(sessionID, "token inspection"); err != nil {
+		return "", err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.CurrentTokenOwner(ctx, &sliverpb.CurrentTokenOwnerReq{
@@ -166,6 +175,9 @@ func (c *Client) ExecuteToken(sessionID, path string, args []string, output bool
 // RunAs is used to reach a different user's context, so a window here is both a
 // giveaway and a visible artefact attributed to the wrong account.
 func (c *Client) RunAs(sessionID, username, processName, args string) (string, bool, error) {
+	if err := c.requireWindows(sessionID, "RunAs"); err != nil {
+		return "", false, err
+	}
 	ctx, cancel := c.rpcCtx(execDefaultTimeout)
 	defer cancel()
 	resp, err := c.RPC.RunAs(ctx, &sliverpb.RunAsReq{

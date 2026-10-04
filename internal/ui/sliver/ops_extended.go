@@ -36,6 +36,9 @@ type ExecAssemblyResult struct {
 }
 
 func (c *Client) ExecuteAssembly(sessionID string, assembly []byte, arguments, process string) (*ExecAssemblyResult, error) {
+	if err := c.requireWindows(sessionID, ".NET assembly execution"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(opTimeoutExt)
 	defer cancel()
 	resp, err := c.RPC.ExecuteAssembly(ctx, &sliverpb.ExecuteAssemblyReq{
@@ -97,6 +100,9 @@ func (c *Client) Sideload(sessionID string, data []byte, processName, args, entr
 
 // --- SpawnDll — DLL injection ---
 func (c *Client) SpawnDll(sessionID string, data []byte, processName, args, entryPoint string) (*SideloadResult, error) {
+	if err := c.requireWindows(sessionID, "DLL injection"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(opTimeoutExt)
 	defer cancel()
 	resp, err := c.RPC.SpawnDll(ctx, &sliverpb.InvokeSpawnDllReq{
@@ -130,6 +136,9 @@ func (c *Client) SpawnDll(sessionID string, data []byte, processName, args, entr
 //     minimum when it is unset. Building the shellcode alone can outlast that,
 //     so the gRPC deadline and the implant-side timeout are both set here.
 func (c *Client) Migrate(sessionID string, pid uint32, procName string) error {
+	if err := c.requireWindows(sessionID, "process migration"); err != nil {
+		return err
+	}
 	sess, err := c.rawSession(sessionID)
 	if err != nil {
 		return err
@@ -246,6 +255,9 @@ func (c *Client) ProcessDump(sessionID string, pid int32) (*ProcessDumpResult, e
 
 // --- Impersonate — impersonate a user ---
 func (c *Client) Impersonate(sessionID, username string) error {
+	if err := c.requireWindows(sessionID, "token impersonation"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.Impersonate(ctx, &sliverpb.ImpersonateReq{
@@ -263,6 +275,9 @@ func (c *Client) Impersonate(sessionID, username string) error {
 
 // --- MakeToken — create a token with credentials ---
 func (c *Client) MakeToken(sessionID, username, password, domain string) error {
+	if err := c.requireWindows(sessionID, "token creation"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.MakeToken(ctx, &sliverpb.MakeTokenReq{
@@ -282,6 +297,9 @@ func (c *Client) MakeToken(sessionID, username, password, domain string) error {
 
 // --- RevToSelf — revert impersonation ---
 func (c *Client) RevToSelf(sessionID string) error {
+	if err := c.requireWindows(sessionID, "token reversion"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RevToSelf(ctx, &sliverpb.RevToSelfReq{
@@ -303,6 +321,9 @@ func (c *Client) RevToSelf(sessionID string) error {
 // is nil. Always send a non-nil Config with the default HTTP C2 profile, mirroring
 // the official client (getsystem.go).
 func (c *Client) GetSystem(sessionID, hostingProcess string) error {
+	if err := c.requireWindows(sessionID, "GetSystem"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.GetSystem(ctx, &clientpb.GetSystemReq{
@@ -413,6 +434,9 @@ func (c *Client) GetOperators() ([]OperatorView, error) {
 
 // --- RegistryCreateKey — create a new registry key ---
 func (c *Client) RegistryCreateKey(sessionID, hive, path, key string) error {
+	if err := c.requireWindows(sessionID, "the Windows registry"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryCreateKey(ctx, &sliverpb.RegistryCreateKeyReq{
@@ -432,6 +456,9 @@ func (c *Client) RegistryCreateKey(sessionID, hive, path, key string) error {
 
 // RegistryDeleteKey deletes a registry key or value on a windows session.
 func (c *Client) RegistryDeleteKey(sessionID, hive, path, key string) error {
+	if err := c.requireWindows(sessionID, "the Windows registry"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryDeleteKey(ctx, &sliverpb.RegistryDeleteKeyReq{

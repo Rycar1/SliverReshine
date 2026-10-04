@@ -9,6 +9,9 @@ import (
 
 // StartService creates and starts a Windows service via the session.
 func (c *Client) StartService(sessionID, serviceName, description, binPath, hostname, arguments string) error {
+	if err := c.requireWindows(sessionID, "Windows service management"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.StartService(ctx, &sliverpb.StartServiceReq{
@@ -30,6 +33,9 @@ func (c *Client) StartService(sessionID, serviceName, description, binPath, host
 
 // StopService stops a Windows service via the session.
 func (c *Client) StopService(sessionID, serviceName, hostname string) error {
+	if err := c.requireWindows(sessionID, "Windows service management"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.StopService(ctx, &sliverpb.StopServiceReq{
@@ -50,6 +56,9 @@ func (c *Client) StopService(sessionID, serviceName, hostname string) error {
 
 // RemoveService deletes a Windows service via the session.
 func (c *Client) RemoveService(sessionID, serviceName, hostname string) error {
+	if err := c.requireWindows(sessionID, "Windows service management"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.RemoveService(ctx, &sliverpb.RemoveServiceReq{
@@ -98,6 +107,9 @@ func (c *Client) RunSSHCommand(sessionID, username, hostname string, port uint32
 
 // RegisterExtension registers an extension on the session.
 func (c *Client) RegisterExtension(sessionID, name, os, init string, data []byte) error {
+	if err := c.requireWindowsOrDarwin(sessionID, "implant extensions"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.RegisterExtension(ctx, &sliverpb.RegisterExtensionReq{
@@ -118,6 +130,9 @@ func (c *Client) RegisterExtension(sessionID, name, os, init string, data []byte
 
 // ListExtensions lists extensions registered on the session.
 func (c *Client) ListExtensions(sessionID string) ([]string, error) {
+	if err := c.requireWindowsOrDarwin(sessionID, "implant extensions"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.ListExtensions(ctx, &sliverpb.ListExtensionsReq{
@@ -140,6 +155,9 @@ type CallExtensionResult struct {
 
 // CallExtension calls an exported function of a registered extension.
 func (c *Client) CallExtension(sessionID, name, export string, serverStore bool, args []byte) (*CallExtensionResult, error) {
+	if err := c.requireWindowsOrDarwin(sessionID, "implant extensions"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(rpcSlow)
 	defer cancel()
 	resp, err := c.RPC.CallExtension(ctx, &sliverpb.CallExtensionReq{

@@ -43,6 +43,13 @@ func (s *elevationStub) GetSystem(_ context.Context, _ *clientpb.GetSystemReq, _
 }
 
 func (s *elevationStub) GetSessions(_ context.Context, _ *commonpb.Empty, _ ...grpc.CallOption) (*clientpb.Sessions, error) {
+	// The session list is also what the OS gate reads (see osgate.go), so a
+	// test that only drives GetPrivs still triggers this call. An empty list
+	// means "platform unknown", which the gate deliberately lets through, so
+	// such a test keeps testing what it was written to test.
+	if s.sessionsFn == nil {
+		return &clientpb.Sessions{}, nil
+	}
 	return s.sessionsFn()
 }
 

@@ -102,6 +102,9 @@ func randomHex(n int) string {
 // It regenerates/reuses the profile's binary, uploads it over SMB (\\host\C$), starts
 // the service, then removes the service registration.
 func (c *Client) PsExec(sessionID, hostname, profileName, serviceName, serviceDesc, binPath string) (map[string]string, error) {
+	if err := c.requireWindows(sessionID, "PsExec"); err != nil {
+		return nil, err
+	}
 	if profileName == "" {
 		return nil, fmt.Errorf("profile name is required")
 	}

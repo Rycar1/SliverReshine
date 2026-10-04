@@ -118,6 +118,9 @@ type ServiceDetailView struct {
 // ServiceDetail returns the full configuration of one Windows service, which is
 // what identifies a hijackable unquoted service path.
 func (c *Client) ServiceDetail(sessionID, name, hostname string) (ServiceDetailView, error) {
+	if err := c.requireWindows(sessionID, "Windows service management"); err != nil {
+		return ServiceDetailView{}, err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.ServiceDetail(ctx, &sliverpb.ServiceDetailReq{
@@ -147,6 +150,9 @@ func (c *Client) ServiceDetail(sessionID, name, hostname string) (ServiceDetailV
 
 // StartServiceByName starts a service by its service name rather than by path.
 func (c *Client) StartServiceByName(sessionID, name, hostname string) error {
+	if err := c.requireWindows(sessionID, "Windows service management"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(opTimeout)
 	defer cancel()
 	resp, err := c.RPC.StartServiceByName(ctx, &sliverpb.StartServiceByNameReq{
@@ -170,6 +176,9 @@ func (c *Client) StartServiceByName(sessionID, name, hostname string) error {
 // encoder the implant used. Combined with offline parsing this is how SAM,
 // SECURITY and SYSTEM are collected for credential extraction.
 func (c *Client) RegistryReadHive(sessionID, rootHive, requestedHive string) ([]byte, string, error) {
+	if err := c.requireWindows(sessionID, "the Windows registry"); err != nil {
+		return nil, "", err
+	}
 	ctx, cancel := c.rpcCtx(5 * opTimeout)
 	defer cancel()
 	resp, err := c.RPC.RegistryReadHive(ctx, &sliverpb.RegistryReadHiveReq{

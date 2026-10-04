@@ -135,6 +135,15 @@ func (t harvestTarget) String() string {
 	return "session " + t.SessionID
 }
 
+// id returns the session or beacon ID this target names, so the OS gate can
+// resolve the platform of whichever it is.
+func (t harvestTarget) id() string {
+	if t.isBeacon() {
+		return t.BeaconID
+	}
+	return t.SessionID
+}
+
 // SessionTarget names an interactive session.
 func SessionTarget(sessionID string) harvestTarget {
 	return harvestTarget{SessionID: sessionID}
@@ -288,6 +297,12 @@ func (c *Client) executeWithTimeout(sessionID, path string, args []string, op ti
 // intent is the same on either, and refusing the beacon case is what left the
 // escalation step un-run for beacon operators.
 func (c *Client) MimikatzRun(target harvestTarget, req MimikatzRequest, originUUID string) (*MimikatzResult, error) {
+	// mimikatz is a Windows payload: on any other platform the run can only
+	// fail, and it used to fail deep inside the target with a message about the
+	// payload rather than the platform. Refusing here names the reason.
+	if err := c.requireWindows(target.id(), "credential harvesting (mimikatz)"); err != nil {
+		return nil, err
+	}
 	sessionID := target.SessionID
 	if target.isBeacon() {
 		// A beacon has no session ID at all; the field is only used to stamp the

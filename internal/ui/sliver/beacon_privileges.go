@@ -70,6 +70,12 @@ func beaconRequest(beaconID string, timeout time.Duration) *commonpb.Request {
 // question rather than answering it: a previous run's task has a different ID,
 // so a stale result is not something that can be picked up.
 func (c *Client) BeaconIntegrity(beaconID string, wait time.Duration) (string, error) {
+	// GetPrivs has no handler in a non-Windows implant. A beacon's platform is
+	// not in the session table, so this gate reads the beacon list (platformOf);
+	// without it the RPC came back as the implant's own "unknown message type".
+	if err := c.requireWindows(beaconID, "token inspection"); err != nil {
+		return "", err
+	}
 	ctx, cancel := c.rpcCtx(wait)
 	defer cancel()
 

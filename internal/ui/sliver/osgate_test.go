@@ -1,8 +1,10 @@
 package sliver
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 )
@@ -13,6 +15,18 @@ func sessionOn(id, osName string) *rpcStub {
 	return &rpcStub{getSessions: func() (*clientpb.Sessions, error) {
 		return &clientpb.Sessions{Sessions: []*clientpb.Session{{ID: id, OS: osName}}}, nil
 	}}
+}
+
+// A beacon is not in the session table, so its platform has to come from the
+// beacon list. Without that lookup a Windows-only RPC aimed at a Linux beacon
+// skipped the gate and came back as the implant's own "unknown message type".
+func beaconOn(id, osName string) *rpcStub {
+	return &rpcStub{
+		getSessions: func() (*clientpb.Sessions, error) { return &clientpb.Sessions{}, nil },
+		getBeacons: func() (*clientpb.Beacons, error) {
+			return &clientpb.Beacons{Beacons: []*clientpb.Beacon{{ID: id, OS: osName}}}, nil
+		},
+	}
 }
 
 // The defect this gate exists for: a Windows-only RPC sent to a Linux implant
@@ -89,5 +103,73 @@ func TestGatedCallRefusesBeforeReachingTheTransport(t *testing.T) {
 	}
 	if err := c.GetSystem("s-1", ""); err == nil {
 		t.Fatal("GetSystem was allowed on a linux session")
+	}
+	// The same gate on the endpoints that reach an unregistered message type.
+	if _, err := c.ServiceDetail("s-1", "spooler", ""); err == nil {
+		t.Fatal("ServiceDetail was allowed on a linux session")
+	}
+	if _, _, err := c.RegistryReadHive("s-1", "HKLM", "SAM"); err == nil {
+		t.Fatal("RegistryReadHive was allowed on a linux session")
+	}
+	if err := c.Backdoor("s-1", "C:\\x.exe", "profile"); err == nil {
+		t.Fatal("Backdoor was allowed on a linux session")
+	}
+	if err := c.HijackDLL("s-1", "C:\\ref.dll", "C:\\t", nil, nil, "profile"); err == nil {
+		t.Fatal("HijackDLL was allowed on a linux session")
+	}
+	if _, err := c.PsExec("s-1", "host", "profile", "", "", ""); err == nil {
+		t.Fatal("PsExec was allowed on a linux session")
+	}
+}
+
+// A beacon has no session table entry, so the gate has to consult the beacon
+// list; without it a Windows-only RPC aimed at a Linux beacon slipped through.
+func TestRequireWindowsRefusesALinuxBeacon(t *testing.T) {
+	c := &Client{RPC: beaconOn("b-1", "linux")}
+	err := c.requireWindows("b-1", "token inspection")
+	if err == nil {
+		t.Fatal("a Windows-only feature was allowed on a linux beacon")
+	}
+	for _, want := range []string{"token inspection", "not supported", "linux"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message %q does not contain %q", err.Error(), want)
+		}
+	}
+}
+
+func TestRequireWindowsAllowsAWindowsBeacon(t *testing.T) {
+	for _, osName := range []string{"windows", "Windows/amd64"} {
+		c := &Client{RPC: beaconOn("b-1", osName)}
+		if err := c.requireWindows("b-1", "token inspection"); err != nil {
+			t.Errorf("%s beacon was refused: %v", osName, err)
+		}
+	}
+}
+
+// The beacon gate must also run before the RPC: the stub's embedded client is
+// nil, so a call that reached the transport would panic.
+func TestBeaconGatedCallRefusesBeforeReachingTheTransport(t *testing.T) {
+	c := &Client{RPC: beaconOn("b-1", "linux")}
+	if _, err := c.BeaconIntegrity("b-1", time.Second); err == nil {
+		t.Fatal("BeaconIntegrity was allowed on a linux beacon")
+	} else if !strings.Contains(err.Error(), "linux") {
+		t.Errorf("the refusal does not name the platform: %v", err)
+	}
+}
+
+// An alias whose manifest selects ExecuteAssembly or SpawnDll rides the same
+// Windows-only message types as those commands, so it has to be refused on the
+// same platforms -- the manifest choice must not smuggle the RPC past the gate.
+func TestExecuteAliasGatesTheWindowsOnlyManifestKinds(t *testing.T) {
+	for name, manifest := range map[string]*AliasManifest{
+		"assembly":   {IsAssembly: true},
+		"reflective": {IsReflective: true},
+	} {
+		c := &Client{RPC: sessionOn("s-1", "linux")}
+		if _, err := c.executeAlias(context.Background(), "s-1", manifest, nil, "", "", "", "", "", false); err == nil {
+			t.Errorf("%s alias was allowed on a linux session", name)
+		} else if !strings.Contains(err.Error(), "linux") {
+			t.Errorf("%s alias refusal does not name the platform: %v", name, err)
+		}
 	}
 }

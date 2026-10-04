@@ -9,6 +9,9 @@ import (
 
 // Backdoor plants a payload in a file on the session (Windows only).
 func (c *Client) Backdoor(sessionID, filePath, profileName string) error {
+	if err := c.requireWindows(sessionID, "the file backdoor"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.Backdoor(ctx, &clientpb.BackdoorReq{
@@ -29,6 +32,9 @@ func (c *Client) Backdoor(sessionID, filePath, profileName string) error {
 // ReferenceDLL and TargetDLL are optional in-memory payloads; when omitted the
 // reference DLL is downloaded from the session's reference_dll_path.
 func (c *Client) HijackDLL(sessionID, referenceDLLPath, targetLocation string, referenceDLL, targetDLL []byte, profileName string) error {
+	if err := c.requireWindows(sessionID, "DLL hijacking"); err != nil {
+		return err
+	}
 	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
 	resp, err := c.RPC.HijackDLL(ctx, &clientpb.DllHijackReq{

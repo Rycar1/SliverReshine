@@ -29,6 +29,15 @@ type listenerStub struct {
 	mtlsReq *clientpb.MTLSListenerReq
 	wgReq   *clientpb.WGListenerReq
 	httpReq *clientpb.HTTPListenerReq
+
+	getJobs func() (*clientpb.Jobs, error)
+}
+
+func (s *listenerStub) GetJobs(_ context.Context, _ *commonpb.Empty, _ ...grpc.CallOption) (*clientpb.Jobs, error) {
+	if s.getJobs == nil {
+		return &clientpb.Jobs{}, nil
+	}
+	return s.getJobs()
 }
 
 func (s *listenerStub) StartDNSListener(_ context.Context, in *clientpb.DNSListenerReq, _ ...grpc.CallOption) (*clientpb.ListenerJob, error) {
@@ -97,6 +106,47 @@ func TestStartListenerPassesPortsForEveryTransport(t *testing.T) {
 		if got := tc.get(stub); got != tc.port {
 			t.Errorf("%s: port = %d, want %d", tc.kind, got, tc.port)
 		}
+	}
+}
+
+// A second start on the same port is what a double click, or a retry after a
+// slow response, produces. It used to fail at the bind with an error that named
+// neither the listener holding the port nor the fact that the request was
+// already satisfied; now the running listener is handed back instead.
+func TestStartListenerReusesAListenerAlreadyOnThePort(t *testing.T) {
+	stub := &listenerStub{getJobs: func() (*clientpb.Jobs, error) {
+		return &clientpb.Jobs{Active: []*clientpb.Job{
+			{ID: 7, Name: "http", Protocol: "tcp", Port: 8080},
+		}}, nil
+	}}
+	c := &Client{RPC: stub}
+	id, err := c.StartListener("http", "0.0.0.0", 8080, false, "webdelivery", "c2.example.com")
+	if err != nil {
+		t.Fatalf("StartListener: %v", err)
+	}
+	if id != 7 {
+		t.Errorf("job id = %d, want the running listener 7", id)
+	}
+	if stub.httpReq != nil {
+		t.Error("a second HTTP listener was started on a port that is already bound")
+	}
+}
+
+// A listener of a different kind on the same port is not the one that was
+// asked for, so it must not be handed back. Both report "tcp", which is why the
+// match is on the job name and not the protocol.
+func TestStartListenerDoesNotReuseADifferentKind(t *testing.T) {
+	stub := &listenerStub{getJobs: func() (*clientpb.Jobs, error) {
+		return &clientpb.Jobs{Active: []*clientpb.Job{
+			{ID: 7, Name: "mtls", Protocol: "tcp", Port: 8080},
+		}}, nil
+	}}
+	c := &Client{RPC: stub}
+	if _, err := c.StartListener("http", "0.0.0.0", 8080, false, "webdelivery", ""); err != nil {
+		t.Fatalf("StartListener: %v", err)
+	}
+	if stub.httpReq == nil {
+		t.Error("the HTTP listener was skipped because an unrelated mTLS listener shares the port")
 	}
 }
 

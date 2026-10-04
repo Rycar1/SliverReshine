@@ -2,6 +2,7 @@ package sliver
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
@@ -169,6 +170,18 @@ func (c *Client) Jobs() ([]JobView, error) {
 // UI-created HTTP listener incapable of serving a stage -- the file was
 // published, the listener reported success, and every fetch returned 404.
 func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, website, domain string) (uint32, error) {
+	// Reuse a listener that already owns the port.
+	//
+	// A second bind on the same port fails at the OS level, and the error names
+	// neither the listener that holds it nor the fact that the request was
+	// already satisfied -- so a console that posts "start" twice (a double
+	// click, or a retry after a slow response) reports a bind failure for a
+	// listener that is running. When a listener of the same kind already holds
+	// the port, hand back its ID: the operator asked for a listener there, and
+	// one is there.
+	if id, ok := c.existingListener(listenerJobName(jobType, tls), port); ok {
+		return id, nil
+	}
 	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	switch jobType {
@@ -241,6 +254,55 @@ func (c *Client) StopJob(jobID uint32) error {
 	defer cancel()
 	_, err := c.RPC.KillJob(ctx, &clientpb.KillJobReq{ID: jobID})
 	return err
+}
+
+// listenerJobName maps the console's listener type to the job name Sliver
+// registers for it.
+//
+// A job carries the protocol ("tcp"/"udp") rather than the listener kind, so
+// the name is what distinguishes an HTTP listener from an mTLS one, and the two
+// are not interchangeable even though both report "tcp". The http/https split
+// follows the request: the server names the job from the Secure flag, which the
+// switch below sets from the same pair of inputs.
+func listenerJobName(jobType string, tls bool) string {
+	switch jobType {
+	case "mtls":
+		return "mtls"
+	case "http":
+		if tls {
+			return "https"
+		}
+		return "http"
+	case "https":
+		return "https"
+	case "dns":
+		return "dns"
+	case "wireguard":
+		return "wg"
+	}
+	return jobType
+}
+
+// existingListener returns the ID of a listener of the given kind already bound
+// to port, if there is one.
+//
+// The job list does not carry the bind address, so a match is kind and port --
+// which is exactly the pair the server refuses to duplicate. An unknown port
+// state is not a reuse: the start attempt is left to report the conflict.
+func (c *Client) existingListener(name string, port uint32) (uint32, bool) {
+	if name == "" || port == 0 {
+		return 0, false
+	}
+	jobs, err := c.Jobs()
+	if err != nil {
+		return 0, false
+	}
+	for _, j := range jobs {
+		if j.Port == port && strings.EqualFold(j.Name, name) {
+			return j.ID, true
+		}
+	}
+	return 0, false
 }
 
 // EventView is the JSON shape for a server event.

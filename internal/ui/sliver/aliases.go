@@ -490,6 +490,9 @@ func (c *Client) executeAlias(ctx context.Context, sessionID string, manifest *A
 	request := &commonpb.Request{SessionID: sessionID}
 
 	if manifest.IsAssembly {
+		if err := c.requireWindows(sessionID, ".NET assembly execution"); err != nil {
+			return "", err
+		}
 		if arch == "" {
 			arch = "x84"
 		}
@@ -513,6 +516,9 @@ func (c *Client) executeAlias(ctx context.Context, sessionID string, manifest *A
 	}
 
 	if manifest.IsReflective {
+		if err := c.requireWindows(sessionID, "DLL injection"); err != nil {
+			return "", err
+		}
 		resp, err := c.RPC.SpawnDll(ctx, &sliverpb.InvokeSpawnDllReq{
 			Data:        binData,
 			Args:        []string{strings.TrimSpace(extArgs)},

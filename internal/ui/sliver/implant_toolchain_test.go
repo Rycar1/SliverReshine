@@ -30,6 +30,19 @@ func TestBuildToolchainHintNamesGcc(t *testing.T) {
 	}
 }
 
+// linux shellcode is the other format that shells out to a C compiler; the
+// shared-library case above must not be the only one that names gcc.
+func TestBuildToolchainHintNamesGccForLinuxShellcode(t *testing.T) {
+	cfg := &clientpb.ImplantConfig{GOOS: "linux", GOARCH: "amd64", Format: clientpb.OutputFormat_SHELLCODE}
+	hint := buildToolchainHint(cfg, errors.New("rpc error: code = Unknown desc = exit status 1"))
+	if !strings.Contains(hint, "gcc") {
+		t.Fatalf("linux shellcode failure did not mention gcc: %q", hint)
+	}
+	if strings.Contains(hint, "osxcross") {
+		t.Errorf("a linux hint suggested osxcross, which is the wrong fix: %q", hint)
+	}
+}
+
 func TestBuildToolchainHintNamesOsxcrossForDarwin(t *testing.T) {
 	cfg := &clientpb.ImplantConfig{GOOS: "darwin", GOARCH: "arm64", Format: clientpb.OutputFormat_SHELLCODE}
 	hint := buildToolchainHint(cfg, errors.New("rpc error: code = Unknown desc = exit status 1"))

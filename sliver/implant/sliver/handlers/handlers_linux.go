@@ -426,30 +426,39 @@ func chownHandler(data []byte, resp RPCResponse) {
 		goto finished
 	}
 
+	// Accept a numeric uid/gid directly and fall back to a name lookup for
+	// anything that is not a number. The console and the CLI send names, but
+	// an API caller (or an operator reading `ls -n`) naturally has the number,
+	// and user.Lookup resolves names only -- user.Lookup("0") fails with
+	// "unknown user 0", which reads as a chown bug rather than a lookup one.
 	uid_str = chownReq.Uid
-	usr, err = user.Lookup(uid_str)
+	uid, err = strconv.ParseUint(uid_str, 10, 32)
 	if err != nil {
-		chown.Response.Err = err.Error()
-		goto finished
-	}
-
-	uid, err = strconv.ParseUint(usr.Uid, 10, 32)
-	if err != nil {
-		chown.Response.Err = err.Error()
-		goto finished
+		usr, err = user.Lookup(uid_str)
+		if err != nil {
+			chown.Response.Err = err.Error()
+			goto finished
+		}
+		uid, err = strconv.ParseUint(usr.Uid, 10, 32)
+		if err != nil {
+			chown.Response.Err = err.Error()
+			goto finished
+		}
 	}
 
 	gid_str = chownReq.Gid
-	grp, err = user.LookupGroup(gid_str)
+	gid, err = strconv.ParseUint(gid_str, 10, 32)
 	if err != nil {
-		chown.Response.Err = err.Error()
-		goto finished
-	}
-
-	gid, err = strconv.ParseUint(grp.Gid, 10, 32)
-	if err != nil {
-		chown.Response.Err = err.Error()
-		goto finished
+		grp, err = user.LookupGroup(gid_str)
+		if err != nil {
+			chown.Response.Err = err.Error()
+			goto finished
+		}
+		gid, err = strconv.ParseUint(grp.Gid, 10, 32)
+		if err != nil {
+			chown.Response.Err = err.Error()
+			goto finished
+		}
 	}
 
 	// Check if the recursive flag is set and the path is a directory

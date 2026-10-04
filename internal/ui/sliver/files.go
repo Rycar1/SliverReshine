@@ -1,7 +1,10 @@
 package sliver
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -127,8 +130,51 @@ func (c *Client) Download(sessionID, path string) (string, string, error) {
 	if !resp.Exists {
 		return "", "", fmt.Errorf("remote file %q does not exist", path)
 	}
-	return encodeBase64(resp.Data), resp.Path, nil
+	data, err := decodeDownloadData(resp.Encoder, resp.Data)
+	if err != nil {
+		return "", "", err
+	}
+	return encodeBase64(data), resp.Path, nil
 }
+
+// decodeDownloadData turns a download reply into the file's real bytes.
+//
+// The implant gzips every file it returns and names the codec in the
+// Download.Encoder field; Sliver's own client checks that field at each call
+// site and decompresses. The console ignored it and forwarded the compressed
+// bytes as if they were the file, so every cat and every download handed back a
+// gzip stream -- the operator saved a .gz where the contents should have been.
+//
+// Only "gzip" is handled, which matches the official client: any other value
+// (including the empty string an older or unusual implant may send) is passed
+// through untouched rather than rejected, so a new codec degrades to the old
+// behaviour instead of breaking the file browser outright.
+func decodeDownloadData(encoder string, data []byte) ([]byte, error) {
+	if encoder != "gzip" {
+		return data, nil
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("could not decompress the downloaded file: %w", err)
+	}
+	defer reader.Close()
+
+	// Bound the expansion the same way the implant's own encoder does, so a
+	// corrupt or hostile stream cannot expand without limit in the console.
+	limited := &io.LimitedReader{R: reader, N: maxDownloadDecodeLen + 1}
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(limited); err != nil {
+		return nil, fmt.Errorf("could not decompress the downloaded file: %w", err)
+	}
+	if limited.N == 0 {
+		return nil, fmt.Errorf("the downloaded file exceeds %d bytes after decompression", int64(maxDownloadDecodeLen))
+	}
+	return buf.Bytes(), nil
+}
+
+// maxDownloadDecodeLen caps how large a gzipped download may become once
+// decompressed. It matches the ceiling Sliver's own gzip encoder enforces.
+const maxDownloadDecodeLen = 2 * 1024 * 1024 * 1024
 
 // Upload writes data to a file on the session.
 // Upload writes data to path on the session.

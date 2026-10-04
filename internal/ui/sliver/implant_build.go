@@ -189,7 +189,7 @@ func (c *Client) GenerateImplant(req *GenerateRequest) (map[string]any, error) {
 		if !prior || !isDuplicateBuildName(err) {
 			// Nothing has been deleted, so a previous build of this name -- if
 			// there is one -- is still on the server.
-			return nil, err
+			return nil, explainBuildFailure(cfg, err)
 		}
 		// The name is taken and the payload compiled. Free the name, then build
 		// the replacement.
@@ -202,7 +202,7 @@ func (c *Client) GenerateImplant(req *GenerateRequest) (map[string]any, error) {
 		if err != nil {
 			return nil, fmt.Errorf(
 				"the previous build %q was removed to free the name, but the replacement failed to build: %w",
-				req.Name, err)
+				req.Name, explainBuildFailure(cfg, err))
 		}
 		return implantBuildResponse(resp, cfg, req, true), nil
 	}
@@ -214,6 +214,98 @@ func (c *Client) runGenerate(name string, cfg *clientpb.ImplantConfig) (*clientp
 	ctx, cancel := c.rpcCtx(rpcLong)
 	defer cancel()
 	return c.RPC.Generate(ctx, &clientpb.GenerateReq{Config: cfg, Name: name})
+}
+
+// explainBuildFailure turns a build error into one the operator can act on.
+//
+// Sliver compiles shared libraries and linux shellcode through a C compiler,
+// and a Darwin target needs osxcross; neither ships with a console-only
+// deployment. When the toolchain is missing the RPC returns the compiler's own
+// terse message -- cgo's `C compiler "gcc" not found: exec: "gcc": executable
+// file not found in $PATH`, or a bare `exit status 1` from the zig/osxcross
+// wrapper -- which names neither the missing tool nor the way to fix it.
+//
+// The request itself was valid, so this is a deployment gap rather than a bad
+// target: the message names the tool to install and keeps the original error
+// attached, so a genuine compile failure is still visible underneath.
+func explainBuildFailure(cfg *clientpb.ImplantConfig, err error) error {
+	hint := buildToolchainHint(cfg, err)
+	if hint == "" {
+		return err
+	}
+	return fmt.Errorf("%s: %w", hint, err)
+}
+
+// buildToolchainHint returns a sentence naming the missing C toolchain for a
+// build that needs one, or an empty string when the error is not a toolchain
+// problem.
+func buildToolchainHint(cfg *clientpb.ImplantConfig, err error) string {
+	if err == nil || cfg == nil {
+		return ""
+	}
+	// Only shared libraries and shellcode invoke a C compiler. An executable
+	// build that failed is a different problem with a different fix, so it is
+	// left untouched.
+	if cfg.Format != clientpb.OutputFormat_SHARED_LIB && cfg.Format != clientpb.OutputFormat_SHELLCODE {
+		return ""
+	}
+	msg := strings.ToLower(err.Error())
+	if !looksLikeMissingToolchain(msg) {
+		return ""
+	}
+	if cfg.GOOS == "darwin" {
+		return fmt.Sprintf(
+			"cannot build %s/%s %s: a Darwin target is compiled with the osxcross C "+
+				"cross-compiler, which is not installed on this host (Sliver expects the "+
+				"SDK under /opt/osxcross). Install osxcross, or build for linux or windows",
+			cfg.GOOS, cfg.GOARCH, formatName(cfg.Format))
+	}
+	return fmt.Sprintf(
+		"cannot build %s/%s %s: it needs a C compiler (gcc) that is not installed on this "+
+			"host. Install gcc (for example `apt-get install -y gcc`), or build an "+
+			"executable instead",
+		cfg.GOOS, cfg.GOARCH, formatName(cfg.Format))
+}
+
+// looksLikeMissingToolchain matches the errors a missing C toolchain produces.
+//
+// The list is explicit rather than a single "exit status" test, because a
+// non-zero status can also come from a genuine compile error in a working
+// toolchain, and mislabelling that as "install gcc" would send the operator
+// down the wrong path. The one status-based match is the terse
+// "exit status 1" the zig/osxcross wrappers emit with no diagnostics of their
+// own -- for a format that cannot build without a compiler, that is the
+// toolchain, not the source.
+func looksLikeMissingToolchain(msg string) bool {
+	for _, marker := range []string{
+		`c compiler "gcc" not found`,   // cgo, GCC
+		`c compiler "clang" not found`, // cgo, clang
+		"cgo: c compiler",              // any cgo compiler-resolution failure
+		"executable file not found",    // exec: "gcc": executable file not found in $PATH
+		"not found in $path",           // cgo's PATH-qualified form
+		"no such file or directory",    // osxcross / wrapper script absent
+		"unknown architecture",         // zig cc -target with an empty target
+		"exit status 1",                // zig/osxcross wrapper, no diagnostics
+	} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// formatName renders an output format for a message.
+func formatName(f clientpb.OutputFormat) string {
+	switch f {
+	case clientpb.OutputFormat_SHARED_LIB:
+		return "shared library"
+	case clientpb.OutputFormat_SHELLCODE:
+		return "shellcode"
+	case clientpb.OutputFormat_SERVICE:
+		return "service"
+	default:
+		return "executable"
+	}
 }
 
 // implantBuildExists reports whether the server already holds a build with this

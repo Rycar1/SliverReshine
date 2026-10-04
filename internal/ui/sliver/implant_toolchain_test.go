@@ -1,0 +1,87 @@
+package sliver
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/bishopfox/sliver/protobuf/clientpb"
+)
+
+// A console-only deployment has no C cross-compiler. Sliver runs one for
+// shared libraries and for linux shellcode, and a Darwin target needs
+// osxcross, so those requests fail with the compiler’s own terse message:
+// cgo’s `C compiler "gcc" not found`, or a bare `exit status 1` from the
+// zig/osxcross wrapper. The operator was told none of that, and had to read
+// the source to learn that the fix was `apt-get install gcc`.
+
+func TestBuildToolchainHintNamesGcc(t *testing.T) {
+	cfg := &clientpb.ImplantConfig{GOOS: "linux", GOARCH: "amd64", Format: clientpb.OutputFormat_SHARED_LIB}
+	cases := []string{
+		`rpc error: code = Unknown desc = exit status 1`,
+		`cgo: C compiler "gcc" not found: exec: "gcc": executable file not found in $PATH`,
+		`exec: "gcc": executable file not found in $PATH`,
+	}
+	for _, msg := range cases {
+		hint := buildToolchainHint(cfg, errors.New(msg))
+		if !strings.Contains(hint, "gcc") {
+			t.Errorf("error %q produced no gcc hint: %q", msg, hint)
+		}
+	}
+}
+
+func TestBuildToolchainHintNamesOsxcrossForDarwin(t *testing.T) {
+	cfg := &clientpb.ImplantConfig{GOOS: "darwin", GOARCH: "arm64", Format: clientpb.OutputFormat_SHELLCODE}
+	hint := buildToolchainHint(cfg, errors.New("rpc error: code = Unknown desc = exit status 1"))
+	if !strings.Contains(hint, "osxcross") {
+		t.Fatalf("darwin shellcode failure did not mention osxcross: %q", hint)
+	}
+	if strings.Contains(hint, "apt-get install -y gcc") {
+		t.Errorf("darwin hint suggested installing gcc, which is the wrong fix: %q", hint)
+	}
+}
+
+// A plain executable never invokes a C compiler, so a failure there must not
+// be rewritten as a toolchain problem.
+func TestBuildToolchainHintLeavesExecutableAlone(t *testing.T) {
+	cfg := &clientpb.ImplantConfig{GOOS: "linux", GOARCH: "amd64", Format: clientpb.OutputFormat_EXECUTABLE}
+	if hint := buildToolchainHint(cfg, errors.New("exit status 1")); hint != "" {
+		t.Errorf("an executable build was blamed on the toolchain: %q", hint)
+	}
+}
+
+// The hint is added, never substituted: whatever the server said stays in the
+// message, so a genuine compile error is still readable underneath it.
+func TestExplainBuildFailureKeepsTheOriginalDiagnostic(t *testing.T) {
+	cfg := &clientpb.ImplantConfig{GOOS: "linux", GOARCH: "amd64", Format: clientpb.OutputFormat_SHARED_LIB}
+	msg := "exit status 1: undefined reference to `main’"
+	// "exit status 1" is the documented zig/osxcross signal, so it does match;
+	// the contract is only that the original error stays attached, not that it
+	// is discarded.
+	var err error = errors.New(msg)
+	wrapped := explainBuildFailure(cfg, err)
+	if !errors.Is(wrapped, err) {
+		t.Fatalf("the original error was dropped: %v", wrapped)
+	}
+	if !strings.Contains(wrapped.Error(), "undefined reference") {
+		t.Errorf("the compiler diagnostic was lost: %v", wrapped)
+	}
+}
+
+func TestExplainBuildFailurePassesThroughUnrelatedErrors(t *testing.T) {
+	cfg := &clientpb.ImplantConfig{GOOS: "windows", GOARCH: "amd64", Format: clientpb.OutputFormat_EXECUTABLE}
+	orig := errors.New("UNIQUE constraint failed: implant_builds.name")
+	got := explainBuildFailure(cfg, orig)
+	if got != orig {
+		t.Errorf("an unrelated error was rewritten: %v", got)
+	}
+}
+
+func TestExplainBuildFailureHandlesNil(t *testing.T) {
+	if got := explainBuildFailure(nil, nil); got != nil {
+		t.Errorf("nil error produced %v", got)
+	}
+	if hint := buildToolchainHint(nil, errors.New("exit status 1")); hint != "" {
+		t.Errorf("a nil config produced a hint: %q", hint)
+	}
+}

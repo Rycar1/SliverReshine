@@ -91,7 +91,16 @@ export default function OneLinerPanel() {
       })
       setResult(res)
     } catch (err) {
-      setError((err as Error).message)
+      // A listener stopped between the last poll and this click reaches the
+      // backend before the poll notices, so the reply names a job id that is
+      // still on screen. Resync and explain it in the operator's language
+      // instead of surfacing the raw backend string.
+      if (/no listener with job id/i.test((err as Error).message)) {
+        setError(t('oneliner.pickListener'))
+        void load()
+      } else {
+        setError((err as Error).message)
+      }
     } finally {
       setBusy(false)
     }

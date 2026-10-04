@@ -121,4 +121,23 @@ describe('OneLinerPanel listener selection', () => {
     expect(await screen.findByText(/No listener can serve a stage yet/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Generate one-liner' })).not.toBeInTheDocument()
   })
+
+  it('explains a listener that stopped between the poll and the click', async () => {
+    mockedApi.oneLinerTargets.mockResolvedValue({ targets: [target({ job_id: 3 })] })
+    mockedApi.oneLiner.mockRejectedValue(new Error('no listener with job id 3'))
+
+    render(<OneLinerPanel />)
+    await act(async () => {})
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Generate one-liner' }))
+    })
+
+    // The reply names a listener that is still on screen, so showing it raw
+    // reads as a panel bug rather than a stale list.
+    expect(await screen.findByText('Pick a listener first')).toBeInTheDocument()
+    expect(screen.queryByText(/no listener with job id/)).not.toBeInTheDocument()
+    // The list is refetched so the next click carries a live id.
+    expect(mockedApi.oneLinerTargets.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
 })

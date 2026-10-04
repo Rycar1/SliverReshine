@@ -4,6 +4,27 @@ import { api } from '../../lib/api'
 import type { OneLinerResult, OneLinerTarget } from '../../lib/types'
 
 /**
+ * Reconciles the selected listener against the freshest listener list.
+ *
+ * Stopping and restarting a listener hands it a new job id, so a selection made
+ * before the restart points at a listener that no longer exists. The select
+ * renders the live listener anyway -- a value with no matching option falls back
+ * to the first option -- so the panel looks correct while carrying the dead id,
+ * and the build fails with "no listener with job id N". Keeping the selection
+ * only while it is still present is what stops the two from drifting apart.
+ *
+ * An empty list yields '' rather than keeping a stale id, so a later listener
+ * gets picked up instead of reviving the old one.
+ */
+export function reconcileJobId(current: number | '', targets: OneLinerTarget[]): number | '' {
+  const usable = targets.filter((x) => x.can_stage)
+  if (current !== '' && usable.some((x) => x.job_id === current)) {
+    return current
+  }
+  return usable.length > 0 ? usable[0].job_id : ''
+}
+
+/**
  * One-liner delivery: pick a listener, get a command that gets a session.
  *
  * This is the whole flow in one control because the underlying operations are
@@ -31,8 +52,7 @@ export default function OneLinerPanel() {
       setTargets(all)
       // Preselect the first eligible listener rather than making the operator
       // pick from a list where most entries cannot be used.
-      const usable = all.filter((x: OneLinerTarget) => x.can_stage)
-      setJobId((cur) => (cur === '' && usable.length > 0 ? usable[0].job_id : cur))
+      setJobId((cur) => reconcileJobId(cur, all))
     } catch (err) {
       setError((err as Error).message)
     }
@@ -47,8 +67,17 @@ export default function OneLinerPanel() {
   const usable = targets.filter((x) => x.can_stage)
 
   const generate = async () => {
-    if (jobId === '') {
+    // Checked against the freshest list rather than trusting the select: the
+    // listener can be stopped from another tab, and the row that carried the
+    // selected job id then vanishes while the select still shows a live one.
+    // Without this the request goes out with a dead id and comes back as
+    // "no listener with job id N" -- naming a listener that is nowhere on
+    // screen, because the list was refreshed and the selection was not.
+    if (jobId === '' || !usable.some((x) => x.job_id === jobId)) {
       setError(t('oneliner.pickListener'))
+      // Resync now rather than waiting up to a poll interval, so the message is
+      // a one-click annoyance instead of something the operator has to guess at.
+      void load()
       return
     }
     setBusy(true)

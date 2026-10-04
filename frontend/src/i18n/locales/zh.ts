@@ -101,7 +101,7 @@ export default {
     listener: '监听器',
     platform: '目标系统',
     host: '回连地址',
-    hostPlaceholder: '留空则用监听器自身地址',
+    hostPlaceholder: '留空则用你打开本控制台所用的地址',
     generate: '生成一行命令',
     building: '正在构建载荷…',
     command: '在目标机上执行这一行',
@@ -424,7 +424,11 @@ export default {
     commandLabel: '一行命令',
     copy: '复制',
     jobStarted: 'HTTP 监听器已启动，任务号 {{id}}。',
-    jobExisting: '未启动新的监听器：预期该端口上已有的监听器会提供此载荷。'
+    jobExisting: '未启动新的监听器：预期该端口上已有的监听器会提供此载荷。',
+    publishedOn: '载荷已发布到网站 {{name}}。',
+    publishedTitle: '已发布载荷',
+    publishedEmpty: '暂无已发布载荷，生成一次即可发布。',
+    refresh: '刷新'
   },
   topology: {
     sub: '会话、信标、跳板链路与控制台代理的统一视图',

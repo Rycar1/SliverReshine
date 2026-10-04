@@ -101,7 +101,7 @@ export default {
     listener: 'Listener',
     platform: 'Target platform',
     host: 'Callback host',
-    hostPlaceholder: 'Empty uses the listener address',
+    hostPlaceholder: 'Empty uses the address you opened this console on',
     generate: 'Generate one-liner',
     building: 'Building the stage…',
     command: 'Run this on the target',
@@ -427,7 +427,11 @@ export default {
     commandLabel: 'One-line command',
     copy: 'Copy',
     jobStarted: 'HTTP listener started as job {{id}}.',
-    jobExisting: 'No new listener was started; an existing one on that port is expected to serve the stage.'
+    jobExisting: 'No new listener was started; an existing one on that port is expected to serve the stage.',
+    publishedOn: 'Stage published on website {{name}}.',
+    publishedTitle: 'Published payloads',
+    publishedEmpty: 'Nothing published yet. Build a stage to publish one.',
+    refresh: 'Refresh'
   },
   topology: {
     sub: 'Sessions, beacons, pivot hops and console-side proxies in one view',

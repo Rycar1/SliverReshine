@@ -7,6 +7,7 @@ const { mockedApi, mockToast } = vi.hoisted(() => ({
     implantProfiles: vi.fn(),
     webDeliveryFormats: vi.fn(),
     webDelivery: vi.fn(),
+    websites: vi.fn(),
   },
   mockToast: { push: vi.fn() },
 }))
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockedApi.implantProfiles.mockResolvedValue({ profiles: [PROFILE] })
   mockedApi.webDeliveryFormats.mockResolvedValue({ formats: FORMATS })
+  mockedApi.websites.mockResolvedValue({ websites: [] })
 })
 
 describe('WebDeliveryPage', () => {
@@ -159,5 +161,48 @@ describe('WebDeliveryPage', () => {
     expect(await screen.findByText(/server unreachable/)).toBeTruthy()
     // Formats still loaded, because the two requests fail independently.
     expect(mockedApi.webDeliveryFormats).toHaveBeenCalled()
+  })
+
+  it('lists the payloads that are already published', async () => {
+    mockedApi.websites.mockResolvedValue({
+      websites: [
+        {
+          Name: 'webdelivery',
+          Size: 2048,
+          Contents: {
+            '/stage-windows.woff': {
+              Path: '/stage-windows.woff',
+              ContentType: 'application/octet-stream',
+              Size: 2048,
+            },
+          },
+        },
+      ],
+    })
+
+    render(<WebDeliveryPage />)
+
+    expect(await screen.findByText('/stage-windows.woff')).toBeTruthy()
+    expect(screen.getByText('webdelivery')).toBeTruthy()
+  })
+
+  it('shows an empty state before anything is published', async () => {
+    render(<WebDeliveryPage />)
+    expect(await screen.findByText('webdelivery.publishedEmpty')).toBeTruthy()
+  })
+
+  it('refreshes the published list after a build', async () => {
+    mockedApi.webDelivery.mockResolvedValue({
+      command: 'cmd',
+      url: 'http://h/s',
+      job_id: 3,
+      warning: '',
+      website: 'webdelivery',
+    })
+
+    render(<WebDeliveryPage />)
+    await waitFor(() => expect(mockedApi.websites).toHaveBeenCalledTimes(1))
+    await submit('h')
+    await waitFor(() => expect(mockedApi.websites).toHaveBeenCalledTimes(2))
   })
 })

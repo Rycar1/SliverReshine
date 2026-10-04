@@ -830,6 +830,8 @@ export interface WebDeliveryResult {
   job_id: number
   /** Non-fatal note, e.g. that no listener was started. */
   warning: string
+  /** Website the stage was actually published on (the console may rewrite it). */
+  website?: string
 }
 
 export interface TopologyGraph {

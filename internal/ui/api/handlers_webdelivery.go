@@ -24,6 +24,9 @@ func (s *Server) handleWebDelivery(c *sliver.Client, w http.ResponseWriter, r *h
 	if !decodeBody(w, r, &req) {
 		return
 	}
+	// An empty host means "the address the operator reached this console on".
+	// See hostOrConsoleAddress in handlers_oneliner.go.
+	req.Host = hostOrConsoleAddress(req.Host, r.Host)
 	res, err := c.WebDelivery(req)
 	writeResult(w, res, err)
 }

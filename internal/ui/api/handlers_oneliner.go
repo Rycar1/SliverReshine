@@ -15,19 +15,12 @@ import (
 // written and content is published. The listener itself is read, not changed --
 // an operator who has already started one should not have it restarted by asking
 // for a command.
-// defaultDeliverySite is the website an HTTP listener serves when the operator
-// did not name one.
-//
-// It is a constant shared with the one-liner code so the listener and the stage
-// it serves cannot disagree -- which is what a 404 on a freshly generated
-// one-liner turned out to be.
-const defaultDeliverySite = "webdelivery"
-
 func (s *Server) handleOneLiner(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.OneLinerRequest
 	if !decodeBody(w, r, &req) {
 		return
 	}
+	req.Host = hostOrConsoleAddress(req.Host, r.Host)
 	res, err := c.OneLiner(req)
 	writeResult(w, res, err)
 }
@@ -81,6 +74,7 @@ func (s *Server) handleOneLinerAll(c *sliver.Client, w http.ResponseWriter, r *h
 		writeErr(w, http.StatusBadRequest, "job_id is required")
 		return
 	}
+	req.Host = hostOrConsoleAddress(req.Host, r.Host)
 
 	// An unknown platform name is refused before any build starts, so a typo
 	// does not cost two implant builds and then report nothing usable.
@@ -103,4 +97,29 @@ func (s *Server) handleOneLinerAll(c *sliver.Client, w http.ResponseWriter, r *h
 	// shows why the rest did not. Failing the whole request would hide a working
 	// command behind a non-2xx.
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
+}
+
+// defaultDeliverySite is the website an HTTP listener serves when the operator
+// did not name one.
+//
+// It is a constant shared with the one-liner code so the listener and the stage
+// it serves cannot disagree -- which is what a 404 on a freshly generated
+// one-liner turned out to be.
+const defaultDeliverySite = "webdelivery"
+
+// hostOrConsoleAddress fills an empty operator-supplied host from the address the
+// operator reached this console on.
+//
+// It exists for one failure mode: a listener bound to 0.0.0.0 reports 0.0.0.0 as
+// its only domain, and 0.0.0.0 is not an address a target can dial. The payload
+// builds, the stage fetches, and nothing ever checks in. The console does know one
+// address that demonstrably routes here -- the one in the browser's URL, which
+// arrives as the Host header -- so that is used when the operator left the field
+// blank. An explicit host is never overridden, and ConsoleHostFromHeader returns
+// "" for a loopback or wildcard header so the existing fallbacks still apply.
+func hostOrConsoleAddress(reqHost, hostHeader string) string {
+	if strings.TrimSpace(reqHost) != "" {
+		return reqHost
+	}
+	return sliver.ConsoleHostFromHeader(hostHeader)
 }

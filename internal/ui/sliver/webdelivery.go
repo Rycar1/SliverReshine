@@ -76,6 +76,10 @@ type WebDeliveryResult struct {
 	// Warning carries a non-fatal note, e.g. that no listener was started
 	// because one may already exist.
 	Warning string `json:"warning"`
+	// Website is the site the stage was actually published on. It is reported
+	// because the console rewrites the requested site to the one the running
+	// listener serves, so the operator cannot infer it from what they typed.
+	Website string `json:"website"`
 }
 
 // WebDelivery builds a stage, publishes it, and returns the one-liner.
@@ -157,7 +161,7 @@ func (c *Client) WebDelivery(req WebDeliveryRequest) (*WebDeliveryResult, error)
 		return nil, err
 	}
 
-	result := &WebDeliveryResult{}
+	result := &WebDeliveryResult{Website: website}
 
 	// A website can only serve on the port Sliver already listens on for
 	// staging. Sliver's website feature binds its own port, so the stage is

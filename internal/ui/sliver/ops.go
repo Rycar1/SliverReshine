@@ -2,6 +2,7 @@ package sliver
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -289,6 +290,17 @@ func (c *Client) Screenshot(sessionID string) (string, error) {
 	}
 	if resp.Response != nil && resp.Response.Err != "" {
 		return "", fmt.Errorf("%s", resp.Response.Err)
+	}
+	// The Linux and Darwin implants implement Screenshot as a best-effort
+	// X11/Quartz capture: on a headless target it returns no bytes at all and
+	// the RPC still reports success. Returning that as a 200 with an empty
+	// "Data" made the console show a blank image with no explanation -- the
+	// operator could not tell "the target has no desktop" from "the console
+	// lost the image". An empty capture is stated as such instead.
+	if len(resp.Data) == 0 {
+		return "", errors.New("the target returned an empty screenshot: it has no " +
+			"active display (a headless host or a session with no graphical desktop), " +
+			"so there is nothing to capture")
 	}
 	return encodeBase64(resp.Data), nil
 }

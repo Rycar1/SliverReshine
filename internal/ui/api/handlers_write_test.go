@@ -42,6 +42,11 @@ type rpcStub struct {
 	getSessionsResp  *clientpb.Sessions
 	getSessionsErr   error
 
+	// StartListener reads the running jobs to reuse a listener that already
+	// owns the port, so every listener test now reaches GetJobs.
+	getJobsResp *clientpb.Jobs
+	getJobsErr  error
+
 	mtlsReq     *clientpb.MTLSListenerReq
 	httpReq     *clientpb.HTTPListenerReq
 	wgReq       *clientpb.WGListenerReq
@@ -90,6 +95,16 @@ func (s *rpcStub) GetSessions(context.Context, *commonpb.Empty, ...grpc.CallOpti
 		return &clientpb.Sessions{}, nil
 	}
 	return s.getSessionsResp, nil
+}
+
+func (s *rpcStub) GetJobs(context.Context, *commonpb.Empty, ...grpc.CallOption) (*clientpb.Jobs, error) {
+	if s.getJobsErr != nil {
+		return nil, s.getJobsErr
+	}
+	if s.getJobsResp == nil {
+		return &clientpb.Jobs{}, nil
+	}
+	return s.getJobsResp, nil
 }
 
 func (s *rpcStub) StartMTLSListener(_ context.Context, in *clientpb.MTLSListenerReq, _ ...grpc.CallOption) (*clientpb.ListenerJob, error) {

@@ -750,6 +750,12 @@ export interface OneLinerTarget {
   port: number
   domains: string[]
   can_stage: boolean
+  /**
+   * The address a command built for this listener dials when the host field is
+   * left blank, or "" when none is available. The panel shows it instead of an
+   * empty field, which is what invited a wildcard to be typed in.
+   */
+  callback_host?: string
 }
 
 /** One command template for a stage that has already been published. */
@@ -771,6 +777,12 @@ export interface OneLinerRequest {
   obfuscate?: boolean
   evasion?: boolean
   delivery?: string
+  /**
+   * Rebuild even when an identical stage was already built. Omitted means the
+   * backend answers from the stage it built last time instead of building
+   * another pair of implants.
+   */
+  force?: boolean
 }
 
 /** The command that gets a session, plus what it points at. */
@@ -783,6 +795,8 @@ export interface OneLinerResult {
   job_id: number
   staged_as: string
   warning: string
+  /** True when the command came from an earlier build rather than a new one. */
+  reused?: boolean
   alternatives: OneLinerAlternative[]
 }
 
@@ -801,7 +815,15 @@ export interface MultiOneLinerResult {
   staged_as: string
   /** Where the stage was published; differs per platform by design. */
   path: string
+  /**
+   * The address the implant dials. Shown in the dialog because a command that
+   * calls back somewhere unreachable looks identical to one that works until it
+   * is run on the target.
+   */
+  c2_url: string
   alternatives: OneLinerAlternative[]
+  /** True when this platform's stage already existed and was not rebuilt. */
+  reused?: boolean
   /** Set when this platform could not be built. Empty on success. */
   error?: string
 }
@@ -839,3 +861,235 @@ export interface TopologyGraph {
   edges: TopologyEdge[]
 }
 
+// --- AI assistant ---
+
+/**
+ * One command the AI collector proposed and what happened to it.
+ *
+ * A refused step is a normal, expected outcome: the model proposed something
+ * outside the read-only allowlist and the console stopped it before it ran.
+ */
+export interface AICollectStep {
+  command: string
+  /**
+   * The model's own reasoning for this step, shown to the operator. Empty
+   * when the endpoint returns no reasoning or thinking is off.
+   */
+  thinking?: string
+  reason?: string
+  refused?: boolean
+  refusal?: string
+  output?: string
+  error?: string
+  status?: number
+}
+
+/** A credential, API key or loot candidate the model extracted. */
+export interface AICollectFinding {
+  kind: string
+  name?: string
+  username?: string
+  secret?: string
+  content?: string
+  source?: string
+}
+
+/** One artefact written into the console vaults. */
+export interface AICollectStored {
+  kind: string
+  name: string
+  id?: string
+}
+
+/** Parameters for one read-only collection run. */
+export interface AICollectRequest {
+  objective?: string
+  no_store?: boolean
+  /**
+   * Run a second model pass over the extracted findings before filing them,
+   * dropping duplicates and entries with no value. The pass answers with
+   * indices, so it can remove a finding but never rewrite one.
+   */
+  filter_findings?: boolean
+}
+
+/** One finding the second pass removed, with the model's reason. */
+export interface AICollectFiltered {
+  /** The finding's position in the extraction phase's output. */
+  index: number
+  kind: string
+  name: string
+  reason: string
+}
+
+export interface AICollectResult {
+  steps: AICollectStep[]
+  findings: AICollectFinding[]
+  stored: AICollectStored[]
+  skipped: string[]
+  /** Findings the second pass removed; empty unless filtering was on. */
+  filtered?: AICollectFiltered[]
+  summary?: string
+  stopped: string
+  model: string
+  dry_run: boolean
+}
+
+/**
+ * One frame of a streaming run.
+ *
+ * A collection or escalation run is published as it happens rather than as a
+ * final blob, so the operator can watch the model reason and act instead of a
+ * spinner. `status` and `summary` carry free text, `step` carries a finished
+ * command, and `done` carries the run's result (or an error message in
+ * `text` when the run failed after the stream had already started).
+ */
+export type AIEventType =
+  | 'status'
+  | 'thinking'
+  | 'thinking_delta'
+  | 'answer_delta'
+  | 'command'
+  | 'step'
+  | 'summary'
+  | 'done'
+
+export interface AIEvent {
+  type: AIEventType
+  /** Position of the step this frame belongs to, when it names one. */
+  index?: number
+  /**
+   * Free text for status, thinking, command and summary frames, and the
+   * increment carried by a thinking_delta or answer_delta frame.
+   */
+  text?: string
+  /** The finished step, on `step` frames. */
+  step?: AICollectStep
+  /** The run's final value, on the `done` frame. */
+  result?: unknown
+}
+
+/**
+ * Parameters for one escalation attempt.
+ *
+ * Unlike collection, escalation defaults to the full shell: a run that cannot
+ * change state cannot escalate. `read_only` opts back into the allowlist.
+ */
+export interface AIPrivescRequest {
+  objective?: string
+  max_steps?: number
+  read_only?: boolean
+  dry_run?: boolean
+  /** Skip the automatic linpeas/winPEAS enumeration and go straight to the model. */
+  skip_enum?: boolean
+  /** Re-download the enumeration tool instead of using the cache. */
+  refresh_tool?: boolean
+  /** Leave the uploaded tool on the target instead of deleting it afterwards. */
+  keep_tool?: boolean
+}
+
+/** The enumeration helper that was staged on the target for this run. */
+export interface AIPrivescTool {
+  name?: string
+  /** The release asset that was fetched, e.g. linpeas.sh. */
+  asset?: string
+  url?: string
+  remotePath?: string
+  bytes?: number
+  /** True when the download was served from the local cache. */
+  cached?: boolean
+  /** True when enumeration was skipped, so nothing was staged. */
+  skipped?: boolean
+  /** True when the staged tool was removed again at the end of the run. */
+  removed?: boolean
+  error?: string
+}
+
+export interface AIPrivescResult {
+  steps: AICollectStep[]
+  summary?: string
+  stopped: string
+  model: string
+  /** The target's platform as the console saw it, e.g. linux/amd64. */
+  platform: string
+  read_only: boolean
+  dry_run: boolean
+  /**
+   * True when the run demonstrated elevated access. This is established
+   * against the target, not taken from the model's own claim.
+   */
+  escalated: boolean
+  /**
+   * How the outcome was established: "session" when the shell itself holds the
+   * elevated identity, "route" when a one-shot escape proved the route without
+   * changing the session's identity.
+   */
+  escalated_via?: 'session' | 'route' | string
+  /** The output that established the outcome, when one ran. */
+  evidence?: string
+  tool: AIPrivescTool
+}
+
+/** Whether the assistant is available, and what it is allowed to run. */
+export interface AIStatus {
+  configured: boolean
+  baseURL: string
+  model: string
+  hasKey: boolean
+  readOnly: boolean
+  allowlist: string[]
+}
+
+/** The read-only policy's answer for one command. */
+export interface AIReadOnlyCheck {
+  allowed: boolean
+  path?: string
+  args?: string[]
+  reason?: string
+}
+
+/** The stored AI configuration, including whether the policy is on. */
+export interface AISettings {
+  baseURL: string
+  model: string
+  apiKeyEnv: string
+  timeoutSeconds: number
+  readOnly: boolean
+  /**
+   * Whether AI features ask the endpoint for the model's reasoning. It is a
+   * console-wide setting, so every AI feature sees the same value.
+   */
+  thinking: boolean
+  hasKey: boolean
+  managed: boolean
+}
+
+/**
+ * A change to the stored AI configuration. Every field is optional: the
+ * server applies only the ones that are present, so the read-only toggle
+ * can be flipped without restating the endpoint and the model.
+ */
+/** The model list an OpenAI-compatible endpoint advertises. */
+export interface AIModels {
+  baseURL: string
+  models: string[]
+}
+
+/**
+ * A model-listing request. Blank fields fall back to the stored configuration,
+ * so the panel can list models for an endpoint it has not saved yet.
+ */
+export interface AIModelsRequest {
+  baseURL?: string
+  apiKey?: string
+}
+
+export interface AISettingsUpdate {
+  baseURL?: string
+  model?: string
+  apiKey?: string
+  apiKeyEnv?: string
+  timeoutSeconds?: number
+  readOnly?: boolean
+  thinking?: boolean
+}

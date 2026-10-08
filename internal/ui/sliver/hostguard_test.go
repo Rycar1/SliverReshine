@@ -96,19 +96,16 @@ func TestOneLinerRejectsAHostileHost(t *testing.T) {
 	job := &JobView{ID: 1, Name: "http", Port: 8443, Domains: []string{"c2.example.com"}}
 
 	for _, bad := range []string{`1.2.3.4; id`, `1.2.3.4&whoami`, "1.2.3.4 -o /tmp/x"} {
-		if _, err := c2AddressForJob(job, bad); err == nil {
-			t.Errorf("c2AddressForJob accepted %q", bad)
-		}
-		if _, err := hostForStageURL(job, bad); err == nil {
-			t.Errorf("hostForStageURL accepted %q", bad)
+		if _, err := callbackHostForJob(job, bad, ""); err == nil {
+			t.Errorf("callbackHostForJob accepted %q", bad)
 		}
 	}
 
 	// A hostile domain on the listener itself is skipped, not used.
 	hostile := &JobView{ID: 1, Name: "http", Port: 8443, Domains: []string{`x; id`, `c2.example.com`}}
-	got, err := hostForStageURL(hostile, "")
+	got, err := callbackHostForJob(hostile, "", "")
 	if err != nil {
-		t.Fatalf("hostForStageURL: %v", err)
+		t.Fatalf("callbackHostForJob: %v", err)
 	}
 	if got != "c2.example.com" {
 		t.Errorf("= %q, want the usable domain rather than the hostile one", got)

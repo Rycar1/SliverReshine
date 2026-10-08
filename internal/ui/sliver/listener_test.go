@@ -62,10 +62,11 @@ func (s *listenerStub) StartHTTPListener(_ context.Context, in *clientpb.HTTPLis
 
 // The regression: the port must reach the server.
 func TestStartListenerPassesTheDNSPort(t *testing.T) {
+	isolateListenerSites(t)
 	stub := &listenerStub{}
 	c := &Client{RPC: stub}
 
-	if _, err := c.StartListener("dns", "c2.example.com", 9053, false, "", ""); err != nil {
+	if _, err := c.StartListener("dns", "c2.example.com", 9053, false, "", "", ""); err != nil {
 		t.Fatalf("StartListener: %v", err)
 	}
 	if stub.dnsReq == nil {
@@ -99,7 +100,7 @@ func TestStartListenerPassesPortsForEveryTransport(t *testing.T) {
 	for _, tc := range cases {
 		stub := &listenerStub{}
 		c := &Client{RPC: stub}
-		if _, err := c.StartListener(tc.kind, "127.0.0.1", tc.port, false, "", ""); err != nil {
+		if _, err := c.StartListener(tc.kind, "127.0.0.1", tc.port, false, "", "", ""); err != nil {
 			t.Errorf("%s: StartListener: %v", tc.kind, err)
 			continue
 		}
@@ -114,13 +115,14 @@ func TestStartListenerPassesPortsForEveryTransport(t *testing.T) {
 // neither the listener holding the port nor the fact that the request was
 // already satisfied; now the running listener is handed back instead.
 func TestStartListenerReusesAListenerAlreadyOnThePort(t *testing.T) {
+	isolateListenerSites(t)
 	stub := &listenerStub{getJobs: func() (*clientpb.Jobs, error) {
 		return &clientpb.Jobs{Active: []*clientpb.Job{
 			{ID: 7, Name: "http", Protocol: "tcp", Port: 8080},
 		}}, nil
 	}}
 	c := &Client{RPC: stub}
-	id, err := c.StartListener("http", "0.0.0.0", 8080, false, "webdelivery", "c2.example.com")
+	id, err := c.StartListener("http", "0.0.0.0", 8080, false, "webdelivery", "c2.example.com", "")
 	if err != nil {
 		t.Fatalf("StartListener: %v", err)
 	}
@@ -136,13 +138,14 @@ func TestStartListenerReusesAListenerAlreadyOnThePort(t *testing.T) {
 // asked for, so it must not be handed back. Both report "tcp", which is why the
 // match is on the job name and not the protocol.
 func TestStartListenerDoesNotReuseADifferentKind(t *testing.T) {
+	isolateListenerSites(t)
 	stub := &listenerStub{getJobs: func() (*clientpb.Jobs, error) {
 		return &clientpb.Jobs{Active: []*clientpb.Job{
 			{ID: 7, Name: "mtls", Protocol: "tcp", Port: 8080},
 		}}, nil
 	}}
 	c := &Client{RPC: stub}
-	if _, err := c.StartListener("http", "0.0.0.0", 8080, false, "webdelivery", ""); err != nil {
+	if _, err := c.StartListener("http", "0.0.0.0", 8080, false, "webdelivery", "", ""); err != nil {
 		t.Fatalf("StartListener: %v", err)
 	}
 	if stub.httpReq == nil {
@@ -154,7 +157,7 @@ func TestStartListenerDoesNotReuseADifferentKind(t *testing.T) {
 // silently turned into a default listener.
 func TestStartListenerRejectsAnUnknownTransport(t *testing.T) {
 	c := &Client{RPC: &listenerStub{}}
-	if _, err := c.StartListener("carrier-pigeon", "127.0.0.1", 1, false, "", ""); err == nil {
+	if _, err := c.StartListener("carrier-pigeon", "127.0.0.1", 1, false, "", "", ""); err == nil {
 		t.Error("an unknown transport was accepted")
 	}
 }

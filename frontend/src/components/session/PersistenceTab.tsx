@@ -4,7 +4,19 @@ import { api } from '../../lib/api'
 import type { PersistenceItem, PersistenceModule } from '../../lib/types'
 import { useToast } from '../common/Toast'
 
-const DEFAULT_PAYLOAD = 'C:\\Windows\\Temp\\agent.exe'
+// defaultPayload is the path the install form seeds for the session's own
+// platform. A Windows host keeps its implant under %SystemRoot%\Temp; a POSIX
+// host has no such tree, and seeding a Linux form with a C:\ path invites a
+// copy-paste install that silently does nothing on the target.
+const DEFAULT_PAYLOADS: Record<string, string> = {
+  windows: 'C:\\Windows\\Temp\\agent.exe',
+  linux: '/tmp/agent',
+  darwin: '/tmp/agent',
+}
+
+function defaultPayload(os: string) {
+  return DEFAULT_PAYLOADS[os.toLowerCase()] || '/tmp/agent'
+}
 
 /**
  * PersistenceTab drives the server-side persistence catalog.
@@ -29,7 +41,7 @@ export default function PersistenceTab({ sessionId, os }: { sessionId: string; o
   const [error, setError] = useState('')
 
   const [selected, setSelected] = useState('')
-  const [payload, setPayload] = useState(DEFAULT_PAYLOAD)
+  const [payload, setPayload] = useState(() => defaultPayload(os))
   const [name, setName] = useState('')
   // Busy keys are per row: a module id for the catalog form, "item:<module>:<name>"
   // for a row in the present-on-host table.
@@ -124,7 +136,9 @@ export default function PersistenceTab({ sessionId, os }: { sessionId: string; o
       return
     }
     setSelected(m.id)
-    setPayload(DEFAULT_PAYLOAD)
+    // A module whose first field is not a file (the account creator takes a
+    // password) starts empty rather than carrying a path that means nothing.
+    setPayload(m.payloadLabel ? '' : defaultPayload(os))
     setName(m.id)
   }
 
@@ -248,7 +262,7 @@ export default function PersistenceTab({ sessionId, os }: { sessionId: string; o
                       <input
                         value={payload}
                         onChange={(e) => setPayload(e.target.value)}
-                        placeholder={m.payloadLabel ? '' : DEFAULT_PAYLOAD}
+                        placeholder={m.payloadLabel ? '' : defaultPayload(os)}
                       />
                     </div>
                     <div className="field">

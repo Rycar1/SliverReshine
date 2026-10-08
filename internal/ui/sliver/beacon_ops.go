@@ -132,13 +132,21 @@ func (c *Client) ReconfigureSession(sessionID string, reconnectSeconds int64) er
 // OpenSessionFromBeacon instructs a beacon to open a new interactive session
 // on its next check-in. Returns true when the request was queued asynchronously
 // (beacon mode); the new session then appears in the session list on check-in.
+//
+// The request has to be built for a beacon, not for a session. This used to
+// send only BeaconID with Async left at its zero value, and the server then
+// took the synchronous path: it looked up an empty session ID, found nothing,
+// and answered "Invalid session ID" on every call -- so the beacon's "open
+// session" button could never work. beaconRequest sets Async, BeaconID and the
+// timeout the same way every other beacon call in this package does, which is
+// what makes the server queue the task against the beacon instead.
 func (c *Client) OpenSessionFromBeacon(beaconID string) (bool, error) {
 	ctx, cancel := c.rpcCtx(rpcDefault)
 	defer cancel()
 	resp, err := c.RPC.OpenSession(ctx, &sliverpb.OpenSession{
 		C2S:     []string{},
 		Delay:   0,
-		Request: &commonpb.Request{BeaconID: beaconID},
+		Request: beaconRequest(beaconID, rpcDefault),
 	})
 	if err != nil {
 		return false, err

@@ -4,11 +4,18 @@ import { api } from '../../lib/api'
 import { bytesToBase64, bytesToText, triggerDownload } from '../../lib/binary'
 import { fmtLocalTime, fmtSize } from '../../lib/format'
 import { joinPath, parentOf } from '../../lib/paths'
-import type { DirView, GrepOut } from '../../lib/types'
+import type { DirView, FileEntry, GrepOut } from '../../lib/types'
 import ConfirmDialog from '../common/ConfirmDialog'
+import ContextMenu from '../common/ContextMenu'
 import StatusBanners from '../common/StatusBanners'
 import { useToast } from '../common/Toast'
+import FileAttrDialog, { type AttrKind } from './FileAttrDialog'
 import '../../pages/pages.css'
+
+// The viewer paints the whole file as one text node, so a big file freezes the
+// tab rather than merely loading slowly. Anything larger is a download, not a
+// preview -- the same limit the server enforces.
+const MAX_VIEW_BYTES = 5 * 1024 * 1024
 
 export default function FilesTab({
   sessionId,
@@ -24,8 +31,18 @@ export default function FilesTab({
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-  const [viewing, setViewing] = useState<{ name: string; data: string } | null>(null)
+  const [viewing, setViewing] = useState<{
+    name: string
+    data?: string
+    binary?: boolean
+    size?: number
+  } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ name: string; isDir: boolean } | null>(null)
+  // The row menu and the attribute dialog it opens. Both are anchored to one
+  // listing entry, so the file the operator clicked is the file the change
+  // applies to -- no path to retype, no chance of aiming at the wrong one.
+  const [menu, setMenu] = useState<{ x: number; y: number; file: FileEntry } | null>(null)
+  const [attrTarget, setAttrTarget] = useState<{ file: FileEntry; kind: AttrKind } | null>(null)
   const [recursive, setRecursive] = useState(false)
   const [busy, setBusy] = useState(false)
   const uploadRef = useRef<HTMLInputElement>(null)
@@ -131,14 +148,21 @@ export default function FilesTab({
     }
   }
 
-  const view = async (name: string, isDir: boolean) => {
+  const view = async (name: string, isDir: boolean, size = 0) => {
     if (isDir) {
       enter(name)
       return
     }
+    // Refuse before the request: otherwise the target pulls the whole file back
+    // only for the viewer to discard it.
+    if (size > MAX_VIEW_BYTES) {
+      setViewing(null)
+      setError(t('files.tooLarge', { size: fmtSize(size), max: fmtSize(MAX_VIEW_BYTES) }))
+      return
+    }
     try {
       const res = await api.fsCat(sessionId, joinPath(path, name, sep))
-      setViewing({ name: res.Name || name, data: res.Data })
+      setViewing({ name: res.Name || name, data: res.Data, binary: res.Binary, size: res.Size })
     } catch (e) {
       setError((e as Error).message)
     }
@@ -174,14 +198,20 @@ export default function FilesTab({
   // A hit is a file somewhere under the search root. Follow it: point the browser
   // at its directory and open it, so a match turns into the file itself instead
   // of a dead-end line of text.
-  const openResult = async (fullPath: string) => {
+  const openResult = async (fullPath: string, isBinary = false) => {
     const cut = Math.max(fullPath.lastIndexOf('/'), fullPath.lastIndexOf('\\'))
     const dirPath = cut > 0 ? fullPath.slice(0, cut) : fullPath
     const name = cut >= 0 ? fullPath.slice(cut + 1) : fullPath
     await load(dirPath)
+    // The search already knows this one is binary, so do not ask the target for
+    // it just to be told the same thing.
+    if (isBinary) {
+      setViewing({ name, binary: true })
+      return
+    }
     try {
       const res = await api.fsCat(sessionId, fullPath)
-      setViewing({ name: res.Name || name, data: res.Data })
+      setViewing({ name: res.Name || name, data: res.Data, binary: res.Binary, size: res.Size })
     } catch (e) {
       setError((e as Error).message)
     }
@@ -307,7 +337,7 @@ export default function FilesTab({
           <tbody>
             {dir.Files.map((f, i) => (
               <tr key={`${f.Name}-${i}`}>
-                <td className="fs-cell-name mono" onClick={() => view(f.Name, f.IsDir)}>
+                <td className="fs-cell-name mono" onClick={() => view(f.Name, f.IsDir, f.Size)}>
                   {f.IsDir ? (
                     <span className="dir">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', marginRight: 5 }}>
@@ -324,7 +354,7 @@ export default function FilesTab({
                 <td className="mono">{fmtLocalTime(f.ModTime)}</td>
                 <td>
                   <div className="fs-actions">
-                    <button type="button" className="btn sm" onClick={() => view(f.Name, f.IsDir)}>
+                    <button type="button" className="btn sm" onClick={() => view(f.Name, f.IsDir, f.Size)}>
                       {f.IsDir ? t('files.path') : t('files.cat')}
                     </button>
                     {!f.IsDir && (
@@ -343,6 +373,16 @@ export default function FilesTab({
                       }}
                     >
                       {t('files.delete')}
+                    </button>
+                    <button type="button"
+                      className="btn sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const r = e.currentTarget.getBoundingClientRect()
+                        setMenu({ x: r.left, y: r.bottom + 4, file: f })
+                      }}
+                    >
+                      {t('files.more')}
                     </button>
                   </div>
                 </td>
@@ -374,7 +414,7 @@ export default function FilesTab({
               <tbody>
                 {searchOut.Results.map((f) => (
                   <tr key={f.Path}>
-                    <td className="mono fs-cell-name" onClick={() => openResult(f.Path)}>
+                    <td className="mono fs-cell-name" onClick={() => openResult(f.Path, f.IsBinary)}>
                       {f.Path}
                     </td>
                     <td>
@@ -404,7 +444,7 @@ export default function FilesTab({
                     </td>
                     <td>
                       <div className="fs-actions">
-                        <button type="button" className="btn sm" onClick={() => openResult(f.Path)}>
+                        <button type="button" className="btn sm" onClick={() => openResult(f.Path, f.IsBinary)}>
                           {t('files.cat')}
                         </button>
                       </div>
@@ -427,8 +467,49 @@ export default function FilesTab({
               </button>
             </span>
           </div>
-          <pre>{bytesToText(viewing.data)}</pre>
+          {viewing.binary ? (
+            <div className="alert" style={{ margin: 12 }}>{t('files.binaryUnsupported')}</div>
+          ) : (
+            <pre>{bytesToText(viewing.data)}</pre>
+          )}
         </div>
+      )}
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: t('files.attrOwner'),
+              onSelect: () => setAttrTarget({ file: menu.file, kind: 'owner' }),
+            },
+            {
+              label: t('files.attrPerm'),
+              onSelect: () => setAttrTarget({ file: menu.file, kind: 'perm' }),
+            },
+            {
+              label: t('files.attrTime'),
+              onSelect: () => setAttrTarget({ file: menu.file, kind: 'time' }),
+            },
+          ]}
+        />
+      )}
+
+      {attrTarget && (
+        <FileAttrDialog
+          sessionId={sessionId}
+          os={os}
+          path={joinPath(path, attrTarget.file.Name, sep)}
+          name={attrTarget.file.Name}
+          kind={attrTarget.kind}
+          onClose={() => setAttrTarget(null)}
+          onDone={() => {
+            setAttrTarget(null)
+            refresh()
+          }}
+        />
       )}
 
       <ConfirmDialog

@@ -118,6 +118,85 @@ func TestCheckGeneratedProfileAcceptsAUsableProfileDespiteNonZeroExit(t *testing
 }
 
 // ---------------------------------------------------------------------------
+// replaceGeneratedProfile: a generated profile is only moved into place when it
+// names the daemon that is actually running
+// ---------------------------------------------------------------------------
+
+// The whole reason the generated file is written beside the target and moved
+// after a check. A profile naming a different host or port is what the console
+// then dials, and the operator sees "the server is unreachable" with a healthy
+// daemon -- so the mismatch has to fail the startup, not be installed.
+func TestReplaceGeneratedProfileRejectsAMismatch(t *testing.T) {
+	dir := t.TempDir()
+	tmp := filepath.Join(dir, "profile.json.new")
+	if err := os.WriteFile(tmp, []byte(`{"operator":"op","lhost":"127.0.0.1","lport":31340}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{opts: Options{
+		ConfigDir:       dir,
+		MultiplayerHost: "127.0.0.1",
+		MultiplayerPort: 31337,
+	}}
+	err := srv.replaceGeneratedProfile(tmp, filepath.Join(dir, "profile.json"))
+	if err == nil {
+		t.Fatal("a profile naming a different port was installed")
+	}
+	for _, want := range []string{"31340", "31337", "the console would dial the wrong port"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	// The mismatched file must not survive as the profile the console reads.
+	if _, statErr := os.Stat(filepath.Join(dir, "profile.json")); !os.IsNotExist(statErr) {
+		t.Error("the target profile was written despite the mismatch")
+	}
+}
+
+func TestReplaceGeneratedProfileInstallsAMatchingProfile(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "profile.json")
+	if err := os.WriteFile(target, []byte(`{"operator":"op","lhost":"127.0.0.1","lport":31340}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tmp := target + ".new"
+	if err := os.WriteFile(tmp, []byte(`{"operator":"op","lhost":"10.0.0.7","lport":31337}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{opts: Options{
+		ConfigDir:       dir,
+		MultiplayerHost: "10.0.0.7",
+		MultiplayerPort: 31337,
+	}}
+	if err := srv.replaceGeneratedProfile(tmp, target); err != nil {
+		t.Fatalf("replaceGeneratedProfile: %v", err)
+	}
+	got, err := ReadProfile(target)
+	if err != nil {
+		t.Fatalf("the installed profile does not parse: %v", err)
+	}
+	if got.LHost != "10.0.0.7" || got.LPort != 31337 {
+		t.Errorf("installed profile = %s:%d, want 10.0.0.7:31337", got.LHost, got.LPort)
+	}
+	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
+		t.Error("the temporary profile was left behind after the move")
+	}
+}
+
+// A file that does not parse is not a profile, and must not be moved over a
+// working one.
+func TestReplaceGeneratedProfileRejectsAnUnusableFile(t *testing.T) {
+	dir := t.TempDir()
+	tmp := filepath.Join(dir, "profile.json.new")
+	if err := os.WriteFile(tmp, []byte(`{"operator":"op","lhost":"127.0.0.1"`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{opts: Options{ConfigDir: dir, MultiplayerHost: "127.0.0.1", MultiplayerPort: 31337}}
+	if err := srv.replaceGeneratedProfile(tmp, filepath.Join(dir, "profile.json")); err == nil {
+		t.Fatal("a truncated profile was installed")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // tail: compact, whitespace-trimmed error excerpts
 // ---------------------------------------------------------------------------
 

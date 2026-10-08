@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"sliverreshine/internal/ai"
 	"sliverreshine/internal/ui/sliver"
 )
 
@@ -24,11 +25,23 @@ type Server struct {
 	// avLookupURL overrides the process-identification endpoint. Empty means the
 	// built-in default; "off" disables the feature. See SetAVLookupURL.
 	avLookupURL string
+	// ai is the process-wide model access point (internal/ai). It is created
+	// lazily so a Server built as a literal -- which the tests do -- still works.
+	ai *ai.Service
+	// settingsHome is the state directory holding the settings file. It is
+	// empty for a Server built as a literal (the tests), which is what makes
+	// the runtime settings endpoints report that they are not managed here
+	// rather than writing to a path nobody configured.
+	settingsHome string
+	// aiReadOnlyDisabled turns the read-only policy off for AI collection. It
+	// is false by default, so the policy is on unless an operator turns it off;
+	// see SetAIReadOnly.
+	aiReadOnlyDisabled bool
 }
 
 // New creates an API server.
 func New() *Server {
-	return &Server{}
+	return &Server{ai: ai.NewService()}
 }
 
 // SetAVLookupURL configures the process-identification endpoint.
@@ -42,6 +55,68 @@ func (s *Server) SetAVLookupURL(url string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.avLookupURL = strings.TrimSpace(url)
+}
+
+// SetSettingsHome tells the server where its settings file lives, so the AI
+// configuration can be read and written at runtime. An empty value leaves the
+// settings endpoints reporting that the file is not managed here.
+func (s *Server) SetSettingsHome(home string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.settingsHome = strings.TrimSpace(home)
+}
+
+// settingsHome returns the state directory and whether one was configured.
+func (s *Server) settingsHomePath() (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.settingsHome, s.settingsHome != ""
+}
+
+// SetAIConfig configures the console's model access.
+//
+// An unconfigured value disables every feature that needs a model, which is how
+// an operator turns the assistant off. The key is resolved by the caller (see
+// config.AIConfig.ResolveKey) so the environment lookup stays at the process
+// boundary rather than inside the API server.
+func (s *Server) SetAIConfig(cfg ai.Config) {
+	s.aiService().Configure(cfg)
+}
+
+// aiService returns the model access point, creating it on first use.
+//
+// A Server built as a struct literal has no service; creating one here means
+// every caller can assume a non-nil value and an unconfigured service reports
+// itself as such rather than panicking.
+func (s *Server) aiService() *ai.Service {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ai == nil {
+		s.ai = ai.NewService()
+	}
+	return s.ai
+}
+
+// SetAIReadOnly turns the read-only policy for AI collection on or off.
+//
+// The policy is on by default and is the only thing that decides whether the
+// model's commands are checked before they run, so a deployment that turns it
+// off has decided the model's commands are trusted. The setting applies to
+// every collection run; it is not a per-request choice.
+func (s *Server) SetAIReadOnly(readOnly bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.aiReadOnlyDisabled = !readOnly
+}
+
+// AIReadOnly reports whether the read-only policy is on.
+//
+// A Server built as a struct literal has the zero value, which reports the
+// policy as on: the safe default rather than the permissive one.
+func (s *Server) AIReadOnly() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return !s.aiReadOnlyDisabled
 }
 
 // avLookupEndpoint resolves the per-request override against the deployment

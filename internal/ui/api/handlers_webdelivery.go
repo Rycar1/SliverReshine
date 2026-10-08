@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"sliverreshine/internal/ui/sliver"
 )
@@ -24,9 +25,13 @@ func (s *Server) handleWebDelivery(c *sliver.Client, w http.ResponseWriter, r *h
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	// An empty host means "the address the operator reached this console on".
-	// See hostOrConsoleAddress in handlers_oneliner.go.
-	req.Host = hostOrConsoleAddress(req.Host, r.Host)
+	// An empty host means "the address the operator reached this console on":
+	// it routes here by construction, which beats a listener's wildcard bind.
+	// ConsoleHostFromHeader drops loopback and wildcard headers, so this only
+	// fills in something a target could actually fetch from.
+	if strings.TrimSpace(req.Host) == "" {
+		req.Host = sliver.ConsoleHostFromHeader(r.Host)
+	}
 	res, err := c.WebDelivery(req)
 	writeResult(w, res, err)
 }

@@ -20,6 +20,7 @@ func (s *Server) apiRoutes() []route {
 		s.infraRoutes(),
 		s.rawRPCRoutes(),
 		s.advancedRoutes(),
+		s.aiRoutes(),
 	}
 	var routes []route
 	for _, group := range groups {
@@ -286,6 +287,9 @@ func (s *Server) advancedRoutes() []route {
 		// File attributes and content search.
 		{"POST", "/api/sessions/{id}/fs/chmod", s.handleChmod},
 		{"POST", "/api/sessions/{id}/fs/chown", s.handleChown},
+		// Windows has no chmod: permissions there are ACL entries, so the same
+		// intent is expressed with an account and a permission level.
+		{"POST", "/api/sessions/{id}/fs/acl", s.handleGrantACL},
 		{"POST", "/api/sessions/{id}/fs/chtimes", s.handleChtimes},
 		{"POST", "/api/sessions/{id}/fs/grep", s.handleGrep},
 
@@ -330,5 +334,38 @@ func (s *Server) advancedRoutes() []route {
 
 		// Whole-hive registry extraction (SAM/SECURITY/SYSTEM collection).
 		{"POST", "/api/sessions/{id}/reg/hive", s.handleRegistryHive},
+	}
+}
+
+// aiRoutes covers the model-backed assistant.
+//
+// It is a group of its own because the set of features that use a model is
+// expected to grow -- summarising a session, drafting a report, suggesting the
+// next step -- and everything that talks to internal/ai should register here
+// rather than being scattered through the domain groups, where the shared
+// configuration that makes them work is not visible.
+func (s *Server) aiRoutes() []route {
+	return []route{
+		// Whether the assistant is available. It never returns the API key.
+		{"GET", "/api/ai/status", s.handleAIStatus},
+		// Check one command against the read-only policy without running it, so
+		// a refusal is reproducible without spending a model call.
+		{"POST", "/api/ai/read-only/check", s.handleAIReadOnlyCheck},
+		// Runtime model configuration: read and write the endpoint, model and
+		// key without editing the settings file by hand. The write is applied
+		// to the running service, so no restart is needed.
+		// List the models the endpoint advertises, so the panel can offer a
+		// choice instead of a free-text model name. It accepts an unsaved
+		// endpoint and key and falls back to the stored ones.
+		{"POST", "/api/ai/models", s.handleAIModels},
+		{"GET", "/api/settings/ai", s.handleAISettingsGet},
+		{"PUT", "/api/settings/ai", s.handleAISettingsPut},
+		// Run the collector against one session. It is a session route because
+		// the assistant is scoped to a single live target.
+		{"POST", "/api/sessions/{id}/ai-collect", s.handleAICollect},
+		// Attempt privilege escalation on one session: enumerate, let the model
+		// choose a route, run it, and verify the result. Like the collector it
+		// is a session route, and it streams its progress.
+		{"POST", "/api/sessions/{id}/ai-privesc", s.handleAIPrivesc},
 	}
 }

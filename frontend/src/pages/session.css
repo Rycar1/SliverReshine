@@ -120,18 +120,15 @@
 }
 
 /* ─── Tabs (Linear 风格的下边线) ─────────────────────────────────
-   窄屏改为横向滚动而非换行,避免 tab 行高跳动。 */
+   换行而非横向滚动:标签已有十余个,滚动会把「AI 助手」「提权」推到可视区
+   之外,操作者会以为它们不存在。 */
 .tabs {
   display: flex;
   gap: 0;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-wrap: wrap;
+  row-gap: 2px;
   margin-bottom: 14px;
   border-bottom: 1px solid var(--border);
-}
-.tabs::-webkit-scrollbar {
-  display: none;
 }
 
 .tab {

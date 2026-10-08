@@ -274,6 +274,26 @@ func TestWebDeliveryValidatesItsInput(t *testing.T) {
 	}
 }
 
+// A wildcard host is a bind address, not a destination. It has to be refused
+// with that explanation -- not silently emitted, and not reported as a character
+// problem by the host validator -- because the URL it produces is one no target
+// can fetch from.
+func TestWebDeliveryRejectsAWildcardHost(t *testing.T) {
+	c := &Client{RPC: &topologyStub{
+		sessions: func() (*clientpb.Sessions, error) { return &clientpb.Sessions{}, nil },
+	}}
+	for _, host := range []string{"0.0.0.0", "::", "[::]", "*"} {
+		_, err := c.WebDelivery(WebDeliveryRequest{ProfileName: "p", Host: host, Port: 80})
+		if err == nil {
+			t.Errorf("host %q was accepted", host)
+			continue
+		}
+		if !strings.Contains(err.Error(), "bind address") {
+			t.Errorf("host %q: error %q does not explain that it is a bind address", host, err)
+		}
+	}
+}
+
 // An unknown format is rejected before anything is built or published, since the
 // whole point is that the command and the published path agree.
 func TestWebDeliveryRejectsUnknownFormat(t *testing.T) {

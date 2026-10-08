@@ -687,6 +687,19 @@ func (s *Server) generateProfile(ctx context.Context) error {
 			target, existing.LHost, existing.LPort, s.opts.MultiplayerHost, s.opts.MultiplayerPort)
 	}
 
+	// The generator refuses to overwrite a file that already exists: it prints
+	// "File already exists" and exits 0 having written nothing. Pointing --save at
+	// the target therefore left the previous profile in place while this function
+	// reported success, and the console dialled whatever address that stale file
+	// named -- a port from an earlier run, because the port moves when one is
+	// taken. The operator sees "the server is unreachable" with a healthy daemon.
+	// A path that does not exist yet is always written, so the generator writes
+	// beside the target and the verified result is moved into place below.
+	tmp := target + ".new"
+	if err := os.Remove(tmp); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("clear a previous %s: %w", tmp, err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
@@ -698,7 +711,7 @@ func (s *Server) generateProfile(ctx context.Context) error {
 		// --save takes an explicit filename here: when handed a directory the
 		// generator derives the name from the lhost flag (producing
 		// operator_127.0.0.1.cfg), which the console would never find.
-		"--save", target,
+		"--save", tmp,
 		"--output", "file",
 	)
 	cmd.Env = s.env()
@@ -717,7 +730,41 @@ func (s *Server) generateProfile(ctx context.Context) error {
 	go feedConfirmations(stdin)
 
 	waitErr := cmd.Wait()
-	return checkGeneratedProfile(target, waitErr, buf.String())
+	if err := checkGeneratedProfile(tmp, waitErr, buf.String()); err != nil {
+		removeQuietly(tmp)
+		return err
+	}
+	if err := s.replaceGeneratedProfile(tmp, target); err != nil {
+		removeQuietly(tmp)
+		return err
+	}
+	return nil
+}
+
+// replaceGeneratedProfile moves a freshly generated profile onto the path the
+// console reads, after checking it names the daemon that is actually running.
+//
+// The check is the point. Judging success by "the file at the target parses" is
+// satisfied by the stale profile the generator declined to overwrite, so the two
+// failures -- generator wrote nothing, generator wrote an address the daemon is
+// not serving -- both looked like success and both ended in a console that could
+// not connect. Verifying the host and port here turns either into a startup error
+// naming the mismatch, which is what the operator needs to see.
+func (s *Server) replaceGeneratedProfile(tmp, target string) error {
+	profile, err := ReadProfile(tmp)
+	if err != nil {
+		return fmt.Errorf("generated operator profile at %s is not usable: %w", tmp, err)
+	}
+	if profile.LHost != s.opts.MultiplayerHost || profile.LPort != s.opts.MultiplayerPort {
+		return fmt.Errorf(
+			"generated operator profile targets %s:%d, but the daemon serves %s:%d; "+
+				"the console would dial the wrong port",
+			profile.LHost, profile.LPort, s.opts.MultiplayerHost, s.opts.MultiplayerPort)
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		return fmt.Errorf("replace operator profile %s: %w", target, err)
+	}
+	return nil
 }
 
 // feedConfirmations answers the generator's overwrite prompt.

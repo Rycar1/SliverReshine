@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"sliverreshine/internal/config"
 )
@@ -463,6 +464,27 @@ func TestResolveHome(t *testing.T) {
 			t.Errorf("state directory was not created: %v", err)
 		}
 	})
+
+	t.Run("a relative flag is resolved to an absolute path", func(t *testing.T) {
+		// Sliver derives GOROOT, GOPATH and GOCACHE from this directory and the
+		// Go toolchain refuses a relative GOPATH, so a relative -home made every
+		// implant build fail with "Invalid compiler target" while the console
+		// itself looked healthy. The flag must not survive here unresolved.
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		got := resolveHome(filepath.Join(".", "data"))
+
+		if !filepath.IsAbs(got) {
+			t.Fatalf("resolveHome(%q) = %q, want an absolute path", "./data", got)
+		}
+		if want := filepath.Join(dir, "data"); got != want {
+			t.Errorf("resolveHome = %q, want %q", got, want)
+		}
+		if _, err := os.Stat(got); err != nil {
+			t.Errorf("state directory was not created: %v", err)
+		}
+	})
 }
 
 // provision is the first-run contract in one call: write the settings and the
@@ -536,5 +558,34 @@ func TestProvisionAppliesFlagsOverTheFile(t *testing.T) {
 
 	if settings.Addr != "192.0.2.10:8443" {
 		t.Errorf("Addr = %q, want the flag value", settings.Addr)
+	}
+}
+
+// The settings file's timeout has to reach the transport. Wiring it into the
+// ai.Config is the whole fix for a collection run that gathered credentials and
+// then lost them to an extraction deadline, so a regression here is silent:
+// every call keeps working until a run gets long enough.
+func TestAIConfigFromSettingsCarriesTheTimeout(t *testing.T) {
+	t.Setenv("SLIVERRESHINE_AI_TEST_KEY", "test-key")
+	got := aiConfigFromSettings(config.AIConfig{
+		BaseURL:        "https://ai.example/v1",
+		Model:          "m",
+		APIKeyEnv:      "SLIVERRESHINE_AI_TEST_KEY",
+		TimeoutSeconds: 300,
+	})
+	if got.Timeout != 300*time.Second {
+		t.Errorf("Timeout = %v, want 5m", got.Timeout)
+	}
+	if got.APIKey != "test-key" {
+		t.Errorf("APIKey = %q, want the resolved environment value", got.APIKey)
+	}
+}
+
+// An unset timeout must stay unset so the ai package applies its own default,
+// rather than arriving as a zero duration that expires every request.
+func TestAIConfigFromSettingsLeavesAnUnsetTimeoutAlone(t *testing.T) {
+	got := aiConfigFromSettings(config.AIConfig{BaseURL: "https://ai.example/v1", Model: "m"})
+	if got.Timeout != 0 {
+		t.Errorf("Timeout = %v, want 0 so the package default applies", got.Timeout)
 	}
 }

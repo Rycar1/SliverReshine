@@ -2,7 +2,9 @@ package sliver
 
 import (
 	"fmt"
+	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -59,6 +61,17 @@ type OneLinerRequest struct {
 	// instantly. Nothing reported an error, because publishing over an existing
 	// path is a normal update.
 	Path string `json:"path"`
+	// Force rebuilds even when an identical stage was built already. Empty
+	// means the already-built stage is reused; see stageFingerprint.
+	Force bool `json:"force"`
+	// ConsoleHost is the address the operator reached this console on, taken
+	// from the browser's Host header by the HTTP layer.
+	//
+	// It is not part of the request body and carries json:"-" for that reason: it
+	// is a fallback the console derives, not something the client sends, and it
+	// sits below the listener's own bind address in precedence because the
+	// console and the listener need not be reachable the same way.
+	ConsoleHost string `json:"-"`
 }
 
 // OneLinerResult is what the operator gets back.
@@ -83,6 +96,10 @@ type OneLinerResult struct {
 	// Alternatives lists the other delivery methods for the same URL, so the
 	// operator can switch without rebuilding.
 	Alternatives []OneLinerAlternative `json:"alternatives"`
+	// Reused is set when the result came from an earlier build of the same
+	// stage rather than from a new one. The bytes are identical, so the only
+	// thing it changes is whether the operator needs to know a build ran.
+	Reused bool `json:"reused,omitempty"`
 }
 
 // OneLinerAlternative is one command template for the same stage.
@@ -126,7 +143,11 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 				"or build a payload instead", job.ID, job.Name)
 	}
 
-	c2Address, err := c2AddressForJob(job, req.Host)
+	host, err := callbackHostForJob(job, req.Host, req.ConsoleHost)
+	if err != nil {
+		return nil, err
+	}
+	c2Address, err := c2AddressForJob(job, host)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +161,48 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 	if name == "" {
 		name = generatedStageName(platform, job.ID)
 	}
+
+	// The stage is fetched from the same address the implant dials: both are
+	// reached by the target, and letting them differ is how a command ends up
+	// fetching from a name the target cannot resolve.
+	stageHost := host
+	stagePath := strings.TrimSpace(req.Path)
+	if stagePath == "" {
+		stagePath = defaultWebDeliveryPath
+	}
+	if !strings.HasPrefix(stagePath, "/") {
+		stagePath = "/" + stagePath
+	}
+
+	// Everything that decides the stage bytes and the command is known by
+	// this point, so an identical request can be answered without building
+	// anything.
+	//
+	// This is the difference between a dialog that is re-opened and a dialog
+	// that rebuilds: the operator asks for the command for a listener they
+	// already staged and gets the same command back from a map instead of
+	// waiting on two more ~20 MB implant builds. The key covers every input
+	// that changes the outcome, so a different host, delivery or obfuscation
+	// flag misses and rebuilds rather than handing back a stage that no
+	// longer matches the request. Force skips the lookup entirely.
+	key := stageFingerprint(stageFingerprintInput{
+		jobID:     job.ID,
+		port:      job.Port,
+		platform:  platform,
+		c2Address: c2Address,
+		stageHost: stageHost,
+		stagePath: stagePath,
+		name:      name,
+		delivery:  delivery,
+		obfuscate: req.Obfuscate,
+		evasion:   req.Evasion,
+	})
+	if !req.Force {
+		if cached, ok := c.cachedStage(key); ok {
+			return cached, nil
+		}
+	}
+
 	if problem := validateBuildRequest(platformString(platform), "", "exe"); problem != "" {
 		return nil, fmt.Errorf("%s", problem)
 	}
@@ -166,16 +229,11 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 			req.JobID)
 	}
 
-	stageHost, err := hostForStageURL(job, req.Host)
-	if err != nil {
-		return nil, err
-	}
-
 	res, err := c.WebDelivery(WebDeliveryRequest{
 		ProfileName: profileName,
 		Host:        stageHost,
 		Port:        job.Port,
-		Path:        req.Path,
+		Path:        stagePath,
 		Format:      delivery,
 		Website:     website,
 	})
@@ -183,7 +241,7 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 		return nil, err
 	}
 
-	return &OneLinerResult{
+	out := &OneLinerResult{
 		Command:      res.Command,
 		URL:          res.URL,
 		Platform:     string(platform),
@@ -193,7 +251,9 @@ func (c *Client) OneLiner(req OneLinerRequest) (*OneLinerResult, error) {
 		StagedAs:     name,
 		Warning:      res.Warning,
 		Alternatives: alternativesFor(res.URL, platform, delivery),
-	}, nil
+	}
+	c.rememberStage(key, out)
+	return out, nil
 }
 
 // StagePathForPlatform is where a stage for one platform is published.
@@ -236,8 +296,15 @@ type MultiOneLinerResult struct {
 	StagedAs string `json:"staged_as"`
 	// Path is where the stage was published on the listener's website.
 	Path string `json:"path"`
+	// C2URL is the address the implant dials. Reported for the same reason the
+	// single-platform result reports it: a command that calls back somewhere
+	// unreachable looks exactly like one that works until it is run.
+	C2URL string `json:"c2_url"`
 	// Alternatives lists the other ways to fetch the same URL.
 	Alternatives []OneLinerAlternative `json:"alternatives"`
+	// Reused is set when the stage already existed, so the UI can say the
+	// command was not rebuilt rather than implying a fresh build.
+	Reused bool `json:"reused,omitempty"`
 	// Error is set when this platform could not be built. Empty on success.
 	Error string `json:"error,omitempty"`
 }
@@ -294,7 +361,9 @@ func (c *Client) OneLinerAll(req OneLinerRequest, platforms []OneLinerPlatform) 
 				Delivery:     res.Delivery,
 				StagedAs:     res.StagedAs,
 				Path:         sub.Path,
+				C2URL:        res.C2URL,
 				Alternatives: res.Alternatives,
+				Reused:       res.Reused,
 			}
 		}(i, p)
 	}
@@ -376,89 +445,187 @@ func jobServesStage(job *JobView) bool {
 	return name == "http" || name == "https"
 }
 
-// c2AddressForJob builds the address the implant will dial.
+// callbackHostForJob resolves the address an implant is told to dial and the
+// stage is fetched from.
 //
-// The listener's own port is used because that is what it is listening on. The
-// host is where this gets interesting: a listener bound to 0.0.0.0 is reachable
-// at any address the target can route to, and the console cannot know which one
-// that is. An explicit host therefore wins, and the listener's own address is
-// used only as a fallback -- with the placeholder explained in the warning the
-// caller passes through, because a one-liner containing 0.0.0.0 will build
-// successfully and never connect.
-func c2AddressForJob(job *JobView, explicitHost string) (string, error) {
-	host := strings.TrimSpace(explicitHost)
-	if host != "" {
-		// The same field as the stage URL, validated here as well because this
-		// runs first: an unvalidated value would otherwise be written into the
-		// implant profile as the address it dials, and the operator would get a
-		// build that calls back somewhere nonsensical with no explanation.
-		if err := validateHost(host); err != nil {
-			return "", err
+// The order is the whole point, because every wrong answer here produces a
+// command that builds, fetches and never connects:
+//
+//  1. The host the operator typed. They know the target's network better than
+//     the console can, and an explicit answer is never second-guessed.
+//  2. The address the listener was actually started on. A listener bound to
+//     192.168.1.9 is reachable there and nowhere else, which makes it the most
+//     authoritative source the console has -- and the one Sliver does not
+//     report, which is why the console records it at start time.
+//  3. The address the operator reached this console on, taken from the
+//     browser's Host header. It routes here by construction, so it beats a
+//     wildcard, but it is a guess: the console and the listener need not be
+//     reachable the same way.
+//  4. A domain Sliver reports for the listener, which covers a listener started
+//     outside this console.
+//  5. An address of one of this host's own interfaces, chosen the way the kernel
+//     would route outbound traffic. This is what answers when the listener is on
+//     a wildcard and the console itself was opened over loopback -- the usual
+//     shape of a freshly deployed server, and the case that used to end with the
+//     operator typing a wildcard into the host field. It is the weakest source:
+//     it says this host is reachable there, not that the listener is.
+//
+// 0.0.0.0 and :: are bind addresses, not destinations: an implant told to dial
+// one dials its own loopback. They are never returned. When none of the sources
+// above produces a usable address the one-liner fails and says what to set,
+// rather than emitting a command that cannot work.
+func callbackHostForJob(job *JobView, operatorHost, consoleHost string) (string, error) {
+	if h := strings.TrimSpace(operatorHost); h != "" {
+		// A bind address is not a destination, and typing one is a mistake rather
+		// than an instruction. validateHost accepts 0.0.0.0 and :: because they are
+		// well-formed IP literals, but an implant told to dial one dials its own
+		// loopback: the command builds, fetches and never checks in. So the value
+		// is skipped -- before validation, so that the wildcard spellings the
+		// validator would reject outright are skipped the same way instead of
+		// failing the whole request -- and the sources below (the address the
+		// listener was started on, the address this console was reached on, a
+		// domain) answer instead.
+		if !isWildcardHost(h) {
+			if err := validateHost(h); err != nil {
+				return "", err
+			}
+			return h, nil
 		}
 	}
-	if host == "" {
-		for _, d := range job.Domains {
-			d = strings.TrimSpace(d)
-			if d == "" || d == "0.0.0.0" || d == "::" {
-				continue
-			}
-			// Skip a domain that is not usable rather than failing the whole
-			// one-liner; a listener may list several and one bad entry should not
-			// block the rest. The 0.0.0.0 fallback below is the documented
-			// placeholder case and stays.
-			if err := validateHost(d); err != nil {
-				continue
-			}
-			host = d
-			break
+	if h := usableHost(job.CallbackHost); h != "" {
+		return h, nil
+	}
+	if h := usableHost(consoleHost); h != "" {
+		return h, nil
+	}
+	for _, d := range job.Domains {
+		if h := usableHost(d); h != "" {
+			return h, nil
 		}
 	}
-	if host == "" {
-		host = "0.0.0.0"
+	// Nothing above names an address. That happens when the listener is on a
+	// wildcard and the console was opened over loopback, which is exactly the
+	// deployment this console is meant for: the server is reachable at a real
+	// address, but the browser used 127.0.0.1 to get here. Asking the machine for
+	// the address it would use to reach the network turns that into a working
+	// command instead of an error box, and the operator can still correct it in
+	// the host field.
+	if h := usableHost(localCallbackHost()); h != "" {
+		return h, nil
+	}
+	return "", fmt.Errorf(
+		"listener %d has no address a target can reach: %s. Start the listener with a "+
+			"callback address, or type one into the host field, and the command will be "+
+			"built for it",
+		job.ID, bindDescription(job))
+}
+
+// SuggestedCallbackHost reports the address a one-liner for this listener would
+// dial when the operator types nothing into the host field, or "" when no
+// address is available.
+//
+// It is exported so the console can show the operator that address before the
+// build runs. Leaving the field blank while the backend substitutes an address
+// is what let a wildcard be typed, silently ignored, and then read back out of
+// the generated command as though the console had chosen it.
+func SuggestedCallbackHost(job *JobView, consoleHost string) string {
+	host, err := callbackHostForJob(job, "", consoleHost)
+	if err != nil {
+		return ""
+	}
+	return host
+}
+
+// usableHost returns the validated host, or "" when the value cannot serve as a
+// callback destination.
+//
+// The wildcard and loopback checks are the reason this exists: validateHost
+// accepts 0.0.0.0, :: and 127.0.0.1 because they are well-formed IP literals, and
+// those are exactly the values the console must not pick *for* the operator. An
+// implant told to dial any of them dials its own loopback, so a listener recorded
+// on 127.0.0.1 is as dead an answer as one recorded on 0.0.0.0 -- it only looks
+// healthier, which is why it is skipped here too. An unusable value is skipped
+// rather than reported, because every caller is walking a fallback list in which
+// the next source may well answer.
+//
+// Skipping is not forbidding: an operator who types a loopback address into the
+// host field still gets it, because a target running on the C2 host is a real
+// case. This only stops the console from choosing one silently.
+func usableHost(value string) string {
+	h := strings.TrimSpace(value)
+	if h == "" || isWildcardHost(h) || isLoopbackHost(h) {
+		return ""
+	}
+	if err := validateHost(h); err != nil {
+		return ""
+	}
+	return h
+}
+
+// isWildcardHost reports whether the host is a bind-any address rather than a
+// destination.
+func isWildcardHost(host string) bool {
+	switch strings.TrimSpace(host) {
+	case "0.0.0.0", "::", "[::]", "*":
+		return true
+	}
+	return false
+}
+
+// isLoopbackHost reports whether the host routes only from the machine it names.
+//
+// A listener started on 127.0.0.1 accepts connections from this host and nowhere
+// else, so a command built for a remote target that dials it never checks in.
+// The console therefore never picks one on the operator's behalf; see usableHost.
+func isLoopbackHost(host string) bool {
+	h := strings.TrimSpace(host)
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	// A recorded bind address is bare, but a domain or a Host header can arrive
+	// with brackets or a port; strip both so every spelling matches.
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		h = host
+	} else if strings.HasPrefix(h, "[") && strings.HasSuffix(h, "]") {
+		h = h[1 : len(h)-1]
+	}
+	ip := net.ParseIP(strings.TrimSpace(h))
+	return ip != nil && ip.IsLoopback()
+}
+
+// bindDescription says where the listener is bound, for the error above. The
+// console records the address it started the listener on; a listener started
+// elsewhere has none, and saying so is more useful than an empty sentence.
+func bindDescription(job *JobView) string {
+	h := strings.TrimSpace(job.CallbackHost)
+	if h == "" {
+		return "its bind address is unknown to this console"
+	}
+	if isLoopbackHost(h) {
+		return fmt.Sprintf("it was started on %s, which only routes from this host", h)
+	}
+	return fmt.Sprintf("it was started on %s, which is not a destination", h)
+}
+
+// c2AddressForJob builds the address the implant will dial from an already
+// resolved host.
+//
+// The port is the listener's own, because that is what it is listening on, and
+// the scheme follows the transport: an HTTPS listener has to produce an https
+// callback, or the implant's traffic is refused by the listener it was built
+// for.
+func c2AddressForJob(job *JobView, host string) (string, error) {
+	if strings.TrimSpace(host) == "" {
+		return "", fmt.Errorf("listener %d has no callback address", job.ID)
 	}
 	if job.Port == 0 {
 		return "", fmt.Errorf("listener %d reports no port", job.ID)
 	}
-
-	// The scheme follows the transport, so an HTTPS listener produces an https
-	// callback rather than a plaintext one that would be refused.
 	scheme := "http"
 	if strings.EqualFold(job.Name, "https") {
 		scheme = "https"
 	}
 	return fmt.Sprintf("%s://%s:%d", scheme, hostForURL(host), job.Port), nil
-}
-
-// hostForStageURL picks the host for the fetch URL.
-//
-// It differs from the C2 address in one case that matters: an implant may be
-// told to dial a public name while the stage must be fetched from an address the
-// target can reach directly. When the operator supplies a host it is used for
-// both, which is the common case; otherwise the listener's own address is used.
-func hostForStageURL(job *JobView, explicitHost string) (string, error) {
-	// Both sources are checked, not just the operator's. A listener's own domain
-	// also ends up in the delivery command, and it comes from a job the console
-	// did not necessarily create -- so it is no more trustworthy than the field.
-	if h := strings.TrimSpace(explicitHost); h != "" {
-		if err := validateHost(h); err != nil {
-			return "", err
-		}
-		return h, nil
-	}
-	for _, d := range job.Domains {
-		d = strings.TrimSpace(d)
-		if d == "" || d == "0.0.0.0" || d == "::" {
-			continue
-		}
-		if err := validateHost(d); err != nil {
-			// Skip a domain that cannot be used rather than failing: a listener can
-			// list several, and one bad entry should not make the whole one-liner
-			// unavailable when another works.
-			continue
-		}
-		return d, nil
-	}
-	return "127.0.0.1", nil
 }
 
 // deliveryForRequest resolves an empty delivery to a platform default.
@@ -545,4 +712,83 @@ func alternativesFor(url string, platform OneLinerPlatform, chosen WebDeliveryFo
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Delivery < out[j].Delivery })
 	return out
+}
+
+// stageFingerprintInput is the set of resolved values that decide what a stage
+// is. It is a struct rather than a parameter list because several fields share a
+// type and a swapped argument would silently key the wrong stage.
+type stageFingerprintInput struct {
+	jobID     uint32
+	port      uint32
+	platform  OneLinerPlatform
+	c2Address string
+	stageHost string
+	stagePath string
+	name      string
+	delivery  WebDeliveryFormat
+	obfuscate bool
+	evasion   bool
+}
+
+// stageFingerprint identifies a built stage by every input that changes its
+// bytes or the command that fetches it.
+//
+// Two requests with the same fingerprint would produce the same implant, publish
+// it to the same path and render the same command, so the second is answered
+// from the first instead of rebuilding. The separator is a unit separator rather
+// than a printable character, so a host or a name that contains it cannot make
+// two different stages collide.
+func stageFingerprint(in stageFingerprintInput) string {
+	return strings.Join([]string{
+		strconv.FormatUint(uint64(in.jobID), 10),
+		strconv.FormatUint(uint64(in.port), 10),
+		string(in.platform),
+		in.c2Address,
+		in.stageHost,
+		in.stagePath,
+		in.name,
+		string(in.delivery),
+		strconv.FormatBool(in.obfuscate),
+		strconv.FormatBool(in.evasion),
+	}, "\x1f")
+}
+
+// cachedStage returns a previously built stage for this fingerprint.
+//
+// The returned copy has Reused set, so the caller cannot tell a cached entry
+// from a fresh build except by that flag, and the entry itself is not mutated.
+func (c *Client) cachedStage(key string) (*OneLinerResult, bool) {
+	if c.root != nil {
+		return c.root.cachedStage(key)
+	}
+	c.stageMu.Lock()
+	defer c.stageMu.Unlock()
+	res, ok := c.stageCache[key]
+	if !ok {
+		return nil, false
+	}
+	out := res
+	out.Reused = true
+	return &out, true
+}
+
+// rememberStage records a built stage so a later identical request is answered
+// without rebuilding it.
+//
+// Nothing expires an entry: the key is derived from the listener, so the map
+// grows with the number of listeners that have been staged rather than with the
+// number of clicks, and an entry is a command string rather than a payload.
+func (c *Client) rememberStage(key string, res *OneLinerResult) {
+	if c.root != nil {
+		c.root.rememberStage(key, res)
+		return
+	}
+	c.stageMu.Lock()
+	defer c.stageMu.Unlock()
+	if c.stageCache == nil {
+		c.stageCache = map[string]OneLinerResult{}
+	}
+	out := *res
+	out.Reused = false
+	c.stageCache[key] = out
 }

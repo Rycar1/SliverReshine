@@ -23,11 +23,11 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"syscall"
 	"time"
 
+	"sliverreshine/internal/ai"
 	"sliverreshine/internal/config"
 	"sliverreshine/internal/launch"
 	"sliverreshine/internal/ui/api"
@@ -199,7 +199,7 @@ func run(o options) {
 	}
 
 	// ---- web console --------------------------------------------------------
-	web := newConsole(settings)
+	web := newConsole(base, settings)
 
 	// Checked before the listener exists, so a refusal leaves no port bound and
 	// nothing to clean up. The warning inside serveConsole is advisory; this is
@@ -236,6 +236,20 @@ func resolveHome(flagHome string) string {
 		}
 		base = dir
 	}
+	// The state directory is resolved to an absolute path before anything is
+	// derived from it. Sliver builds every path it hands the Go toolchain --
+	// GOROOT, GOPATH, GOCACHE -- from the directory it is started with, and the
+	// toolchain refuses a relative GOPATH ("GOPATH entry is relative; must be
+	// absolute path"). A launch with a relative -home therefore started, served
+	// the console, and then failed every implant build with "Invalid compiler
+	// target", because `go tool dist list` never ran. Resolving here fixes every
+	// derived path at once, and is a no-op for the absolute paths the default
+	// home and a normal deployment already use.
+	abs, err := filepath.Abs(base)
+	if err != nil {
+		log.Fatalf("[sliverreshine] cannot resolve %s to an absolute path: %v", base, err)
+	}
+	base = abs
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		log.Fatalf("[sliverreshine] cannot create %s: %v", base, err)
 	}
@@ -311,12 +325,24 @@ func startEmbeddedServer(ctx context.Context, base string, settings config.Confi
 
 // newConsole builds the web console and, when the settings ask for it, attaches
 // it to the profile the launcher just wrote.
-func newConsole(settings config.Config) *api.Server {
+func newConsole(base string, settings config.Config) *api.Server {
 	web := api.New()
+	// The console reads and writes its own settings file, so it has to know
+	// where that file lives. Without this the AI panel answers "this console
+	// does not manage a settings file" and the read-only policy can only be
+	// changed by editing the file and restarting.
+	web.SetSettingsHome(base)
 	// The process-identification endpoint receives the target's process list, so
 	// whether it is used at all is a deployment decision rather than a per-click
 	// one. Empty keeps the built-in public default; "off" disables it.
 	web.SetAVLookupURL(settings.AVLookupURL)
+	// Model access is off unless the settings name an endpoint and a model. The
+	// key is resolved here so the environment lookup happens once, at startup,
+	// rather than on every request.
+	web.SetAIConfig(aiConfigFromSettings(settings.AI))
+	// The read-only policy for the assistant is a deployment setting, on by
+	// default; see config.AIConfig.ReadOnly.
+	web.SetAIReadOnly(settings.AI.ReadOnly)
 	if settings.AutoConnect {
 		client, err := connectProfile(launchProfileName())
 		if err != nil {
@@ -327,6 +353,21 @@ func newConsole(settings config.Config) *api.Server {
 		}
 	}
 	return web
+}
+
+// aiConfigFromSettings turns the settings file into the ai package's config.
+//
+// The split exists because the two packages want different things: the settings
+// file stores where the key comes from, and the client wants the key itself.
+// Resolving it here keeps the environment lookup at the process boundary.
+func aiConfigFromSettings(cfg config.AIConfig) ai.Config {
+	return ai.Config{
+		BaseURL:  cfg.BaseURL,
+		Model:    cfg.Model,
+		APIKey:   cfg.ResolveKey(),
+		Timeout:  cfg.Timeout(),
+		Thinking: cfg.Thinking,
+	}
 }
 
 // configureAuth resolves the console account and installs it on the server.
@@ -870,6 +911,5 @@ func displayAddr(addr string) string {
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"
 	}
-	_ = runtime.GOOS
 	return fmt.Sprintf("%s:%s", host, port)
 }

@@ -31,6 +31,7 @@ import WebsitesPage from './pages/WebsitesPage'
 import SettingsPage from './pages/SettingsPage'
 import CredentialsPage from './pages/CredentialsPage'
 import InfrastructurePage from './pages/InfrastructurePage'
+import AIConfigPage from './pages/AIConfigPage'
 import Logo from './components/Logo'
 import { ToastProvider } from './components/common/Toast'
 import './App.css'
@@ -284,6 +285,7 @@ function AppLayout() {
               <Route path="/topology" element={<TopologyPage />} />
               <Route path="/webdelivery" element={<WebDeliveryPage />} />
               <Route path="/websites" element={<WebsitesPage />} />
+              <Route path="/ai" element={<AIConfigPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/credentials" element={<CredentialsPage />} />
               <Route path="/infrastructure" element={<InfrastructurePage />} />

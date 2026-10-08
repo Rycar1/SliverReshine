@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -56,8 +55,7 @@ func (s *Server) handleBuilders(c *sliver.Client, w http.ResponseWriter, r *http
 
 func (s *Server) handleGenerate(c *sliver.Client, w http.ResponseWriter, r *http.Request) {
 	var req sliver.GenerateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid request body")
+	if !decodeBody(w, r, &req) {
 		return
 	}
 	result, err := c.GenerateImplant(&req)
@@ -77,9 +75,12 @@ func (s *Server) handleListeners(c *sliver.Client, w http.ResponseWriter, r *htt
 		Website string `json:"website"`
 		// Domain is what the implant's callback URIs are built from.
 		Domain string `json:"domain"`
+		// CallbackHost is the address a payload built for this listener should
+		// call back to, when that is not the bind address -- a bind of 0.0.0.0
+		// behind NAT, or a public name. Empty means "use the bind address".
+		CallbackHost string `json:"callback_host"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid request body")
+	if !decodeBody(w, r, &req) {
 		return
 	}
 	addr := req.Addr
@@ -110,7 +111,7 @@ func (s *Server) handleListeners(c *sliver.Client, w http.ResponseWriter, r *htt
 	if website == "" && (req.Type == "http" || req.Type == "https") {
 		website = defaultDeliverySite
 	}
-	jobID, err := c.StartListener(req.Type, addr, port, req.TLS, website, req.Domain)
+	jobID, err := c.StartListener(req.Type, addr, port, req.TLS, website, req.Domain, req.CallbackHost)
 	writeResult(w, map[string]any{"success": true, "job_id": jobID}, err)
 }
 

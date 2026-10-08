@@ -233,7 +233,44 @@ func explainBuildFailure(cfg *clientpb.ImplantConfig, err error) error {
 	if hint == "" {
 		return err
 	}
-	return fmt.Errorf("%s: %w", hint, err)
+	return NewMissingToolchainError(hint, err)
+}
+
+// MissingToolchainError is a build that failed because the console's own host
+// lacks the C toolchain the requested format needs.
+//
+// It is a type rather than a formatted error so the API layer can answer it
+// without reading the sentence. The hint names the missing compiler as "not
+// installed on this host", and the not-found marker list claims that phrase --
+// so this deployment gap was answered with a 404, which says "the thing you
+// asked for does not exist" about a host that merely needs gcc. The type keeps
+// the classification honest and lets the status be chosen by what happened
+// rather than by which words the message happens to contain.
+type MissingToolchainError struct {
+	hint string
+	err  error
+}
+
+// NewMissingToolchainError wraps a build error that failed for want of a C
+// toolchain on the console host, attaching the operator-facing hint.
+//
+// It is exported so the API layer -- and its tests -- can classify a build
+// failure without a live sliver-server.
+func NewMissingToolchainError(hint string, err error) error {
+	return &MissingToolchainError{hint: hint, err: err}
+}
+
+func (e *MissingToolchainError) Error() string { return e.hint + ": " + e.err.Error() }
+
+// Unwrap keeps the server's original error reachable, so a caller that wants
+// the gRPC status still gets it.
+func (e *MissingToolchainError) Unwrap() error { return e.err }
+
+// IsMissingToolchain reports whether err is a build that failed for want of a C
+// toolchain on the console's host.
+func IsMissingToolchain(err error) bool {
+	var m *MissingToolchainError
+	return errors.As(err, &m)
 }
 
 // buildToolchainHint returns a sentence naming the missing C toolchain for a

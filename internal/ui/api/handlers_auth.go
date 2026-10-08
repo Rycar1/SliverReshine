@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -57,8 +56,7 @@ func (s *Server) handleAuthPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req authChangeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+	if !decodeBody(w, r, &req) {
 		return
 	}
 

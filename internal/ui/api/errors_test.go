@@ -2,11 +2,12 @@ package api
 
 import (
 	"errors"
-	"net/http"
-	"testing"
-
+	"fmt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"net/http"
+	"sliverreshine/internal/ui/sliver"
+	"testing"
 )
 
 // Every gRPC error the console did not recognise used to become a 500, which
@@ -167,5 +168,25 @@ func TestHTTPStatusForErrorDoesNotMistakeTransportFailuresForMissingRecords(t *t
 		if got != http.StatusBadGateway {
 			t.Errorf("%q -> %d, want 502 (an upstream failed, which is not the console's own outage)", msg, got)
 		}
+	}
+}
+
+// A build that failed for want of a C toolchain on the console's host is a
+// server fault, not a missing record. The hint names the compiler as "not
+// installed", which the not-found marker list claims, so this used to be
+// answered with a 404 -- telling the operator the target does not exist when
+// the fix was to install gcc. The error's type settles it before the text is
+// consulted.
+func TestHTTPStatusForErrorTreatsAMissingToolchainAsAServerFault(t *testing.T) {
+	err := sliver.NewMissingToolchainError(
+		"this host cannot build linux shared libraries: gcc is not installed",
+		errors.New(`exec: "gcc": executable file not found in $PATH`),
+	)
+	if got := httpStatusForError(err); got != http.StatusInternalServerError {
+		t.Errorf("a missing toolchain produced %d, want %d", got, http.StatusInternalServerError)
+	}
+	wrapped := fmt.Errorf("generate stage: %w", err)
+	if got := httpStatusForError(wrapped); got != http.StatusInternalServerError {
+		t.Errorf("a wrapped missing toolchain produced %d, want %d", got, http.StatusInternalServerError)
 	}
 }

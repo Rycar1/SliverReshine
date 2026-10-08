@@ -176,12 +176,19 @@ func (s *Server) handleSocksStart(c *sliver.Client, w http.ResponseWriter, r *ht
 		return
 	}
 	p, err := c.Socks().Start(req.SessionID, req.BindAddr, req.BindPort, req.Username, req.Password)
-	writeResult(w, map[string]any{
+	if err != nil {
+		// Start returns a nil proxy on every failure path, so the fields below
+		// must not be read until the error is ruled out -- reading them first
+		// dereferenced nil and took the console down on a bad request.
+		writeClientError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
 		"success":  true,
 		"id":       p.ID,
 		"bindAddr": p.BindAddr,
 		"bindPort": p.BindPort,
-	}, err)
+	})
 }
 
 func (s *Server) handleSocksStop(c *sliver.Client, w http.ResponseWriter, r *http.Request) {

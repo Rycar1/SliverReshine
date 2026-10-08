@@ -231,6 +231,12 @@ type ProcessDumpResult struct {
 }
 
 func (c *Client) ProcessDump(sessionID string, pid int32) (*ProcessDumpResult, error) {
+	// Dumping is a Windows implant feature: the Linux and macOS implants have no
+	// handler, so the RPC comes back as "unknown message type". Gate it here as
+	// well as in the UI, so the failure names the platform instead of the protocol.
+	if err := c.requireWindows(sessionID, "process dump"); err != nil {
+		return nil, err
+	}
 	ctx, cancel := c.rpcCtx(dumpTimeout)
 	defer cancel()
 	resp, err := c.RPC.ProcessDump(ctx, &sliverpb.ProcessDumpReq{
@@ -386,11 +392,14 @@ func (c *Client) Regenerate(implantName string) (*RegenerateResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	var data string
+	// resp.File is optional: a regenerate can answer with no file at all (for
+	// example when the build was already current). Reading .Name off a nil File
+	// panicked the whole console, so both fields are read under the one guard.
+	var data, name string
 	if resp.File != nil {
 		data = base64.StdEncoding.EncodeToString(resp.File.Data)
+		name = resp.File.Name
 	}
-	name := resp.File.Name
 	if name != "" && filepath.Ext(name) == "" {
 		name += implantFileExtension(c.configFromBuild(ctx, implantName))
 	}

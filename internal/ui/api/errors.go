@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"google.golang.org/grpc/status"
+
+	"sliverreshine/internal/ui/sliver"
 )
 
 // A gRPC error is not an HTTP status, and the console was treating every one it
@@ -167,6 +169,15 @@ func httpStatusForError(err error) int {
 		case "Unimplemented":
 			return http.StatusNotImplemented
 		}
+	}
+
+	// A build that failed for want of a C toolchain is a fault on the console's
+	// own host, not a missing record. It is answered before the message markers
+	// because its own hint says the compiler is "not installed", which the
+	// not-found list below claims -- so "install gcc" reached the operator as a
+	// 404. The type settles it without reading the text.
+	if sliver.IsMissingToolchain(err) {
+		return http.StatusInternalServerError
 	}
 
 	// The server grades a missing record as Internal in several handlers, so the

@@ -55,6 +55,10 @@ type JobView struct {
 	Type    string   `json:"Protocol"`
 	Port    uint32   `json:"Port"`
 	Domains []string `json:"Domains"`
+	// CallbackHost is the address this listener was started on, recorded by the
+	// console because Sliver does not report it. It is what stops a listener
+	// bound to 192.168.1.9 from producing a callback address of 0.0.0.0.
+	CallbackHost string `json:"callback_host,omitempty"`
 	// Description is the server's human-readable line for the job. The forward
 	// (bind) dialer puts its target in here, because a bind listener has no
 	// local port to identify it and the target is the only thing that
@@ -148,14 +152,21 @@ func (c *Client) Jobs() ([]JobView, error) {
 		if domains == nil {
 			domains = []string{}
 		}
+		// The address the listener was started on, when this console started it.
+		// Sliver does not report it, and without it a listener bound to a real
+		// interface is indistinguishable from one bound to 0.0.0.0 -- which is
+		// how a one-liner for a listener on 192.168.1.9 ended up telling the
+		// implant to call back to 0.0.0.0.
+		callbackHost, _ := c.listenerHost(j.ID)
 		out = append(out, JobView{
-			ID:          j.ID,
-			Name:        j.Name,
-			Type:        j.Protocol,
-			Port:        j.Port,
-			Domains:     domains,
-			Description: j.Description,
-			CanStage:    JobServesStage(j.Name),
+			ID:           j.ID,
+			Name:         j.Name,
+			Type:         j.Protocol,
+			Port:         j.Port,
+			Domains:      domains,
+			CallbackHost: callbackHost,
+			Description:  j.Description,
+			CanStage:     JobServesStage(j.Name),
 		})
 	}
 	return out, nil
@@ -169,7 +180,27 @@ func (c *Client) Jobs() ([]JobView, error) {
 // implant's callback URIs are built from. Both were missing, which made a
 // UI-created HTTP listener incapable of serving a stage -- the file was
 // published, the listener reported success, and every fetch returned 404.
-func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, website, domain string) (uint32, error) {
+func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, website, domain, callbackHost string) (uint32, error) {
+	// The address an implant built for this listener should call back to.
+	//
+	// Sliver's Job does not carry the bind address, so unless it is recorded
+	// here the console cannot tell a listener on 192.168.1.9 from one on
+	// 0.0.0.0, and every one-liner falls back to the wildcard. An explicit
+	// callback address wins; otherwise the bind address is used as-is, wildcard
+	// included, so the resolver can say "bound to 0.0.0.0" instead of "unknown".
+	//
+	// A callback address the operator typed is validated here rather than at
+	// build time, because a typo should be refused while they are looking at the
+	// form, not two minutes later by a one-liner that quietly ignored it.
+	recorded := strings.TrimSpace(callbackHost)
+	if recorded != "" {
+		if err := validateHost(recorded); err != nil {
+			return 0, err
+		}
+	} else {
+		recorded = strings.TrimSpace(addr)
+	}
+
 	// Reuse a listener that already owns the port.
 	//
 	// A second bind on the same port fails at the OS level, and the error names
@@ -180,6 +211,9 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, webs
 	// the port, hand back its ID: the operator asked for a listener there, and
 	// one is there.
 	if id, ok := c.existingListener(listenerJobName(jobType, tls), port); ok {
+		if recorded != "" {
+			c.rememberListenerHost(id, recorded)
+		}
 		return id, nil
 	}
 	ctx, cancel := c.rpcCtx(rpcDefault)
@@ -193,6 +227,7 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, webs
 		if err != nil {
 			return 0, err
 		}
+		c.rememberListenerHost(resp.JobID, recorded)
 		return resp.JobID, nil
 	case "http", "https":
 		req := &clientpb.HTTPListenerReq{
@@ -218,6 +253,7 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, webs
 		// delivery code picks, the listener cannot see it, and the fetch 404s
 		// with every step reporting success.
 		c.rememberListenerSite(resp.JobID, website)
+		c.rememberListenerHost(resp.JobID, recorded)
 		return resp.JobID, nil
 	case "dns":
 		// The port has to be sent. This branch used to pass only Domains, so the
@@ -233,6 +269,7 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, webs
 		if err != nil {
 			return 0, err
 		}
+		c.rememberListenerHost(resp.JobID, recorded)
 		return resp.JobID, nil
 	case "wireguard":
 		resp, err := c.RPC.StartWGListener(ctx, &clientpb.WGListenerReq{
@@ -242,6 +279,7 @@ func (c *Client) StartListener(jobType, addr string, port uint32, tls bool, webs
 		if err != nil {
 			return 0, err
 		}
+		c.rememberListenerHost(resp.JobID, recorded)
 		return resp.JobID, nil
 	default:
 		return 0, fmt.Errorf("unsupported listener type %q", jobType)

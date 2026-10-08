@@ -438,7 +438,6 @@ nav {
   flex-direction: column;
   overflow: hidden;
   animation: page-enter-same var(--dur-3) var(--ease-out);
-  will-change: opacity, transform;
 }
 
 .page-transition.forward {

@@ -2,10 +2,10 @@ package sliver
 
 import (
 	"errors"
+	"fmt"
+	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"strings"
 	"testing"
-
-	"github.com/bishopfox/sliver/protobuf/clientpb"
 )
 
 // A console-only deployment has no C cross-compiler. Sliver runs one for
@@ -96,5 +96,37 @@ func TestExplainBuildFailureHandlesNil(t *testing.T) {
 	}
 	if hint := buildToolchainHint(nil, errors.New("exit status 1")); hint != "" {
 		t.Errorf("a nil config produced a hint: %q", hint)
+	}
+}
+
+// A toolchain failure is a fault on the console's own host, not a missing
+// record. It used to be answered with a 404 because the hint says the compiler
+// is "not installed" and the API's not-found marker list claims that phrase;
+// the type lets the status be chosen by what happened rather than by the words.
+func TestIsMissingToolchainRecognisesTheWrappedError(t *testing.T) {
+	cfg := &clientpb.ImplantConfig{GOOS: "linux", GOARCH: "amd64", Format: clientpb.OutputFormat_SHARED_LIB}
+	err := explainBuildFailure(cfg, errors.New("exit status 1"))
+	if !IsMissingToolchain(err) {
+		t.Fatalf("a toolchain failure was not classified as one: %v", err)
+	}
+	if !IsMissingToolchain(fmt.Errorf("generate stage: %w", err)) {
+		t.Errorf("classification was lost when the error was wrapped")
+	}
+	if IsMissingToolchain(errors.New("exit status 1")) {
+		t.Errorf("a bare error was classified as a toolchain failure")
+	}
+	if IsMissingToolchain(nil) {
+		t.Errorf("nil was classified as a toolchain failure")
+	}
+}
+
+func TestMissingToolchainErrorKeepsHintAndCause(t *testing.T) {
+	cause := errors.New(`exec: "gcc": executable file not found in $PATH`)
+	err := NewMissingToolchainError("install gcc on this host", cause)
+	if !errors.Is(err, cause) {
+		t.Errorf("the original error is no longer reachable: %v", err)
+	}
+	if !strings.Contains(err.Error(), "install gcc on this host") || !strings.Contains(err.Error(), "executable file not found") {
+		t.Errorf("hint or cause missing from the message: %v", err)
 	}
 }

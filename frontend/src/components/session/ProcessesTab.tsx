@@ -16,9 +16,13 @@ const CATEGORY_TONE: Record<string, string> = {
   unknown: 'var(--muted, #8a8f98)',
 }
 
-export default function ProcessesTab({ sessionId }: { sessionId: string }) {
+export default function ProcessesTab({ sessionId, os }: { sessionId: string; os: string }) {
   const { t } = useTranslation()
   const toast = useToast()
+  // Migrate and dump are implemented by the Windows implant only: Sliver's Linux
+  // and macOS implants answer "unknown message type", so the buttons used to
+  // produce a raw server error on those sessions. Hide them instead.
+  const windowsOnly = os === 'windows'
   const [procs, setProcs] = useState<ProcessInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -221,6 +225,12 @@ export default function ProcessesTab({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
+      {!windowsOnly && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <p className="page-sub">{t('processes.windowsOnlyActions')}</p>
+        </div>
+      )}
+
       {/* Identified security products get their own panel: on a domain host the
           installed EDR is the single most important thing to know before
           touching anything. */}
@@ -310,28 +320,32 @@ export default function ProcessesTab({ sessionId }: { sessionId: string }) {
                   </td>
                   <td>
                     <div className="fs-actions">
-                      <button
-                        type="button"
-                        className="btn sm"
-                        disabled={busy}
-                        title={t('processes.migrateHint')}
-                        onClick={() => {
-                          setTargetPid(p.PID)
-                          setTargetName(p.Executable)
-                          setConfirm('migrate')
-                        }}
-                      >
-                        {t('processes.migrate')}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn sm"
-                        disabled={dumpBusy === p.PID}
-                        title={`${t('processes.dumpHint')} - ${t('processes.dumpLimitHint')}`}
-                        onClick={() => dump(p.PID)}
-                      >
-                        {dumpBusy === p.PID ? t('common.loading') : t('processes.dump')}
-                      </button>
+                      {windowsOnly && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn sm"
+                            disabled={busy}
+                            title={t('processes.migrateHint')}
+                            onClick={() => {
+                              setTargetPid(p.PID)
+                              setTargetName(p.Executable)
+                              setConfirm('migrate')
+                            }}
+                          >
+                            {t('processes.migrate')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn sm"
+                            disabled={dumpBusy === p.PID}
+                            title={`${t('processes.dumpHint')} - ${t('processes.dumpLimitHint')}`}
+                            onClick={() => dump(p.PID)}
+                          >
+                            {dumpBusy === p.PID ? t('common.loading') : t('processes.dump')}
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
                         className="btn sm danger"

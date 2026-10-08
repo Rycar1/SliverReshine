@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -48,7 +49,7 @@ export default function ConfirmDialog({
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div className="modal-overlay confirm-overlay" onClick={onCancel}>
       <div
         className="modal confirm-dialog"
@@ -75,6 +76,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

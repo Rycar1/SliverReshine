@@ -641,6 +641,10 @@
   },
   {
     "method": "POST",
+    "pattern": "/api/sessions/{id}/fs/acl"
+  },
+  {
+    "method": "POST",
     "pattern": "/api/sessions/{id}/fs/chtimes"
   },
   {
@@ -742,6 +746,34 @@
   {
     "method": "POST",
     "pattern": "/api/sessions/{id}/reg/hive"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/ai/status"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/ai/read-only/check"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/ai/models"
+  },
+  {
+    "method": "GET",
+    "pattern": "/api/settings/ai"
+  },
+  {
+    "method": "PUT",
+    "pattern": "/api/settings/ai"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/ai-collect"
+  },
+  {
+    "method": "POST",
+    "pattern": "/api/sessions/{id}/ai-privesc"
   },
   {
     "method": "GET",

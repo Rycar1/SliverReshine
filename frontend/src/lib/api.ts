@@ -61,6 +61,17 @@ import type {
   MimikatzMode,
   MimikatzResult,
   AuthSettings,
+  AIStatus,
+  AIReadOnlyCheck,
+  AIEvent,
+  AICollectRequest,
+  AICollectResult,
+  AIPrivescRequest,
+  AIPrivescResult,
+  AISettings,
+  AISettingsUpdate,
+  AIModels,
+  AIModelsRequest,
 } from './types'
 
 const BASE = '/api'
@@ -88,6 +99,78 @@ function filenameFromDisposition(header: string | null): string {
   if (!header) return ''
   const m = /filename="([^"]*)"/.exec(header)
   return m ? m[1] : ''
+}
+
+/**
+ * Run one server-sent-events endpoint and report every frame as it arrives.
+ *
+ * A plain EventSource cannot be used here: the run needs a POST body (the
+ * objective, the policy) and the console's CSRF check requires a JSON content
+ * type, neither of which EventSource can send. The response is read off the
+ * fetch body instead, which is the same transport with none of those limits.
+ *
+ * Frames are separated by a blank line and each `data:` payload is one JSON
+ * event. The run's final value travels in the `done` event, so the promise
+ * resolves with it; a `done` event carrying only text is a failure that
+ * happened after the stream had already started.
+ */
+async function streamAI<T>(
+  path: string,
+  body: unknown,
+  onEvent: (ev: AIEvent) => void,
+): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    cache: 'no-store',
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(err.error || `HTTP ${res.status}`)
+  }
+  if (!res.body) throw new Error('the response has no body to stream')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  let result: T | undefined
+  let failed = ''
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    // Frames end at a blank line. Anything after the last one is a partial
+    // frame and stays in the buffer for the next read.
+    for (;;) {
+      const sep = buf.indexOf('\n\n')
+      if (sep === -1) break
+      const frame = buf.slice(0, sep)
+      buf = buf.slice(sep + 2)
+      const payload = frame
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+        .join('')
+      if (!payload) continue
+      let ev: AIEvent
+      try {
+        ev = JSON.parse(payload) as AIEvent
+      } catch {
+        continue
+      }
+      onEvent(ev)
+      if (ev.type === 'done') {
+        if (ev.result !== undefined) result = ev.result as T
+        else failed = ev.text || 'the run failed'
+      }
+    }
+  }
+
+  if (failed) throw new Error(failed)
+  if (result === undefined) throw new Error('the stream ended without a result')
+  return result
 }
 
 export const api = {
@@ -243,8 +326,15 @@ export const api = {
   fsPwd: (sessionId: string) => request<{ Path: string }>(`/sessions/${sessionId}/fs/pwd`),
   fsCd: (sessionId: string, path: string) =>
     request<{ Path: string }>(`/sessions/${sessionId}/fs/cd`, { method: 'POST', body: JSON.stringify({ path }) }),
+  /**
+   * Fetch a file for the in-console viewer.
+   *
+   * Data is base64 text, or absent when Binary is set -- the server refuses a
+   * binary file with a flag rather than a wall of mojibake, and refuses one over
+   * the viewer's size limit with an error.
+   */
   fsCat: (sessionId: string, path: string) =>
-    request<{ Data: string; Name: string }>(
+    request<{ Data?: string; Name: string; Binary?: boolean; Size?: number }>(
       `/sessions/${sessionId}/fs/cat?path=${encodeURIComponent(path)}`,
     ),
   /**
@@ -770,6 +860,13 @@ export const api = {
 			body: JSON.stringify({ path, uid, gid, recursive }),
 		}),
 
+	/** Replace an account's permission entry on a Windows target (icacls /grant:r). */
+	fsAcl: (sessionId: string, path: string, principal: string, perm: string, recursive = false) =>
+		request<{ ok: boolean }>(`/sessions/${sessionId}/fs/acl`, {
+			method: 'POST',
+			body: JSON.stringify({ path, principal, perm, recursive }),
+		}),
+
 	/** Rewrite timestamps (timestomping). */
 	chtimes: (sessionId: string, path: string, atime: number, mtime: number) =>
 		request<{ ok: boolean }>(`/sessions/${sessionId}/fs/chtimes`, {
@@ -1055,6 +1152,58 @@ export const api = {
 			method: 'PUT',
 			body: JSON.stringify({ username, password, currentPassword }),
 		}),
+
+	// --- AI assistant ---
+
+	/** Whether the model-backed assistant is available, and what it may run. */
+	aiStatus: () => request<AIStatus>('/ai/status'),
+
+	/** The stored AI configuration, including whether the read-only policy is on. */
+	aiSettings: () => request<AISettings>('/settings/ai'),
+
+	/** Change the stored AI configuration. Omitted fields are left alone. */
+	aiSettingsUpdate: (req: AISettingsUpdate) =>
+		request<AISettings>('/settings/ai', {
+			method: 'PUT',
+			body: JSON.stringify(req),
+		}),
+
+	/** List the models the configured endpoint advertises, for the picker. */
+	aiModels: (req: AIModelsRequest) =>
+		request<AIModels>('/ai/models', {
+			method: 'POST',
+			body: JSON.stringify(req),
+		}),
+
+	/** Check a command against the read-only policy without running it. */
+	aiReadOnlyCheck: (command: string) =>
+		request<AIReadOnlyCheck>('/ai/read-only/check', {
+			method: 'POST',
+			body: JSON.stringify({ command }),
+		}),
+
+	/** Run one read-only collection pass over a session. */
+	aiCollect: (sessionId: string, req: AICollectRequest) =>
+		request<AICollectResult>(`/sessions/${encodeURIComponent(sessionId)}/ai-collect`, {
+			method: 'POST',
+			body: JSON.stringify(req),
+		}),
+
+	/** The same collection run, streamed so the operator sees each step live. */
+	aiCollectStream: (sessionId: string, req: AICollectRequest, onEvent: (ev: AIEvent) => void) =>
+		streamAI<AICollectResult>(
+			`/sessions/${encodeURIComponent(sessionId)}/ai-collect`,
+			req,
+			onEvent,
+		),
+
+	/** Run one AI-driven privilege escalation attempt, streamed live. */
+	aiPrivescStream: (sessionId: string, req: AIPrivescRequest, onEvent: (ev: AIEvent) => void) =>
+		streamAI<AIPrivescResult>(
+			`/sessions/${encodeURIComponent(sessionId)}/ai-privesc`,
+			req,
+			onEvent,
+		),
 }
 
 export function wsUrl(path: string): string {

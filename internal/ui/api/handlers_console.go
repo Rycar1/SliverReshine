@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -83,8 +82,7 @@ type connectRequest struct {
 
 func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	var req connectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid request body")
+	if !decodeBody(w, r, &req) {
 		return
 	}
 	if req.Content == "" {

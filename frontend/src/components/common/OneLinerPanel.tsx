@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
 import type { OneLinerResult, OneLinerTarget } from '../../lib/types'
+import { classifyOneLinerError, oneLinerErrorText } from './oneLinerError'
 
 /**
  * Reconciles the selected listener against the freshest listener list.
@@ -25,6 +26,21 @@ export function reconcileJobId(current: number | '', targets: OneLinerTarget[]):
 }
 
 /**
+ * Whether the value only routes from the machine it names.
+ *
+ * Exported for tests. Kept in step with isLoopbackHost on the Go side: the panel
+ * must not warn about an address the backend would accept, and must not stay
+ * silent about one it would never choose.
+ */
+export function isLoopbackHost(value: string): boolean {
+  const h = value.trim().replace(/^\[|\]$/g, '')
+  if (h.toLowerCase() === 'localhost') return true
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h)
+  if (v4) return Number(v4[1]) === 127
+  return h === '::1'
+}
+
+/**
  * One-liner delivery: pick a listener, get a command that gets a session.
  *
  * This is the whole flow in one control because the underlying operations are
@@ -40,6 +56,10 @@ export default function OneLinerPanel() {
   const [jobId, setJobId] = useState<number | ''>('')
   const [platform, setPlatform] = useState('windows')
   const [host, setHost] = useState('')
+  // Whether the operator has typed into the host field. Until they do, the field
+  // tracks the address the backend would derive, so the panel shows what the
+  // implant will actually dial rather than an empty box.
+  const [hostTouched, setHostTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<OneLinerResult | null>(null)
@@ -66,6 +86,35 @@ export default function OneLinerPanel() {
 
   const usable = targets.filter((x) => x.can_stage)
 
+  // The address a command built for the selected listener dials when the field
+  // is left blank. Resolved by the backend from the listener's own bind address
+  // and, failing that, the address this console was reached on.
+  const selected = usable.find((x) => x.job_id === jobId)
+  const suggestedHost = selected?.callback_host || ''
+
+  // A wildcard here is a mistake, not an instruction, and the backend ignores it
+  // and falls back to the listener's recorded address. Saying so before the build
+  // is what stops the operator from reading a 0.0.0.0 command and concluding the
+  // console derived it.
+  const hostIsWildcard = ['0.0.0.0', '::', '[::]', '*'].includes(host.trim())
+
+  // Loopback is the quieter form of the same mistake: 127.0.0.1 is a real
+  // address, so it reads like a working callback, but it only routes from this
+  // host. It is never derived (the backend skips it), so a value here is one the
+  // operator typed -- which is honoured, because a target running on the C2 host
+  // is a real case. Warn rather than rewrite.
+  const hostIsLoopback = isLoopbackHost(host)
+
+  // Fill the field with the address the backend would derive, so the operator
+  // reads the callback the implant will use before a single build runs. An empty
+  // field was what made "0.0.0.0" look like a reasonable thing to type -- and a
+  // typed wildcard used to be accepted and emitted. Tracking the selection stops
+  // the field going stale, and touching it hands control back to the operator.
+  useEffect(() => {
+    if (hostTouched) return
+    setHost(suggestedHost)
+  }, [suggestedHost, hostTouched])
+
   const generate = async () => {
     // Checked against the freshest list rather than trusting the select: the
     // listener can be stopped from another tab, and the row that carried the
@@ -80,6 +129,20 @@ export default function OneLinerPanel() {
       void load()
       return
     }
+    // A wildcard is a bind address, not a destination, so it is dropped here
+    // where the field is rather than sent for the backend to ignore -- the
+    // warning under the field promises exactly this. The backend keeps the same
+    // guard, because it is the last line of defence and not every caller goes
+    // through this form.
+    const typedHost = hostIsWildcard ? '' : host.trim()
+    // Nothing to send and nothing to fall back on: the backend would refuse, and
+    // its refusal is a sentence about bind addresses rather than an instruction.
+    // Stopping here keeps the message in the operator's language and next to the
+    // field that fixes it.
+    if (typedHost === '' && !suggestedHost) {
+      setError(t('oneliner.hostNeeded'))
+      return
+    }
     setBusy(true)
     setError('')
     setResult(null)
@@ -87,19 +150,19 @@ export default function OneLinerPanel() {
       const res = await api.oneLiner({
         job_id: Number(jobId),
         platform,
-        host: host.trim() || undefined,
+        host: typedHost || undefined,
       })
       setResult(res)
     } catch (err) {
       // A listener stopped between the last poll and this click reaches the
       // backend before the poll notices, so the reply names a job id that is
-      // still on screen. Resync and explain it in the operator's language
-      // instead of surfacing the raw backend string.
-      if (/no listener with job id/i.test((err as Error).message)) {
-        setError(t('oneliner.pickListener'))
+      // still on screen. Resync now rather than waiting up to a poll interval,
+      // and explain the failure in the operator's language instead of surfacing
+      // the raw backend sentence.
+      const message = (err as Error).message
+      setError(oneLinerErrorText(message, t, 'panel'))
+      if (classifyOneLinerError(message) === 'pick') {
         void load()
-      } else {
-        setError((err as Error).message)
       }
     } finally {
       setBusy(false)
@@ -156,8 +219,31 @@ export default function OneLinerPanel() {
             <input
               value={host}
               placeholder={t('oneliner.hostPlaceholder')}
-              onChange={(e) => setHost(e.target.value)}
+              onChange={(e) => {
+                setHost(e.target.value)
+                setHostTouched(true)
+              }}
             />
+            {!hostTouched && suggestedHost && (
+              <div className="page-sub" style={{ marginTop: 4 }}>
+                {t('oneliner.hostAuto')}
+              </div>
+            )}
+            {!hostTouched && !suggestedHost && (
+              <div className="page-sub" style={{ marginTop: 4 }}>
+                {t('oneliner.hostNeeded')}
+              </div>
+            )}
+            {hostIsWildcard && (
+              <div className="page-sub" style={{ marginTop: 4 }}>
+                {t('oneliner.hostIsWildcard')}
+              </div>
+            )}
+            {hostIsLoopback && !hostIsWildcard && (
+              <div className="page-sub" style={{ marginTop: 4 }}>
+                {t('oneliner.hostIsLoopback')}
+              </div>
+            )}
           </div>
           <div className="field" style={{ justifyContent: 'flex-end' }}>
             <button type="button" className="btn primary" onClick={generate} disabled={busy}>

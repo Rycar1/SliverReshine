@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
@@ -109,6 +111,53 @@ func (c *Client) Cd(sessionID, path string) (string, error) {
 		return "", fmt.Errorf("%s", resp.Response.Err)
 	}
 	return resp.Path, nil
+}
+
+// Stat reports the size of one remote path without pulling its bytes.
+//
+// Ls answers for a single file as well as for a directory, so the viewer can
+// learn how big a file is before deciding whether to open it. ok is false when
+// the target did not answer usefully, in which case the caller has to fall back
+// to downloading and measuring.
+func (c *Client) Stat(sessionID, path string) (size int64, isDir, ok bool) {
+	view, err := c.Ls(sessionID, path)
+	if err != nil || view == nil || !view.Exists {
+		return 0, false, false
+	}
+	base := path
+	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
+		base = base[i+1:]
+	}
+	for _, f := range view.Files {
+		if f.Name == base {
+			return f.Size, f.IsDir, true
+		}
+	}
+	// Some implants answer with the entry alone and no name to match against.
+	if len(view.Files) == 1 {
+		return view.Files[0].Size, view.Files[0].IsDir, true
+	}
+	return 0, false, false
+}
+
+// LooksBinary reports whether data looks like a binary file rather than text.
+//
+// The viewer renders the file as text in the page, so binary content shows up as
+// a wall of replacement characters and a large one freezes the tab while it
+// tries. A NUL byte is the usual signal; invalid UTF-8 catches the rest --
+// images, archives and compiled code -- without guessing a charset.
+func LooksBinary(data []byte) bool {
+	if len(data) == 0 {
+		return false
+	}
+	sample := data
+	if len(sample) > 8192 {
+		sample = sample[:8192]
+	}
+	if bytes.IndexByte(sample, 0) >= 0 {
+		return true
+	}
+	return !utf8.Valid(data)
 }
 
 // Download reads a file from the session and returns its base64-encoded data.

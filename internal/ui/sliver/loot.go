@@ -46,6 +46,11 @@ func lootToView(l *clientpb.Loot, withData bool) *LootView {
 	return v
 }
 
+// credAPIKeyUsername is the reserved credential username that marks an entry as
+// an API key rather than a user/password pair. The Sliver Credential model has
+// no field for the distinction, so the app encodes it in the username.
+const credAPIKeyUsername = "apikey"
+
 // credToView maps a credential to a LootView. API keys are stored with the
 // reserved username "apikey" (see LootAdd); everything else is user/password.
 func credToView(cred *clientpb.Credential) *LootView {
@@ -58,7 +63,7 @@ func credToView(cred *clientpb.Credential) *LootView {
 		LootType: "LOOT_CREDENTIAL",
 		CredUser: cred.Username,
 	}
-	if cred.Username == "apikey" {
+	if cred.Username == credAPIKeyUsername {
 		v.CredAPIKey = cred.Plaintext
 	} else {
 		v.CredPassword = cred.Plaintext
@@ -206,10 +211,10 @@ func (c *Client) LootAdd(req *LootAddRequest) (string, error) {
 		// (see credToView). Guard the write path so a user/password credential can
 		// never silently collide with that marker.
 		if req.CredAPIKey != "" {
-			cred.Username = "apikey"
+			cred.Username = credAPIKeyUsername
 			cred.Plaintext = req.CredAPIKey
 		} else {
-			if req.CredUser == "apikey" {
+			if req.CredUser == credAPIKeyUsername {
 				return "", fmt.Errorf(`username "apikey" is reserved for API keys; use the API key type or a different username`)
 			}
 			cred.Username = req.CredUser

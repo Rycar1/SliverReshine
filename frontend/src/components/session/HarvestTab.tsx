@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
 import type { MimikatzMode, MimikatzResult } from '../../lib/types'
 import { useToast } from '../common/Toast'
+import AITab from './AITab'
 
 /** The sekurlsa/lsadump/vault commands an operator reaches for, in the order
  *  they are usually tried: logon passwords first, then the narrower providers,
@@ -373,6 +374,14 @@ export default function HarvestTab({ sessionId }: { sessionId: string }) {
             {autoAdd ? t('harvest.parseAutoAdd') : t('harvest.parseNoAdd')}
           </span>
         </div>
+      </div>
+
+      {/* The AI collection pass lives in this tab rather than its own: it is
+          the same job as the dump above -- get credentials off the host -- and
+          an operator picks between the two here instead of hunting for the
+          other tab. */}
+      <div style={{ marginTop: 14 }}>
+        <AITab sessionId={sessionId} />
       </div>
     </>
   )

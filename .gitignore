@@ -45,4 +45,5 @@ tools/upx/
 # Local state
 /data/
 *.dmp
+.tmp-scratch/
 zzout/

@@ -1,9 +1,14 @@
 package sliver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
+	"github.com/bishopfox/sliver/protobuf/commonpb"
+	"github.com/bishopfox/sliver/protobuf/rpcpb"
+	"github.com/bishopfox/sliver/protobuf/sliverpb"
+	"google.golang.org/grpc"
 )
 
 func TestBeaconTaskToView(t *testing.T) {
@@ -46,5 +51,48 @@ func TestItoa(t *testing.T) {
 		if got := itoa(in); got != want {
 			t.Fatalf("itoa(%d) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// openSessionStub captures the OpenSession request so a test can assert the
+// fields that decide sync vs async on the server. The embedded interface is
+// nil, so any other RPC a test drives panics instead of returning a zero value.
+type openSessionStub struct {
+	rpcpb.SliverRPCClient
+	got *sliverpb.OpenSession
+}
+
+func (s *openSessionStub) OpenSession(_ context.Context, in *sliverpb.OpenSession, _ ...grpc.CallOption) (*sliverpb.OpenSession, error) {
+	s.got = in
+	return &sliverpb.OpenSession{Response: &commonpb.Response{Async: true}}, nil
+}
+
+// A beacon has no live session to look up, so the OpenSession request has to be
+// marked async and carry the beacon ID. Sent without Async -- which is what the
+// code did -- the server takes the synchronous path, looks up an empty session
+// ID, finds nothing and answers "Invalid session ID", so a beacon's open-session
+// button could never work.
+func TestOpenSessionFromBeaconSendsAnAsyncRequest(t *testing.T) {
+	stub := &openSessionStub{}
+	c := &Client{RPC: stub}
+
+	async, err := c.OpenSessionFromBeacon("beacon-1")
+	if err != nil {
+		t.Fatalf("OpenSessionFromBeacon: %v", err)
+	}
+	if !async {
+		t.Fatal("async = false, want true")
+	}
+	if stub.got == nil || stub.got.Request == nil {
+		t.Fatal("no request was sent")
+	}
+	if !stub.got.Request.Async {
+		t.Error("Request.Async = false; the server then looks for a session and fails")
+	}
+	if stub.got.Request.BeaconID != "beacon-1" {
+		t.Errorf("Request.BeaconID = %q, want beacon-1", stub.got.Request.BeaconID)
+	}
+	if stub.got.Request.Timeout <= 0 {
+		t.Errorf("Request.Timeout = %d, want a positive timeout", stub.got.Request.Timeout)
 	}
 }

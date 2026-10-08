@@ -17,6 +17,10 @@ vi.mock('../../../lib/api', () => ({
     fsDownload: vi.fn(),
     fsMv: vi.fn(),
     grep: vi.fn(),
+    chmod: vi.fn(),
+    chown: vi.fn(),
+    chtimes: vi.fn(),
+    fsAcl: vi.fn(),
     memfiles: vi.fn(),
     portfwdList: vi.fn(),
     portfwdStart: vi.fn(),
@@ -132,7 +136,7 @@ describe('PostExTab after both moves', () => {
 
   it('keeps only the panes that were not folded elsewhere', async () => {
     renderWithProviders(<PostExTab sessionId="s1" />)
-    await screen.findByText('File attributes')
+    await screen.findByText('Memfiles')
 
     expect(screen.queryByText('Content search')).toBeNull()
     expect(screen.queryByText('Reverse port forward')).toBeNull()
@@ -143,9 +147,77 @@ describe('PostExTab after both moves', () => {
 
   it('never calls the reverse-forward API now that the pane is gone', async () => {
     renderWithProviders(<PostExTab sessionId="s1" />)
-    await screen.findByText('File attributes')
+    await screen.findByText('Memfiles')
 
     expect(mockedApi.rportfwd).not.toHaveBeenCalled()
+  })
+})
+
+describe('FilesTab row menu', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockedApi.fsList.mockResolvedValue(DIR as never)
+  })
+
+  it('opens a second-level menu from the row and edits Windows permissions with icacls', async () => {
+    mockedApi.fsAcl.mockResolvedValue({ ok: true } as never)
+    renderWithProviders(<FilesTab sessionId="s1" os="windows" />)
+    await screen.findByText('nginx.conf')
+
+    fireEvent.click(screen.getByText('More'))
+    // The menu has to hang off the body: inside the page tree a transformed
+    // ancestor becomes the containing block for `position: fixed`, and the
+    // menu lands offset by that ancestor's origin.
+    const menu = await screen.findByRole('menu')
+    expect(menu.parentElement).toBe(document.body)
+    fireEvent.click(await screen.findByText('Change permissions'))
+
+    // The Windows dialog asks for an account and a level, not a mode word.
+    const level = await screen.findByLabelText('Permission level')
+    expect(level).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'BUILTIN\\Users' } })
+    fireEvent.change(level, { target: { value: 'RX' } })
+    fireEvent.click(screen.getByText('Apply'))
+
+    await waitFor(() =>
+      // The row menu joins with the target's own separator, so a Windows path
+      // comes out backslash-joined even when the listing was fetched as /etc.
+      expect(mockedApi.fsAcl).toHaveBeenCalledWith('s1', '/etc\\nginx.conf', 'BUILTIN\\Users', 'RX', false),
+    )
+  })
+
+  it('edits a POSIX mode through chmod instead of icacls', async () => {
+    mockedApi.chmod.mockResolvedValue({ ok: true } as never)
+    renderWithProviders(<FilesTab sessionId="s1" os="linux" />)
+    await screen.findByText('nginx.conf')
+
+    fireEvent.click(screen.getByText('More'))
+    fireEvent.click(await screen.findByText('Change permissions'))
+
+    const mode = await screen.findByLabelText('Mode (e.g. 0755)')
+    fireEvent.change(mode, { target: { value: '0644' } })
+    fireEvent.click(screen.getByText('Apply'))
+
+    await waitFor(() => expect(mockedApi.chmod).toHaveBeenCalledWith('s1', '/etc/nginx.conf', '0644', false))
+    expect(mockedApi.fsAcl).not.toHaveBeenCalled()
+  })
+
+  it('sends timestamps as unix seconds', async () => {
+    mockedApi.chtimes.mockResolvedValue({ ok: true } as never)
+    renderWithProviders(<FilesTab sessionId="s1" os="linux" />)
+    await screen.findByText('nginx.conf')
+
+    fireEvent.click(screen.getByText('More'))
+    fireEvent.click(await screen.findByText('Change timestamps'))
+
+    fireEvent.change(await screen.findByLabelText('Modified time (unix seconds)'), {
+      target: { value: '1700000000' },
+    })
+    fireEvent.click(screen.getByText('Apply'))
+
+    await waitFor(() =>
+      expect(mockedApi.chtimes).toHaveBeenCalledWith('s1', '/etc/nginx.conf', expect.any(Number), 1700000000),
+    )
   })
 })
 

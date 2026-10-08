@@ -43,9 +43,21 @@ function consoleHostFromLocation(): string {
 
 interface PublishedRow {
   site: string
+  // payload is the stage name taken from the last path segment. Every stage the
+  // console publishes is named after the profile it was built from
+  // (/stage-linux.woff), and the website is the same for every row, so the
+  // basename is the only field that says which payload a row is.
+  payload: string
   path: string
   type: string
   size: number
+}
+
+/** The last segment of a published path, which is the stage name. */
+function payloadName(path: string): string {
+  const clean = (path || '').split('?')[0]
+  const seg = clean.split('/').filter(Boolean).pop()
+  return seg || path || '-'
 }
 
 export default function WebDeliveryPage() {
@@ -147,7 +159,13 @@ export default function WebDeliveryPage() {
     const rows: PublishedRow[] = []
     for (const site of websites) {
       for (const c of Object.values(site.Contents || {})) {
-        rows.push({ site: site.Name, path: c.Path, type: c.ContentType, size: c.Size })
+        rows.push({
+          site: site.Name,
+          payload: payloadName(c.Path),
+          path: c.Path,
+          type: c.ContentType,
+          size: c.Size,
+        })
       }
     }
     return rows.sort(
@@ -287,7 +305,8 @@ export default function WebDeliveryPage() {
           <table className="data">
             <thead>
               <tr>
-                <th>{t('websites.thName')}</th>
+                <th>{t('webdelivery.thPayload')}</th>
+                <th>{t('webdelivery.thSite')}</th>
                 <th>{t('websites.thPath')}</th>
                 <th>{t('websites.thType')}</th>
                 <th>{t('websites.thSize')}</th>
@@ -296,7 +315,8 @@ export default function WebDeliveryPage() {
             <tbody>
               {published.map((r) => (
                 <tr key={`${r.site}${r.path}`}>
-                  <td className="mono">{r.site}</td>
+                  <td className="mono">{r.payload}</td>
+                  <td className="mono dim">{r.site}</td>
                   <td className="mono">{r.path}</td>
                   <td className="mono dim">{r.type || '—'}</td>
                   <td className="mono dim">{formatSize(r.size)}</td>

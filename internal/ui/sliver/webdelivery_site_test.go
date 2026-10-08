@@ -25,6 +25,11 @@ func siteJob(id uint32, name string, port uint32) *clientpb.Job {
 // A free port means nothing to reuse: the requested website is used and a
 // listener is started for it.
 func TestDeliverySiteForPortUsesRequestedWhenFree(t *testing.T) {
+	// The persisted listener maps live in the profile directory; point them at a
+	// private one so a stale entry written by another test or run cannot decide
+	// which website this port is served by.
+	isolateListenerSites(t)
+
 	c := &Client{RPC: siteJobs(siteJob(1, "http", 9999))}
 	website, jobID, reuse, err := c.deliverySiteForPort(8080, "webdelivery", false)
 	if err != nil {
@@ -42,6 +47,11 @@ func TestDeliverySiteForPortUsesRequestedWhenFree(t *testing.T) {
 // whose website is known. Publishing to the requested website instead is
 // invisible to it and the URL 404s, so the listener's own website has to win.
 func TestDeliverySiteForPortReusesKnownListenerWebsite(t *testing.T) {
+	// The persisted listener maps live in the profile directory; point them at a
+	// private one so a stale entry written by another test or run cannot decide
+	// which website this port is served by.
+	isolateListenerSites(t)
+
 	c := &Client{RPC: siteJobs(siteJob(7, "https", 8443))}
 	c.rememberListenerSite(7, "staging")
 
@@ -60,6 +70,11 @@ func TestDeliverySiteForPortReusesKnownListenerWebsite(t *testing.T) {
 // A listener on the port whose website is unknown cannot be published to
 // safely, so the request is refused rather than handed a 404 URL.
 func TestDeliverySiteForPortRefusesUnknownWebsite(t *testing.T) {
+	// The persisted listener maps live in the profile directory; point them at a
+	// private one so a stale entry written by another test or run cannot decide
+	// which website this port is served by.
+	isolateListenerSites(t)
+
 	c := &Client{RPC: siteJobs(siteJob(3, "http", 8080))}
 	_, _, _, err := c.deliverySiteForPort(8080, "webdelivery", false)
 	if err == nil {
@@ -75,6 +90,11 @@ func TestDeliverySiteForPortRefusesUnknownWebsite(t *testing.T) {
 // An operator who names a website for a listener the console did not start has
 // nothing better to go on, so the name is honoured and the listener reused.
 func TestDeliverySiteForPortHonoursAnExplicitName(t *testing.T) {
+	// The persisted listener maps live in the profile directory; point them at a
+	// private one so a stale entry written by another test or run cannot decide
+	// which website this port is served by.
+	isolateListenerSites(t)
+
 	c := &Client{RPC: siteJobs(siteJob(3, "http", 8080))}
 	website, jobID, reuse, err := c.deliverySiteForPort(8080, "operator-site", true)
 	if err != nil {
@@ -91,6 +111,11 @@ func TestDeliverySiteForPortHonoursAnExplicitName(t *testing.T) {
 // Only a listener that can actually serve a stage takes the port over: a
 // non-staging listener on the same port must not be treated as the target.
 func TestDeliverySiteForPortIgnoresNonStagingListeners(t *testing.T) {
+	// The persisted listener maps live in the profile directory; point them at a
+	// private one so a stale entry written by another test or run cannot decide
+	// which website this port is served by.
+	isolateListenerSites(t)
+
 	c := &Client{RPC: siteJobs(siteJob(4, "dns", 8080))}
 	website, jobID, reuse, err := c.deliverySiteForPort(8080, "webdelivery", false)
 	if err != nil {
@@ -104,6 +129,11 @@ func TestDeliverySiteForPortIgnoresNonStagingListeners(t *testing.T) {
 // A failing GetJobs must not fail the delivery: the port's state is unknown, so
 // the caller's website is used and the listener start surfaces any conflict.
 func TestDeliverySiteForPortFallsBackWhenJobsFail(t *testing.T) {
+	// The persisted listener maps live in the profile directory; point them at a
+	// private one so a stale entry written by another test or run cannot decide
+	// which website this port is served by.
+	isolateListenerSites(t)
+
 	c := &Client{RPC: &failingJobs{}}
 	website, jobID, reuse, err := c.deliverySiteForPort(8080, "webdelivery", false)
 	if err != nil {

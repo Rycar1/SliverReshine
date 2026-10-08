@@ -1,142 +1,92 @@
 package sliver
 
-import (
-	"encoding/json"
-	"log"
-	"os"
-	"path/filepath"
-)
+// The two maps in this file remember what Sliver's Job does not.
+//
+// A Job carries a name, a port, a description and a list of domains. It does not
+// carry the website an HTTP listener serves, nor the address it was bound to,
+// and both are needed to produce a one-liner that works:
+//
+//   - the website decides where a stage has to be published. Publishing to a
+//     different one leaves the listener answering 404 while the listener, the
+//     build and the publish all report success;
+//   - the bind address is the only address the console knows for sure the
+//     listener is reachable at. Without it a listener started on 192.168.1.9
+//     looks identical to one started on 0.0.0.0, and the callback address falls
+//     back to the wildcard -- an implant told to dial 0.0.0.0 dials itself.
+//
+// So both are recorded here, keyed by job id, when this console starts a
+// listener. See persistedJobMap for the storage.
 
 // listenerSitesFile is the file the listener-to-website map is persisted to,
 // inside the console's profile directory.
 //
-// The map is the only record of which website an HTTP listener started here
-// serves: Sliver's Job carries a name, a port and a description, but no field
-// for the website it was bound to. Without it, a console restart forgets the
-// association, the one-liner refuses to publish ("the website it serves is
-// unknown"), and the only way to recover is to stop and restart the listener.
-// Persisting it makes the association outlive the process.
+// Persisting it is what makes the association outlive the process: without it a
+// console restart forgets which website a listener serves, the one-liner refuses
+// to publish ("the website it serves is unknown"), and the only way to recover
+// is to stop and restart the listener.
 const listenerSitesFile = "listener-sites.json"
 
-// loadListenerSitesLocked reads the persisted map once per client.
+// listenerHostsFile is the file the listener-to-callback-address map is
+// persisted to, beside the one above and for the same reason.
+const listenerHostsFile = "listener-hosts.json"
+
+// listenerMaps returns the two persisted maps, creating them on first use.
 //
-// The caller holds lsMu. A missing file is the normal first-run case; a
-// malformed one is logged and ignored rather than returned, because a bad
-// cache must not stop the console from starting a listener. Anything already
-// in memory wins, so a value recorded before the load is never overwritten by
-// a stale one on disk.
-func (c *Client) loadListenerSitesLocked() {
-	if c.lsLoaded {
-		return
+// Lazy creation keeps a zero-value Client usable in tests and in any code path
+// that never starts a listener. The maps are created once, so every caller
+// shares one instance and one lock.
+func (c *Client) listenerMaps() (*persistedJobMap, *persistedJobMap) {
+	c.mapsMu.Lock()
+	defer c.mapsMu.Unlock()
+	if c.sites == nil {
+		c.sites = newPersistedJobMap(listenerSitesFile, "listener websites")
 	}
-	c.lsLoaded = true
-
-	path := listenerSitesPath()
-	if path == "" {
-		log.Printf("[listeners] no writable config directory found; listener websites will not survive a restart")
-		return
+	if c.hosts == nil {
+		c.hosts = newPersistedJobMap(listenerHostsFile, "listener callback addresses")
 	}
-	c.lsPath = path
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("[listeners] could not read %s: %v", path, err)
-		}
-		return
-	}
-	var stored map[uint32]string
-	if err := json.Unmarshal(data, &stored); err != nil {
-		log.Printf("[listeners] ignoring malformed %s: %v", path, err)
-		return
-	}
-	if len(stored) == 0 {
-		return
-	}
-	if c.lsMap == nil {
-		c.lsMap = stored
-		return
-	}
-	for id, site := range stored {
-		if _, ok := c.lsMap[id]; !ok {
-			c.lsMap[id] = site
-		}
-	}
+	return c.sites, c.hosts
 }
 
-// persistListenerSitesLocked writes the map atomically so an interrupted write
-// cannot leave a truncated file that reads back as "no listeners". The caller
-// holds lsMu. Failures are logged and dropped: the map is a cache, and a
-// console that cannot write it still works for the life of the process.
-func (c *Client) persistListenerSitesLocked() {
-	if c.lsPath == "" {
+// rememberListenerSite records which website a listener serves.
+func (c *Client) rememberListenerSite(jobID uint32, website string) {
+	if c.root != nil {
+		c.root.rememberListenerSite(jobID, website)
 		return
 	}
-	data, err := json.Marshal(c.lsMap)
-	if err != nil {
-		log.Printf("[listeners] could not encode listener websites: %v", err)
-		return
-	}
-
-	dir := filepath.Dir(c.lsPath)
-	tmp, err := os.CreateTemp(dir, ".listener-sites-*")
-	if err != nil {
-		log.Printf("[listeners] could not persist listener websites to %s: %v", c.lsPath, err)
-		return
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op once the rename succeeds
-
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		log.Printf("[listeners] could not secure %s: %v", tmpName, err)
-		return
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		log.Printf("[listeners] could not write %s: %v", tmpName, err)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		log.Printf("[listeners] could not flush %s: %v", tmpName, err)
-		return
-	}
-	if err := os.Rename(tmpName, c.lsPath); err != nil {
-		log.Printf("[listeners] could not replace %s: %v", c.lsPath, err)
-	}
+	sites, _ := c.listenerMaps()
+	sites.remember(jobID, website)
 }
 
-// listenerSitesPath picks the profile directory the map is kept in.
+// listenerSite returns the website a listener serves and whether it is known.
+func (c *Client) listenerSite(jobID uint32) (string, bool) {
+	if c.root != nil {
+		return c.root.listenerSite(jobID)
+	}
+	sites, _ := c.listenerMaps()
+	return sites.get(jobID)
+}
+
+// rememberListenerHost records the address a listener this console started is
+// reachable at, so a one-liner built for it dials something real.
 //
-// Directories that already exist come first, so the map lands beside the
-// profiles the console is actually using instead of creating a new directory
-// elsewhere. The first one this process can write to wins; when none can be
-// written the map stays in memory and the caller logs that.
-func listenerSitesPath() string {
-	dirs := ConfigPaths()
-	ordered := make([]string, 0, len(dirs))
-	for _, dir := range dirs {
-		if st, err := os.Stat(dir); err == nil && st.IsDir() {
-			ordered = append(ordered, dir)
-		}
+// The value is stored as given, wildcards included: the resolver decides what is
+// usable, and keeping the raw value means the console can say "bound to 0.0.0.0"
+// rather than "unknown" when it has to explain why it cannot build a command.
+func (c *Client) rememberListenerHost(jobID uint32, host string) {
+	if c.root != nil {
+		c.root.rememberListenerHost(jobID, host)
+		return
 	}
-	for _, dir := range dirs {
-		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
-			ordered = append(ordered, dir)
-		}
+	_, hosts := c.listenerMaps()
+	hosts.remember(jobID, host)
+}
+
+// listenerHost returns the address a listener is reachable at and whether it is
+// known.
+func (c *Client) listenerHost(jobID uint32) (string, bool) {
+	if c.root != nil {
+		return c.root.listenerHost(jobID)
 	}
-	for _, dir := range ordered {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			continue
-		}
-		probe, err := os.CreateTemp(dir, ".listener-sites-probe-*")
-		if err != nil {
-			continue
-		}
-		name := probe.Name()
-		_ = probe.Close()
-		_ = os.Remove(name)
-		return filepath.Join(dir, listenerSitesFile)
-	}
-	return ""
+	_, hosts := c.listenerMaps()
+	return hosts.get(jobID)
 }

@@ -65,7 +65,7 @@ func MaterializeServer() (string, error) {
 		// is content-addressed, so re-extracting produces exactly the file this
 		// name promises.
 		log.Printf("[launch] discarding %s: not a usable %s server, re-extracting", target, runtime.GOOS)
-		_ = os.Remove(target)
+		removeQuietly(target)
 	}
 
 	if err := extractEmbeddedServer(dir, target); err != nil {
@@ -124,11 +124,11 @@ func extractEmbeddedServer(dir, target string) error {
 		return err
 	}
 	if err := writeGzip(embed.Payload, tmp); err != nil {
-		_ = os.Remove(tmp)
+		removeQuietly(tmp)
 		return fmt.Errorf("extract embedded server: %w", err)
 	}
 	if err := verifyExecutableFormat(tmp); err != nil {
-		_ = os.Remove(tmp)
+		removeQuietly(tmp)
 		return fmt.Errorf("embedded server payload does not match this host: %w (build carries %s)",
 			err, embeddedPlatforms())
 	}
@@ -136,11 +136,11 @@ func extractEmbeddedServer(dir, target string) error {
 	// or corrupted extraction is caught here rather than becoming a binary that is
 	// reused and executed on every later start.
 	if err := verifyExtractedContent(tmp); err != nil {
-		_ = os.Remove(tmp)
+		removeQuietly(tmp)
 		return fmt.Errorf("extracted server does not match the embedded payload: %w", err)
 	}
 	if err := os.Rename(tmp, target); err != nil {
-		_ = os.Remove(tmp)
+		removeQuietly(tmp)
 		return err
 	}
 	return os.Chmod(target, 0o755)
@@ -491,7 +491,7 @@ func tempExtractPath(dir string) (string, error) {
 	}
 	name := f.Name()
 	if err := f.Close(); err != nil {
-		_ = os.Remove(name)
+		removeQuietly(name)
 		return "", err
 	}
 	return name, nil

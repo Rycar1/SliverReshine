@@ -98,6 +98,16 @@ func (c *Client) WebDelivery(req WebDeliveryRequest) (*WebDeliveryResult, error)
 	// command and the implant's callback address, and the templates do not quote
 	// it consistently -- so an unvalidated value is a second command on the
 	// target. See hostguard.go.
+	// The same guard the one-liner applies to the operator's host field, for the
+	// same reason: 0.0.0.0 and :: are bind addresses, not destinations, and both
+	// become a URL the target cannot fetch from. Checked before validateHost so
+	// every wildcard spelling is refused with this explanation rather than the
+	// validator's character rule.
+	if isWildcardHost(host) {
+		return nil, fmt.Errorf(
+			"host %q is a bind address, not a destination: an implant told to dial it "+
+				"dials its own loopback. Use an address the target can reach", host)
+	}
 	if err := validateHost(host); err != nil {
 		return nil, err
 	}

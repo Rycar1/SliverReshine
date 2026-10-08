@@ -186,6 +186,38 @@ describe('WebDeliveryPage', () => {
     expect(screen.getByText('webdelivery')).toBeTruthy()
   })
 
+  it('names each published payload by its stage name, not the website', async () => {
+    mockedApi.websites.mockResolvedValue({
+      websites: [
+        {
+          Name: 'webdelivery',
+          Size: 4096,
+          Contents: {
+            '/stage-linux.woff': {
+              Path: '/stage-linux.woff',
+              ContentType: 'application/octet-stream',
+              Size: 2048,
+            },
+            '/stage-windows.woff': {
+              Path: '/stage-windows.woff',
+              ContentType: 'application/octet-stream',
+              Size: 2048,
+            },
+          },
+        },
+      ],
+    })
+
+    render(<WebDeliveryPage />)
+
+    // Every row used to show the website name in the name column, so two
+    // different stages were indistinguishable at a glance.
+    expect(await screen.findByText('stage-linux.woff')).toBeTruthy()
+    expect(screen.getByText('stage-windows.woff')).toBeTruthy()
+    // The website is still listed, in its own column.
+    expect(screen.getAllByText('webdelivery').length).toBeGreaterThan(0)
+  })
+
   it('shows an empty state before anything is published', async () => {
     render(<WebDeliveryPage />)
     expect(await screen.findByText('webdelivery.publishedEmpty')).toBeTruthy()

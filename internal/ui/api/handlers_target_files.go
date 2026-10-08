@@ -88,6 +88,38 @@ func (s *Server) handleChown(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// handleGrantACL replaces a principal's permission entry on a Windows target.
+//
+// It is the Windows counterpart of chmod. A POSIX mode word has no meaning in a
+// security descriptor, so the request carries the account and the permission
+// level instead of an octal mode, and the backend picks the tool: the handler is
+// reachable on any platform, and GrantACL refuses a non-Windows session with a
+// sentence that says so.
+func (s *Server) handleGrantACL(w http.ResponseWriter, r *http.Request) {
+	id, c := s.sessionID(w, r)
+	if c == nil {
+		return
+	}
+	var req struct {
+		Path      string `json:"path"`
+		Principal string `json:"principal"`
+		Perm      string `json:"perm"`
+		Recursive bool   `json:"recursive"`
+	}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if req.Path == "" || req.Principal == "" || req.Perm == "" {
+		writeErr(w, http.StatusBadRequest, "path, principal and perm are required")
+		return
+	}
+	if err := c.GrantACL(id, req.Path, req.Principal, req.Perm, req.Recursive); err != nil {
+		writeClientError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleChtimes timestomps a file. Operators use this to restore the original
 
 func (s *Server) handleChtimes(w http.ResponseWriter, r *http.Request) {

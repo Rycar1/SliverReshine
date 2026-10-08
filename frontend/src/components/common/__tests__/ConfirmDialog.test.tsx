@@ -33,10 +33,10 @@ describe('ConfirmDialog', () => {
   it('fires onCancel on backdrop click and Escape', () => {
     const onConfirm = vi.fn()
     const onCancel = vi.fn()
-    const { container } = render(
-      <ConfirmDialog open title="Delete" onConfirm={onConfirm} onCancel={onCancel} />,
-    )
-    fireEvent.click(container.querySelector('.modal-overlay')!)
+    render(<ConfirmDialog open title="Delete" onConfirm={onConfirm} onCancel={onCancel} />)
+    // The overlay is portalled to the body, so it is not inside the render
+    // container -- the whole point of the portal is to escape that subtree.
+    fireEvent.click(document.querySelector('.modal-overlay')!)
     expect(onCancel).toHaveBeenCalledTimes(1)
 
     fireEvent.keyDown(window, { key: 'Escape' })

@@ -2,10 +2,29 @@ package api
 
 import (
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"sliverreshine/internal/ui/sliver"
 )
+
+// maxViewBytes caps what the in-console viewer will load.
+//
+// The viewer renders the file as text in the page, so a large file is not a slow
+// page -- it is a frozen tab, because the whole thing has to be base64-decoded
+// and painted as one text node. Anything bigger is a download, not a preview.
+const maxViewBytes = 5 * 1024 * 1024
+
+// sizeLabel renders a byte count for the refusal message, which the operator
+// reads in the error banner.
+func sizeLabel(n int64) string {
+	if n >= 1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	}
+	return fmt.Sprintf("%.1f KB", float64(n)/1024)
+}
 
 func headerSafeFilename(name, path string) string {
 	base := name
@@ -96,6 +115,16 @@ func (s *Server) handleFsCat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ask the target how big the file is before pulling it. Refusing after the
+	// download would still drag the whole file through the implant and the
+	// console, which is the freeze this limit exists to prevent.
+	if size, isDir, ok := c.Stat(id, path); ok && !isDir && size > maxViewBytes {
+		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf(
+			"file is %s; the viewer only opens files up to %s -- download it instead",
+			sizeLabel(size), sizeLabel(maxViewBytes)))
+		return
+	}
+
 	b64, name, err := c.Download(id, path)
 	if err != nil {
 		writeClientError(w, err)
@@ -107,6 +136,33 @@ func (s *Server) handleFsCat(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = headerSafeFilename("", path)
 	}
+
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "the file could not be decoded")
+		return
+	}
+
+	// The stat above can be unavailable (an implant that will not list a file),
+	// so the size is checked again on the bytes that actually arrived.
+	if len(data) > maxViewBytes {
+		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf(
+			"file is %s; the viewer only opens files up to %s -- download it instead",
+			sizeLabel(int64(len(data))), sizeLabel(maxViewBytes)))
+		return
+	}
+
+	// Binary files are refused with a flag rather than an error: it is a normal
+	// answer, and the viewer shows the message instead of a wall of mojibake.
+	if sliver.LooksBinary(data) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"Name":   name,
+			"Binary": true,
+			"Size":   len(data),
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{
 		"Data": b64,
 		"Name": name,

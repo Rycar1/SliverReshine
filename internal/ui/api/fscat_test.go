@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -27,9 +28,16 @@ type downloadStub struct {
 	data   []byte
 	path   string
 	exists bool
+	// size overrides what Ls reports, so a test can claim a file is larger than
+	// it really is without allocating it. Zero means "as large as data".
+	size int64
+	// downloads counts Download calls, so a test can prove the viewer refused a
+	// file before pulling it.
+	downloads int
 }
 
 func (d *downloadStub) Download(_ context.Context, in *sliverpb.DownloadReq, _ ...grpc.CallOption) (*sliverpb.Download, error) {
+	d.downloads++
 	return &sliverpb.Download{
 		Path:   d.path,
 		Data:   d.data,
@@ -37,6 +45,25 @@ func (d *downloadStub) Download(_ context.Context, in *sliverpb.DownloadReq, _ .
 		Response: &commonpb.Response{
 			Err: "",
 		},
+	}, nil
+}
+
+// Ls answers for a single path, which is how the cat handler learns a file's
+// size before deciding whether to pull it.
+func (d *downloadStub) Ls(_ context.Context, in *sliverpb.LsReq, _ ...grpc.CallOption) (*sliverpb.Ls, error) {
+	size := d.size
+	if size == 0 {
+		size = int64(len(d.data))
+	}
+	return &sliverpb.Ls{
+		Path:   in.GetPath(),
+		Exists: d.exists,
+		Files: []*sliverpb.FileInfo{{
+			Name:  filepath.Base(in.GetPath()),
+			Size:  size,
+			IsDir: false,
+		}},
+		Response: &commonpb.Response{},
 	}, nil
 }
 
@@ -144,6 +171,72 @@ func TestDownloadStubProducesABody(t *testing.T) {
 	}
 	if rec.Body.String() != "hello" {
 		t.Errorf("body = %q, want the stub's bytes", rec.Body.String())
+	}
+}
+
+// The viewer must refuse a file it would have to paint in one go, and it must
+// refuse it before the download: pulling a huge file through the implant and
+// the console is exactly the freeze the limit exists to prevent.
+func TestFsCatRefusesOversizedFileBeforeDownloading(t *testing.T) {
+	s := New()
+	stub := &downloadStub{
+		data:   []byte("this is not really that big"),
+		path:   "/var/log/huge.log",
+		exists: true,
+		size:   maxViewBytes + 1,
+	}
+	s.SetClient(&sliver.Client{RPC: stub})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/sessions/s-1/fs/cat?path=/var/log/huge.log", nil)
+	req.SetPathValue("id", "s-1")
+	s.handleFsCat(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413; body %q", rec.Code, rec.Body.String())
+	}
+	if stub.downloads != 0 {
+		t.Errorf("the file was downloaded %d time(s) despite being over the limit",
+			stub.downloads)
+	}
+}
+
+// A binary file is a normal answer, not an error: the viewer says it cannot show
+// it and the operator downloads it instead.
+func TestFsCatFlagsBinaryFile(t *testing.T) {
+	body := []byte{0x7f, 'E', 'L', 'F', 0x02, 0x01, 0x01, 0x00, 0x00}
+	s := New()
+	s.SetClient(&sliver.Client{RPC: &downloadStub{
+		data:   body,
+		path:   "/bin/ls",
+		exists: true,
+	}})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions/s-1/fs/cat?path=/bin/ls", nil)
+	req.SetPathValue("id", "s-1")
+	s.handleFsCat(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body %q", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Data   string `json:"Data"`
+		Binary bool   `json:"Binary"`
+		Size   int    `json:"Size"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("fs/cat did not answer JSON (%v): %q", err, rec.Body.String())
+	}
+	if !got.Binary {
+		t.Error("Binary = false, want true for an ELF header")
+	}
+	if got.Data != "" {
+		t.Errorf("Data = %q, want empty for a binary file", got.Data)
+	}
+	if got.Size != len(body) {
+		t.Errorf("Size = %d, want %d", got.Size, len(body))
 	}
 }
 

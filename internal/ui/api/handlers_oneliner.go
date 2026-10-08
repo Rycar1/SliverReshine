@@ -20,7 +20,7 @@ func (s *Server) handleOneLiner(c *sliver.Client, w http.ResponseWriter, r *http
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	req.Host = hostOrConsoleAddress(req.Host, r.Host)
+	req.ConsoleHost = sliver.ConsoleHostFromHeader(r.Host)
 	res, err := c.OneLiner(req)
 	writeResult(w, res, err)
 }
@@ -38,14 +38,21 @@ func (s *Server) handleOneLinerTargets(c *sliver.Client, w http.ResponseWriter, 
 		writeClientError(w, err)
 		return
 	}
+	// The address a command built for this listener would dial when the host
+	// field is left blank. It is resolved here rather than in the browser so the
+	// panel can show the operator the real address instead of an empty field --
+	// an empty field is what invited a wildcard to be typed into it.
+	consoleHost := sliver.ConsoleHostFromHeader(r.Host)
+
 	targets := make([]map[string]any, 0, len(jobs))
 	for i := range jobs {
 		targets = append(targets, map[string]any{
-			"job_id":    jobs[i].ID,
-			"name":      jobs[i].Name,
-			"port":      jobs[i].Port,
-			"domains":   jobs[i].Domains,
-			"can_stage": sliver.JobServesStage(jobs[i].Name),
+			"job_id":        jobs[i].ID,
+			"name":          jobs[i].Name,
+			"port":          jobs[i].Port,
+			"domains":       jobs[i].Domains,
+			"can_stage":     sliver.JobServesStage(jobs[i].Name),
+			"callback_host": sliver.SuggestedCallbackHost(&jobs[i], consoleHost),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"targets": targets})
@@ -74,7 +81,7 @@ func (s *Server) handleOneLinerAll(c *sliver.Client, w http.ResponseWriter, r *h
 		writeErr(w, http.StatusBadRequest, "job_id is required")
 		return
 	}
-	req.Host = hostOrConsoleAddress(req.Host, r.Host)
+	req.ConsoleHost = sliver.ConsoleHostFromHeader(r.Host)
 
 	// An unknown platform name is refused before any build starts, so a typo
 	// does not cost two implant builds and then report nothing usable.
@@ -106,20 +113,3 @@ func (s *Server) handleOneLinerAll(c *sliver.Client, w http.ResponseWriter, r *h
 // it serves cannot disagree -- which is what a 404 on a freshly generated
 // one-liner turned out to be.
 const defaultDeliverySite = "webdelivery"
-
-// hostOrConsoleAddress fills an empty operator-supplied host from the address the
-// operator reached this console on.
-//
-// It exists for one failure mode: a listener bound to 0.0.0.0 reports 0.0.0.0 as
-// its only domain, and 0.0.0.0 is not an address a target can dial. The payload
-// builds, the stage fetches, and nothing ever checks in. The console does know one
-// address that demonstrably routes here -- the one in the browser's URL, which
-// arrives as the Host header -- so that is used when the operator left the field
-// blank. An explicit host is never overridden, and ConsoleHostFromHeader returns
-// "" for a loopback or wildcard header so the existing fallbacks still apply.
-func hostOrConsoleAddress(reqHost, hostHeader string) string {
-	if strings.TrimSpace(reqHost) != "" {
-		return reqHost
-	}
-	return sliver.ConsoleHostFromHeader(hostHeader)
-}

@@ -22,10 +22,11 @@ import ServicesTab from '../components/session/ServicesTab'
 import PostExTab from '../components/session/PostExTab'
 import PersistenceTab from '../components/session/PersistenceTab'
 import HarvestTab from '../components/session/HarvestTab'
+import PrivescTab from '../components/session/PrivescTab'
 import './pages.css'
 import './session.css'
 
-const TABS = ['files', 'processes', 'network', 'env', 'exec', 'screenshot', 'portfwd', 'registry', 'advanced', 'tokens', 'wg', 'pivot', 'services', 'postex', 'persistence', 'harvest'] as const
+const TABS = ['files', 'processes', 'network', 'env', 'exec', 'screenshot', 'portfwd', 'registry', 'advanced', 'tokens', 'wg', 'pivot', 'services', 'postex', 'persistence', 'harvest', 'privesc'] as const
 type TabKey = (typeof TABS)[number]
 
 type TFunc = ReturnType<typeof useTranslation>['t']
@@ -188,7 +189,7 @@ export default function SessionDetailPage() {
 
             <div className="tab-content">
               {tab === 'files' && <FilesTab sessionId={session.ID} os={session.OS} />}
-              {tab === 'processes' && <ProcessesTab sessionId={session.ID} />}
+              {tab === 'processes' && <ProcessesTab sessionId={session.ID} os={session.OS} />}
               {tab === 'network' && <NetworkTab sessionId={session.ID} />}
               {tab === 'env' && <EnvTab sessionId={session.ID} />}
               {tab === 'exec' && <ExecTab sessionId={session.ID} />}
@@ -203,6 +204,7 @@ export default function SessionDetailPage() {
               {tab === 'postex' && <PostExTab sessionId={session.ID} />}
               {tab === 'persistence' && <PersistenceTab sessionId={session.ID} os={session.OS} />}
               {tab === 'harvest' && <HarvestTab sessionId={session.ID} />}
+              {tab === 'privesc' && <PrivescTab sessionId={session.ID} />}
             </div>
           </div>
 

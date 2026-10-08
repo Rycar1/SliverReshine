@@ -211,6 +211,14 @@ export const ICONS: Record<string, ReactNode> = {
 			<path d="M4 20h16" />
 		</svg>
 	),
+	// AI 配置 — 一个带引脚的模型节点，与业务图标区分。
+	ai: (
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+			<rect x="7" y="7" width="10" height="10" rx="2" />
+			<path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+			<path d="M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
+		</svg>
+	),
 }
 
 // 分组导航 — Viper 风格信息架构
@@ -265,6 +273,7 @@ export const GROUPED_NAV: NavSection[] = [
     key: 'system',
     items: [
       { path: '/infrastructure', key: 'infrastructure', icon: ICONS.infra },
+      { path: '/ai', key: 'ai', icon: ICONS.ai },
       { path: '/settings', key: 'settings', icon: ICONS.settings },
     ],
   },

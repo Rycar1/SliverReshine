@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
 	"github.com/bishopfox/sliver/protobuf/rpcpb"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
@@ -26,6 +27,19 @@ type chownStub struct {
 func (s *chownStub) Chown(_ context.Context, in *sliverpb.ChownReq, _ ...grpc.CallOption) (*sliverpb.Chown, error) {
 	s.req = in
 	return &sliverpb.Chown{Response: &commonpb.Response{}}, nil
+}
+
+// The handler asks which platform the target runs before choosing between the
+// Chown RPC and the Windows ACL path, so the stub has to answer the session
+// list. It is empty here, which leaves the platform unresolved -- and an
+// unresolved platform deliberately keeps the portable implementation, so these
+// cases still exercise the RPC.
+func (s *chownStub) GetSessions(_ context.Context, _ *commonpb.Empty, _ ...grpc.CallOption) (*clientpb.Sessions, error) {
+	return &clientpb.Sessions{}, nil
+}
+
+func (s *chownStub) GetBeacons(_ context.Context, _ *commonpb.Empty, _ ...grpc.CallOption) (*clientpb.Beacons, error) {
+	return &clientpb.Beacons{}, nil
 }
 
 // A hand-written JSON body sends uid and gid as numbers ("uid":0). Decoding

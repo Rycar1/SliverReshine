@@ -169,6 +169,25 @@ func (c *Client) execRawOn(sessionID, osName, path string, args []string, op tim
 	return c.execPlain(sessionID, path, args, op)
 }
 
+// ShellCommand runs a command line through the target's own shell.
+//
+// The AI collector uses this rather than the argv form of Execute because the
+// model proposes a command line, not a pre-split argv: shell built-ins, pipes,
+// redirection and quoting all have to survive, and only the shell can give
+// them meaning. Linux and macOS targets get /bin/sh -c, Windows targets get
+// cmd.exe /c.
+//
+// When the platform cannot be resolved the POSIX shell is assumed. That is the
+// safe default: a POSIX target is the common case, and execRawOn still tries
+// the window-hiding RPC first for an unresolved session, so a Windows target
+// whose OS field is momentarily empty still runs its command.
+func (c *Client) ShellCommand(sessionID, command string) (*ExecResult, error) {
+	if osName, ok := c.sessionOS(sessionID); ok && strings.Contains(strings.ToLower(osName), platformWindows) {
+		return c.execOn(sessionID, osName, "cmd.exe", []string{"/c", command}, execDefaultTimeout)
+	}
+	return c.execOn(sessionID, "", "/bin/sh", []string{"-c", command}, execDefaultTimeout)
+}
+
 // execWindows starts the process with HideWindow set, so no console window
 // appears on the target's desktop.
 func (c *Client) execWindows(sessionID, path string, args []string, op time.Duration) (*ExecResult, error) {

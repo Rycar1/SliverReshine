@@ -20,6 +20,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 // FileName is the settings file inside the state directory.
@@ -40,6 +42,90 @@ type AuthConfig struct {
 	User string `json:"user"`
 	// Realm is shown in the browser's login prompt.
 	Realm string `json:"realm"`
+}
+
+// AIConfig configures the console's model access (see internal/ai).
+//
+// The assistant is off until a baseURL and a model are both set. That is
+// deliberate: every feature built on the model sends data from the operation to
+// the endpoint, so enabling one has to be an explicit choice rather than a
+// default an operator discovers afterwards.
+//
+// The API key is not normally stored here. apiKeyEnv names an environment
+// variable read at startup, which keeps the secret out of a file that gets
+// copied around with the rest of the state directory; apiKey is the inline
+// fallback for a deployment that would rather keep everything in one file.
+type AIConfig struct {
+	// BaseURL is an OpenAI-compatible API root, e.g.
+	// "https://api.openai.com/v1" or "http://127.0.0.1:11434/v1".
+	BaseURL string `json:"baseURL"`
+	// Model is the chat model name, e.g. "gpt-4o-mini".
+	Model string `json:"model"`
+	// APIKeyEnv names the environment variable that holds the key.
+	APIKeyEnv string `json:"apiKeyEnv"`
+	// APIKey is an inline key, used only when the environment is unset.
+	APIKey string `json:"apiKey"`
+	// TimeoutSeconds bounds one chat round-trip. Zero uses the ai package's
+	// default.
+	//
+	// It is a setting because one of these calls does not have a fixed cost:
+	// the collector's extraction call reads the whole reconnaissance
+	// transcript, so a run allowed more steps produces a bigger request and a
+	// slower reply. A single hard-coded budget therefore fits a short run and
+	// fails a long one, and it fails at the last step -- after the work is
+	// already done and the findings are in hand. An operator on a slow
+	// endpoint raises this rather than discovering the ceiling mid-run.
+	TimeoutSeconds int `json:"timeoutSeconds"`
+	// ReadOnly keeps the collection assistant to commands that only read. It
+	// is on by default: the model proposing the commands is not trusted, and
+	// the policy is what stands between a prompt-injected command and the
+	// target. An operator who has decided the model's commands are trusted can
+	// turn it off, which lets the assistant run whatever the model proposes.
+	ReadOnly bool `json:"readOnly"`
+	// Thinking asks the endpoint for the model's reasoning alongside its
+	// answer. It is off by default: reasoning_effort is an OpenAI-compatible
+	// extension that not every gateway accepts, and a run that fails on an
+	// unknown field is worse than one that simply does not show its working.
+	// When on, the collector records the model's reasoning for each step.
+	Thinking bool `json:"thinking"`
+}
+
+// APIKeyDefaultEnv is the environment variable read when APIKeyEnv is empty.
+const APIKeyDefaultEnv = "SLIVERRESHINE_AI_API_KEY"
+
+// Configured reports whether the assistant has an endpoint and a model.
+func (c AIConfig) Configured() bool {
+	return strings.TrimSpace(c.BaseURL) != "" && strings.TrimSpace(c.Model) != ""
+}
+
+// ResolveKey returns the API key: the named environment variable first, then
+// the default variable, then the inline value.
+//
+// The environment wins over the file on purpose. A key in the environment is a
+// deliberate act by whoever started the process; a key in the file may have
+// been copied from a template or left behind by an earlier deployment.
+func (c AIConfig) ResolveKey() string {
+	if name := strings.TrimSpace(c.APIKeyEnv); name != "" {
+		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+			return v
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv(APIKeyDefaultEnv)); v != "" {
+		return v
+	}
+	return strings.TrimSpace(c.APIKey)
+}
+
+// Timeout returns the per-call deadline as a duration.
+//
+// Zero means "let the ai package decide", so an unset or nonsensical value
+// keeps the built-in default rather than producing a zero deadline that would
+// fail every call instantly.
+func (c AIConfig) Timeout() time.Duration {
+	if c.TimeoutSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(c.TimeoutSeconds) * time.Second
 }
 
 // Config is the whole settings file.
@@ -96,6 +182,10 @@ type Config struct {
 	// network. Resolved by api.Server.avLookupEndpoint.
 	AVLookupURL string `json:"avLookupURL"`
 
+	// AI configures the console's model access. Empty by default: the assistant
+	// stays off until an operator names an endpoint and a model.
+	AI AIConfig `json:"ai"`
+
 	Auth AuthConfig `json:"auth"`
 }
 
@@ -119,6 +209,9 @@ func Default() Config {
 		// The console warns loudly about cleartext exposure but still starts.
 		// This is the enforcing version of that warning; see RequireTLS.
 		RequireTLS: false,
+		// The AI assistant is read-only unless an operator turns the policy
+		// off; see AIConfig.ReadOnly.
+		AI: AIConfig{ReadOnly: true},
 		Auth: AuthConfig{
 			Enabled: true,
 			User:    "operator",
@@ -190,7 +283,7 @@ func Save(home string, cfg Config) error {
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+		removeQuietly(tmp)
 		return fmt.Errorf("replace %s: %w", path, err)
 	}
 	return nil
@@ -310,6 +403,33 @@ Change the listen address or the login
   keep that on your own network, or to switch the feature off entirely:
 
     "avLookupURL": "https://your-own-service/api"   or   "off"
+
+  The AI assistant is off until it is pointed at a model. It sends a target's
+  command output to that endpoint, so it is opt-in:
+
+    "ai": {
+      "baseURL":        "https://api.openai.com/v1",
+      "model":          "gpt-4o-mini",
+      "apiKeyEnv":      "SLIVERRESHINE_AI_API_KEY",
+      "timeoutSeconds": 180,
+      "readOnly":       true
+    }
+
+  The key is read from the named environment variable (SLIVERRESHINE_AI_API_KEY
+  by default) so it does not have to be written into this file. Set "apiKey"
+  instead only if you would rather keep it here. Any OpenAI-compatible endpoint
+  works, including a local runtime such as http://127.0.0.1:11434/v1.
+
+  "timeoutSeconds" bounds a single chat round-trip and defaults to 180. Raise
+  it on an endpoint slow enough that a collection run reports "extraction
+  failed: ... context deadline exceeded" at the end: that message means the
+  model was still reading the transcript when the budget ran out.
+
+  "readOnly" keeps the assistant to commands that only read, and is on by
+  default. Set it to false only if you have decided the model's commands can
+  be trusted to run unchecked on your targets; the policy is what stops a
+  command the model invented, or was prompted into by something it read on
+  the target, before it reaches the shell.
 
   Deleting console-auth makes the next start generate a fresh random password
   and print it.

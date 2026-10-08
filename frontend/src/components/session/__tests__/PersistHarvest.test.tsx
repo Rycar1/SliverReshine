@@ -135,6 +135,20 @@ describe('PersistenceTab', () => {
     expect(screen.getByText('Install')).toBeInTheDocument()
   })
 
+  // The payload value is submitted to the target verbatim, so a Linux session
+  // must not be seeded with a Windows path: a C:\ default there would install
+  // a cron entry that silently does nothing, and the operator would read the
+  // empty result as the technique failing rather than the path being wrong.
+  it('seeds the payload with a POSIX path for a Linux session', async () => {
+    renderWithProviders(<PersistenceTab sessionId="s1" os="linux" />)
+    await waitFor(() => expect(screen.getByText('Registry Run key')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Registry Run key'))
+
+    const payload = (await screen.findByPlaceholderText('/tmp/agent')) as HTMLInputElement
+    expect(payload.value).toBe('/tmp/agent')
+  })
+
   it('installs the selected module and refreshes the list', async () => {
     mockedApi.persistenceInstall.mockResolvedValue({
       ok: true,

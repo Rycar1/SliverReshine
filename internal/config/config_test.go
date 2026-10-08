@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestEnsureWritesADefaultOnFirstRun(t *testing.T) {
@@ -239,5 +240,77 @@ func TestDefaultRoundTrips(t *testing.T) {
 	}
 	if got != Default() {
 		t.Errorf("round trip changed the config: %+v", got)
+	}
+}
+
+// The timeout is an operator override, so an unset field has to mean "use the
+// ai package's default" rather than "no deadline". A zero duration reaching the
+// HTTP client would expire every call before it was sent, which reads as a
+// broken endpoint rather than a missing setting.
+func TestAIConfigTimeout(t *testing.T) {
+	cases := []struct {
+		name    string
+		seconds int
+		want    time.Duration
+	}{
+		{"unset defers to the package default", 0, 0},
+		{"a negative value is treated as unset", -5, 0},
+		{"seconds become a duration", 300, 300 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AIConfig{TimeoutSeconds: tc.seconds}.Timeout()
+			if got != tc.want {
+				t.Errorf("Timeout() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// The read-only policy for AI collection is on by default. A settings file that
+// predates the field, or simply omits it, must not silently turn it off.
+func TestAIConfigReadOnlyDefaultsOn(t *testing.T) {
+	if !Default().AI.ReadOnly {
+		t.Error("Default().AI.ReadOnly = false, want true")
+	}
+
+	home := t.TempDir()
+	blob := []byte(`{"ai":{"baseURL":"http://ai.example/v1","model":"m"}}`)
+	if err := os.WriteFile(filepath.Join(home, FileName), blob, 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+	cfg, err := Load(home)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.AI.ReadOnly {
+		t.Error("a settings file without readOnly turned the policy off")
+	}
+}
+
+// An operator who has decided the model's commands are trusted can turn the
+// policy off in the settings file, and it survives a round trip.
+func TestAIConfigReadOnlyCanBeTurnedOff(t *testing.T) {
+	home := t.TempDir()
+	blob := []byte(`{"ai":{"readOnly":false}}`)
+	if err := os.WriteFile(filepath.Join(home, FileName), blob, 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+	cfg, err := Load(home)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AI.ReadOnly {
+		t.Fatal("readOnly:false in the settings file was ignored")
+	}
+	if err := Save(home, cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	again, err := Load(home)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if again.AI.ReadOnly {
+		t.Error("readOnly:false did not survive a save/load round trip")
 	}
 }

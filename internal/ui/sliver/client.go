@@ -57,50 +57,23 @@ type Client struct {
 	osMu    sync.Mutex
 	osCache map[string]string
 
-	// listenerSites records which website each HTTP listener this console started
-	// serves, keyed by job ID.
+	// sites and hosts are the two per-listener facts Sliver does not report: the
+	// website an HTTP listener serves, and the address it is reachable at. Both
+	// are recorded when this console starts a listener and persisted beside the
+	// profiles. See listener_sites.go and jobmap.go.
 	//
-	// It exists because Sliver does not tell us: a Job carries a name, a port and
-	// a free-text description, and no field for the website it was bound to. A
-	// stage published to one website is invisible to a listener serving another,
-	// so the delivery URL 404s while everything reports success -- the listener
-	// is up, the content is published, and the fetch fails.
-	//
-	// Only listeners started here are recorded. One started elsewhere (a previous
-	// run, the server CLI) has no entry, and the one-liner says so rather than
-	// guessing a name that would silently not match.
-	lsMu     sync.Mutex
-	lsMap    map[uint32]string
-	lsLoaded bool
-	lsPath   string
-}
+	// mapsMu guards their lazy creation only; each map has its own lock for the
+	// values themselves.
+	mapsMu sync.Mutex
+	sites  *persistedJobMap
+	hosts  *persistedJobMap
 
-// rememberListenerSite records which website a listener serves.
-func (c *Client) rememberListenerSite(jobID uint32, website string) {
-	if c.root != nil {
-		c.root.rememberListenerSite(jobID, website)
-		return
-	}
-	c.lsMu.Lock()
-	defer c.lsMu.Unlock()
-	c.loadListenerSitesLocked()
-	if c.lsMap == nil {
-		c.lsMap = map[uint32]string{}
-	}
-	c.lsMap[jobID] = website
-	c.persistListenerSitesLocked()
-}
-
-// listenerSite returns the website a listener serves and whether it is known.
-func (c *Client) listenerSite(jobID uint32) (string, bool) {
-	if c.root != nil {
-		return c.root.listenerSite(jobID)
-	}
-	c.lsMu.Lock()
-	defer c.lsMu.Unlock()
-	c.loadListenerSitesLocked()
-	site, ok := c.lsMap[jobID]
-	return site, ok
+	// stageCache memoises stages that were already built and published,
+	// keyed by the fingerprint in oneliner.go. It is what makes re-opening
+	// the one-liner dialog a map lookup instead of two implant builds.
+	// Entries are small and keyed by listener, so nothing evicts them.
+	stageMu    sync.Mutex
+	stageCache map[string]OneLinerResult
 }
 
 // WithRequestContext returns a view of the client bound to ctx, the context of

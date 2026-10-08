@@ -76,3 +76,28 @@ func (c *Client) platformOf(targetID string) (string, bool) {
 	}
 	return "", false
 }
+
+// PlatformOf is the exported form of platformOf, for callers outside this
+// package.
+//
+// The HTTP layer needs the same answer the gate uses. A file-attribute change
+// has two implementations and which one runs depends on the target's platform,
+// so the handler cannot choose between them without asking this question first.
+func (c *Client) PlatformOf(targetID string) (string, bool) {
+	return c.platformOf(targetID)
+}
+
+// IsWindowsTarget reports whether the target is known to run Windows.
+//
+// An unresolved platform answers "no". That is the conservative direction: the
+// portable implementation runs, instead of a Windows-only command being sent to
+// a target that might be Linux or macOS. The Windows branch is the specialised
+// one, so a wrong "no" costs an error message the operator can read, while a
+// wrong "yes" would run the wrong tool on the wrong platform.
+func (c *Client) IsWindowsTarget(targetID string) bool {
+	osName, ok := c.platformOf(targetID)
+	if !ok {
+		return false
+	}
+	return strings.Contains(strings.ToLower(osName), platformWindows)
+}

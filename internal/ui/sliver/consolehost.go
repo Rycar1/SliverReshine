@@ -55,10 +55,9 @@ func ConsoleHostFromHeader(hostHeader string) string {
 	if h == "0.0.0.0" || h == "::" {
 		return ""
 	}
-	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
-		return ""
-	}
-	if strings.EqualFold(h, "localhost") {
+	// Shared with the one-liner's own host resolution, so a spelling that counts
+	// as loopback in one place cannot count as a destination in the other.
+	if isLoopbackHost(h) {
 		return ""
 	}
 

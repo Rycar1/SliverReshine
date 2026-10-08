@@ -152,8 +152,7 @@ func (s *Server) handleRPCCall(c *sliver.Client, w http.ResponseWriter, r *http.
 		Request json.RawMessage `json:"request"`
 		Timeout int             `json:"timeout"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid request body")
+	if !decodeBody(w, r, &req) {
 		return
 	}
 	if req.Method == "" {

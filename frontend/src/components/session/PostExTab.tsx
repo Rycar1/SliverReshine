@@ -4,16 +4,16 @@ import { api } from '../../lib/api'
 import type { DirView } from '../../lib/types'
 import { useToast } from '../common/Toast'
 
-type Pane = 'attrs' | 'memfiles' | 'wasm'
+type Pane = 'memfiles' | 'wasm'
 
-const PANES: Pane[] = ['attrs', 'memfiles', 'wasm']
+const PANES: Pane[] = ['memfiles', 'wasm']
 
 /**
  * PostExTab collects the post-exploitation primitives that previously only
- * existed in the Sliver TUI:
+ * existed in the Sliver TUI. File attributes used to live here as a third pane;
+ * they now sit beside the listing they act on, in the files tab, where every
+ * entry carries its own "More" menu.
  *
- *  - attrs: chmod / chown / chtimes, including timestomping to keep a file's
- *    original timestamps after it has been touched.
  *  - memfiles: anonymous in-memory files that never hit disk.
  *  - wasm: run WASM extensions in the session.
  */
@@ -21,18 +21,7 @@ export default function PostExTab({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation()
   const toast = useToast()
 
-  const [pane, setPane] = useState<Pane>('attrs')
-
-
-  // --- file attributes ---
-  const [attrPath, setAttrPath] = useState('')
-  const [attrMode, setAttrMode] = useState('0755')
-  const [attrUID, setAttrUID] = useState('0')
-  const [attrGID, setAttrGID] = useState('0')
-  const [attrRecursive, setAttrRecursive] = useState(false)
-  const [atime, setAtime] = useState('')
-  const [mtime, setMtime] = useState('')
-  const [attrBusy, setAttrBusy] = useState(false)
+  const [pane, setPane] = useState<Pane>('memfiles')
 
   // --- memfiles ---
   const [memfiles, setMemfiles] = useState<DirView | null>(null)
@@ -73,38 +62,6 @@ export default function PostExTab({ sessionId }: { sessionId: string }) {
   }, [pane, loadPane])
 
   // --- actions -------------------------------------------------------------
-
-
-
-  const runAttr = async (kind: 'chmod' | 'chown' | 'chtimes') => {
-    if (!attrPath) {
-      toast.push('error', t('postex.needPath'))
-      return
-    }
-    setAttrBusy(true)
-    try {
-      if (kind === 'chmod') {
-        await api.chmod(sessionId, attrPath, attrMode, attrRecursive)
-      } else if (kind === 'chown') {
-        await api.chown(sessionId, attrPath, attrUID, attrGID, attrRecursive)
-      } else {
-        // Empty fields mean "now", which is what an operator usually wants when
-        // normalising timestamps after a modification.
-        const now = Math.floor(Date.now() / 1000)
-        await api.chtimes(
-          sessionId,
-          attrPath,
-          atime ? Number(atime) : now,
-          mtime ? Number(mtime) : now,
-        )
-      }
-      toast.push('success', t('postex.attrDone'))
-    } catch (e) {
-      toast.push('error', (e as Error).message)
-    } finally {
-      setAttrBusy(false)
-    }
-  }
 
   const addMemfile = async () => {
     setMemBusy(true)
@@ -176,92 +133,6 @@ export default function PostExTab({ sessionId }: { sessionId: string }) {
       </div>
 
       <div style={{ padding: '14px 16px' }}>
-
-        {pane === 'attrs' && (
-          <>
-            <div className="env-form">
-              <input
-                type="text"
-                placeholder={t('postex.path')}
-                value={attrPath}
-                onChange={(e) => setAttrPath(e.target.value)}
-                style={{ flex: 1, minWidth: 220 }}
-              />
-              <label className="inline-check">
-                <input
-                  type="checkbox"
-                  checked={attrRecursive}
-                  onChange={(e) => setAttrRecursive(e.target.checked)}
-                />
-                {t('postex.recursive')}
-              </label>
-            </div>
-            <div className="env-form">
-              <input
-                type="text"
-                placeholder={t('postex.mode')}
-                value={attrMode}
-                onChange={(e) => setAttrMode(e.target.value)}
-                style={{ width: 90 }}
-              />
-              <button
-                type="button"
-                className="btn sm"
-                onClick={() => runAttr('chmod')}
-                disabled={attrBusy}
-              >
-                {t('postex.chmod')}
-              </button>
-              <input
-                type="text"
-                placeholder="uid"
-                value={attrUID}
-                onChange={(e) => setAttrUID(e.target.value)}
-                style={{ width: 70 }}
-              />
-              <input
-                type="text"
-                placeholder="gid"
-                value={attrGID}
-                onChange={(e) => setAttrGID(e.target.value)}
-                style={{ width: 70 }}
-              />
-              <button
-                type="button"
-                className="btn sm"
-                onClick={() => runAttr('chown')}
-                disabled={attrBusy}
-              >
-                {t('postex.chown')}
-              </button>
-            </div>
-            <div className="env-form">
-              <input
-                type="text"
-                placeholder="atime (unix)"
-                value={atime}
-                onChange={(e) => setAtime(e.target.value)}
-                style={{ width: 130 }}
-              />
-              <input
-                type="text"
-                placeholder="mtime (unix)"
-                value={mtime}
-                onChange={(e) => setMtime(e.target.value)}
-                style={{ width: 130 }}
-              />
-              <button
-                type="button"
-                className="btn sm"
-                onClick={() => runAttr('chtimes')}
-                disabled={attrBusy}
-              >
-                {t('postex.chtimes')}
-              </button>
-            </div>
-            <p className="muted small">{t('postex.attrHint')}</p>
-          </>
-        )}
 
         {pane === 'memfiles' && (
           <>

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../lib/api'
 import type { Job, MultiOneLinerResult } from '../../lib/types'
+import { oneLinerErrorText } from './oneLinerError'
 
 interface Props {
   /** The listener to build for. Null closes the dialog. */
@@ -38,36 +40,61 @@ export default function OneLinerDialog({ job, onClose }: Props) {
   const [copied, setCopied] = useState('')
   const [advanced, setAdvanced] = useState(false)
 
-  // Reset whenever the dialog is pointed at a different listener. Reusing the
-  // previous listener's commands would hand the operator a stage that calls
-  // back to a different port -- the exact mismatch this feature exists to stop.
+  // A real listener id is never 0, so this doubles as "nothing is selected".
+  const jobId = job?.ID ?? 0
+  const canStage =
+    (job?.Name || '').toLowerCase() === 'http' || (job?.Name || '').toLowerCase() === 'https'
+
+  const generate = useCallback(
+    async (force: boolean) => {
+      setBusy(true)
+      setError('')
+      setResults([])
+      try {
+        const res = await api.oneLinerAll({
+          job_id: jobId,
+          platforms: ['windows', 'linux'],
+          // Only the Rebuild button sets this. Everything else is answered from
+          // the stage the backend already built for this listener.
+          force,
+        })
+        setResults(res.results || [])
+      } catch (err) {
+        setError(oneLinerErrorText((err as Error).message, t, 'dialog'))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [jobId, t],
+  )
+
+  // The dialog is opened to get a command, so it asks for one on open rather
+  // than waiting for a second click: open, read "build", click, wait. The
+  // backend hands back the stage it built last time when the request is
+  // identical, so only the first open pays for a build and re-opening is a
+  // lookup. Reusing the previous listener's commands would hand the operator a
+  // stage that calls back to a different port -- the mismatch this feature
+  // exists to stop -- so switching listeners always asks again.
+  //
+  // The guard stops a remount (StrictMode) or a re-render from firing the same
+  // request twice, and is reset when the dialog closes so re-opening a listener
+  // asks again instead of showing an empty dialog.
+  const startedFor = useRef(0)
   useEffect(() => {
     setResults([])
     setError('')
     setCopied('')
     setAdvanced(false)
-  }, [job?.ID])
+    if (jobId === 0 || !canStage) {
+      startedFor.current = 0
+      return
+    }
+    if (startedFor.current === jobId) return
+    startedFor.current = jobId
+    void generate(false)
+  }, [jobId, canStage, generate])
 
   if (!job) return null
-
-  const canStage = (job.Name || '').toLowerCase() === 'http' || (job.Name || '').toLowerCase() === 'https'
-
-  const generate = async () => {
-    setBusy(true)
-    setError('')
-    setResults([])
-    try {
-      const res = await api.oneLinerAll({
-        job_id: job.ID,
-        platforms: ['windows', 'linux'],
-      })
-      setResults(res.results || [])
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const copy = async (text: string, tag: string) => {
     try {
@@ -82,7 +109,16 @@ export default function OneLinerDialog({ job, onClose }: Props) {
 
   const copyCommand = (command: string) => copy(command, 'cmd-' + command)
 
-  return (
+  // When every platform failed for the same reason -- a listener whose address
+  // cannot be resolved is the usual one -- the identical sentence was printed
+  // once per platform. Show it once; the per-row banners stay for the mixed
+  // case, where knowing which platform failed is the point.
+  const sharedError =
+    results.length > 0 && results.every((r) => r.error && r.error === results[0].error)
+      ? oneLinerErrorText(results[0].error as string, t, 'dialog')
+      : ''
+
+  return createPortal(
     <div className="modal-overlay confirm-overlay" onClick={onClose}>
       <div
         className="modal"
@@ -111,8 +147,16 @@ export default function OneLinerDialog({ job, onClose }: Props) {
 
               {error && <div className="error-banner">{error}</div>}
 
+              {sharedError && <div className="error-banner">{sharedError}</div>}
+
+              {results.some((r) => r.reused) && (
+                <div className="page-sub" style={{ marginBottom: 12 }}>
+                  {t('oneliner.reused')}
+                </div>
+              )}
+
               {results.length === 0 && !busy && (
-                <button type="button" className="btn primary" onClick={generate}>
+                <button type="button" className="btn primary" onClick={() => void generate(false)}>
                   {t('oneliner.dialogGenerate')}
                 </button>
               )}
@@ -139,7 +183,9 @@ export default function OneLinerDialog({ job, onClose }: Props) {
                   </div>
 
                   {r.error ? (
-                    <div className="error-banner">{r.error}</div>
+                    sharedError ? null : (
+                      <div className="error-banner">{oneLinerErrorText(r.error, t, 'dialog')}</div>
+                    )
                   ) : (
                     <>
                       <textarea
@@ -159,6 +205,15 @@ export default function OneLinerDialog({ job, onClose }: Props) {
                         }}
                         onFocus={(e) => e.currentTarget.select()}
                       />
+                      {/* The callback address is shown rather than hidden behind
+                          the details toggle: a command that calls back to an
+                          address the target cannot route to looks exactly like a
+                          working one until it is run, and 0.0.0.0 was exactly
+                          that -- emitted, invisible, and never checked in. */}
+                      <div className="side-row">
+                        <span className="side-label">{t('oneliner.callback')}</span>
+                        <span className="side-value mono">{r.c2_url}</span>
+                      </div>
                       <div className="side-row">
                         <span className="side-label">{t('oneliner.builtAs')}</span>
                         <span className="side-value mono">{r.staged_as}</span>
@@ -191,7 +246,7 @@ export default function OneLinerDialog({ job, onClose }: Props) {
                   type="button"
                   className="btn"
                   style={{ marginTop: 12 }}
-                  onClick={generate}
+                  onClick={() => void generate(true)}
                   disabled={busy}
                 >
                   {t('oneliner.dialogRebuild')}
@@ -207,6 +262,7 @@ export default function OneLinerDialog({ job, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

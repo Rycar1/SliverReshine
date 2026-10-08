@@ -26,6 +26,14 @@ describe('frontend/backend route contract', () => {
       status: 200,
       json: async () => ({}),
       blob: async () => new Blob(),
+      // The AI endpoints are streamed. A body that emits one `done` frame and
+      // closes is enough for the streaming client to settle.
+      body: new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode('data: {"type":"done","result":{}}\n\n'))
+          c.close()
+        },
+      }),
       // A real fetch always returns a Headers object. It is modelled here
       // because the file-download path reads Content-Disposition off it, and a
       // mock without one fails with a TypeError that looks like a bug in the
@@ -222,6 +230,14 @@ describe('frontend/backend route contract', () => {
       api.mimikatzParse('text', false),
       api.authGet(),
       api.authPut('user', 'password', 'current'),
+      api.aiStatus(),
+      api.aiSettings(),
+      api.aiSettingsUpdate({ model: 'm' }),
+      api.aiReadOnlyCheck('cat /etc/passwd'),
+      api.aiModels({ baseURL: 'http://x/v1' }),
+      api.aiCollect('{id}', {}),
+      api.aiCollectStream('{id}', {}, () => {}),
+      api.aiPrivescStream('{id}', {}, () => {}),
     ])
 
     expect(calls.length).toBeGreaterThan(0)

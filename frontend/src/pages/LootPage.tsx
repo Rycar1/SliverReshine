@@ -188,12 +188,23 @@ export default function LootPage() {
       key: 'Name',
       label: t('loot.thName'),
       sortable: true,
-      render: (l) => (
-        <span className="mono">
-          {l.Name}
-          {l.File && <span className="loot-file"> · {l.File}</span>}
-        </span>
-      ),
+      // The vault has no name field for a credential, so a harvest is filed
+      // under the label the assistant gave it. The username is still the most
+      // concrete identifier, so it rides along when it is not already the name
+      // -- which is what a row of identical collections used to hide.
+      render: (l) => {
+        const annotation = l.LootType.includes('CREDENTIAL')
+          ? !l.CredAPIKey && l.CredUser !== l.Name
+            ? l.CredUser
+            : ''
+          : l.File
+        return (
+          <span className="mono">
+            {l.Name}
+            {annotation && <span className="loot-file"> · {annotation}</span>}
+          </span>
+        )
+      },
     },
     {
       key: 'LootType',

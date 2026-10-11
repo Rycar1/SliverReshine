@@ -244,25 +244,23 @@ export default function ImplantsPage() {
           ? t('implants.formatShellcode')
           : t('implants.formatShared')
 
+  // buildConfig is the body of POST /api/generate and the `config` of POST
+  // /api/implant-profiles. Its keys must stay a subset of the Go GenerateRequest
+  // (see ImplantConfig in lib/types.ts); the server rejects unknown fields, so
+  // an extra key here breaks every build.
   const buildConfig = (): Partial<ImplantConfig> => ({
     name,
     os,
     arch,
     format,
-    target: os,
-    transport: c2Type,
     c2: [{ address: `${c2Host}:${c2Port}`, protocol: c2Type }],
-    mtls: c2Type === 'mtls',
-    http: c2Type === 'http' || c2Type === 'https',
-    dns: c2Type === 'dns',
-    wireguard: c2Type === 'wireguard',
     interval: Number(reconInterval),
     jitter: Number(jitter),
     debug,
     evasion,
     obfuscate,
     maxConnectionErrors: 1000,
-    limitDomainJoined: false,
+    is_beacon: false,
   })
 
   const saveProfile = async () => {

@@ -97,25 +97,30 @@ export interface OverviewData {
   counts: OverviewCounts
 }
 
+// ImplantConfig is the request body for POST /api/generate, and the `config`
+// object of POST /api/implant-profiles. Every field here must also exist on the
+// Go GenerateRequest (internal/ui/sliver/implants.go): the server decodes with
+// DisallowUnknownFields, so a field that exists only on this side fails the
+// whole request with `json: unknown field ...`.
+//
+// It used to declare seven fields the server has never had -- target, mtls,
+// http, dns, wireguard, limitDomainJoined and transport -- which made both
+// "generate" and "save profile" answer 400. GenerateContractMatchesTheFrontend
+// (internal/ui/sliver/generate_contract_test.go) now pins the two sides
+// together.
 export interface ImplantConfig {
   name: string
   os: string
   arch: string
   format: string
-  target: string
   c2: { address: string; protocol: string }[]
-  mtls: boolean
-  http: boolean
-  dns: boolean
-  wireguard: boolean
   interval: number
   jitter: number
   maxConnectionErrors: number
+  is_beacon: boolean
   debug: boolean
   evasion: boolean
   obfuscate: boolean
-  limitDomainJoined: boolean
-  transport: string
 }
 
 export interface ImplantBuild {

@@ -56,6 +56,11 @@ type rpcStub struct {
 	generateReq *clientpb.GenerateReq
 	generateErr error
 
+	// ImplantBuilds is read before a Generate, to see whether the name is
+	// already taken.
+	implantBuildsResp *clientpb.ImplantBuilds
+	implantBuildsErr  error
+
 	websiteAddReq  *clientpb.WebsiteAddContent
 	websiteAddResp *clientpb.Website
 	websiteAddErr  error
@@ -145,6 +150,19 @@ func (s *rpcStub) Generate(_ context.Context, in *clientpb.GenerateReq, _ ...grp
 	}
 	s.generateReq = in
 	return &clientpb.Generate{}, nil
+}
+
+// ImplantBuilds answers the listing GenerateImplant does before it builds. An
+// empty list is the answer for a name that is not taken yet, which is the case
+// a successful build starts from.
+func (s *rpcStub) ImplantBuilds(context.Context, *commonpb.Empty, ...grpc.CallOption) (*clientpb.ImplantBuilds, error) {
+	if s.implantBuildsErr != nil {
+		return nil, s.implantBuildsErr
+	}
+	if s.implantBuildsResp == nil {
+		return &clientpb.ImplantBuilds{}, nil
+	}
+	return s.implantBuildsResp, nil
 }
 
 func (s *rpcStub) WebsiteAddContent(_ context.Context, in *clientpb.WebsiteAddContent, _ ...grpc.CallOption) (*clientpb.Website, error) {
@@ -330,6 +348,45 @@ func TestWriteGenerateRejectsBadRequests(t *testing.T) {
 		if stub.generateReq != nil {
 			t.Errorf("%s: an invalid request was forwarded to the server", tc.name)
 		}
+	}
+}
+
+// TestWriteGenerateAcceptsTheFrontendBody posts the body ImplantsPage's
+// buildConfig() actually sends, field for field.
+//
+// The cases above are all rejections, and every one of them passed while the
+// real form was broken: a hand-written body with four keys cannot catch a
+// client that sends eleven. This one is the client's body, so a field the
+// server does not know fails here instead of in the browser.
+func TestWriteGenerateAcceptsTheFrontendBody(t *testing.T) {
+	const body = `{
+		"name": "frontend-body",
+		"os": "windows",
+		"arch": "amd64",
+		"format": "exe",
+		"c2": [{"address": "127.0.0.1:8888", "protocol": "mtls"}],
+		"interval": 60,
+		"jitter": 0,
+		"maxConnectionErrors": 1000,
+		"is_beacon": false,
+		"debug": false,
+		"evasion": false,
+		"obfuscate": false
+	}`
+	stub := &rpcStub{}
+	rec := recorderFor(serverWithStub(stub),
+		httptest.NewRequest(http.MethodPost, "/api/generate", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if stub.generateReq == nil {
+		t.Fatal("the request never reached the server")
+	}
+	if got := stub.generateReq.GetName(); got != "frontend-body" {
+		t.Errorf("name = %q, want frontend-body", got)
+	}
+	if got := stub.generateReq.GetConfig().GetGOOS(); got != "windows" {
+		t.Errorf("GOOS = %q, want windows", got)
 	}
 }
 

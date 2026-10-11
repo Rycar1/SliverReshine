@@ -79,10 +79,10 @@ function GenPayload {
     $addr = $C2 -replace '^[a-z-]+://', ''
     $json = '{"name":"' + $Name + '","os":"' + $Os + '","arch":"' + $Arch + '","format":"' + $Format + '",' +
             '"c2":[{"address":"' + $addr + '","protocol":"' + $proto + '"}],' +
-            '"interval":5,"jitter":0,"mtls":true,"http":false,"dns":false,"wireguard":false,' +
+            '"interval":5,"jitter":0,' +
             '"debug":false,"evasion":' + $(if ($Evasion) { 'true' } else { 'false' }) + ',' +
             '"obfuscate":' + $(if ($Obfuscate) { 'true' } else { 'false' }) + ',' +
-            '"limitDomainJoined":false,"transport":"' + $proto + '","maxConnectionErrors":100' + $ExtraJson + '}'
+            '"maxConnectionErrors":100' + $ExtraJson + '}'
     $r = Api -Path '/api/generate' -Method 'POST' -Body $json
     $o = $null
     try { $o = $r | ConvertFrom-Json } catch { return @{ ok = $false; err = "not JSON: " + $r.Substring(0, [Math]::Min(200, $r.Length)) } }

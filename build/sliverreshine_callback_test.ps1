@@ -60,10 +60,10 @@ function Generate {
     $obfTxt = if ($Obfuscate) { 'true' } else { 'false' }
     $json = '{"name":"' + $Name + '","os":"' + $Os + '","arch":"' + $Arch + '","format":"' + $Format + '",' +
             '"c2":[{"address":"127.0.0.1:' + $Port + '","protocol":"' + $Proto + '"}],' +
-            '"interval":3,"jitter":0,"mtls":true,"http":false,"dns":false,"wireguard":false,' +
+            '"interval":3,"jitter":0,' +
             '"debug":false,"evasion":' + $evaTxt + ',"obfuscate":' + $obfTxt + ',' +
-            '"isBeacon":' + $beaconTxt + ',' +
-            '"limitDomainJoined":false,"transport":"' + $Proto + '","maxConnectionErrors":100}'
+            '"is_beacon":' + $beaconTxt + ',' +
+            '"maxConnectionErrors":100}'
     $r = Api -Path '/api/generate' -Method 'POST' -Body $json
     try { $o = $r | ConvertFrom-Json } catch { return @{ ok = $false; err = "bad json: $r" } }
     if ($o.error) { return @{ ok = $false; err = $o.error } }

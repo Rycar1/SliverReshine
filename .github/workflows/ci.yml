@@ -25,6 +25,28 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # web/dist carries only .gitkeep in a fresh checkout: the bundle is a build
+      # artifact, produced by the frontend build and deliberately not committed.
+      # The console serves it out of the embedded FS (go:embed all:dist) and
+      # internal/ui/api's live tests assert it is really served, so without a
+      # build here those tests fail on a missing frontend instead of on a real
+      # regression. Build it so the Go tests run against the bundle the release
+      # ships.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: build frontend into web/dist
+        run: |
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+          rm -rf web/dist
+          mkdir -p web/dist
+          cp -R frontend/dist/. web/dist/
+          touch web/dist/.gitkeep
+
       # 只校验自有包；sliver/ 是内置 fork，格式风格随上游，不纳入门禁。
       - name: gofmt
         run: |

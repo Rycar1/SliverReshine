@@ -30,6 +30,19 @@ const listenerSitesFile = "listener-sites.json"
 // persisted to, beside the one above and for the same reason.
 const listenerHostsFile = "listener-hosts.json"
 
+// consoleOwnedConfigFile reports whether a file in the profile directory is
+// one this console persists for its own bookkeeping rather than a profile the
+// operator saved.
+//
+// Both files live beside the profiles so a restart can recover which website
+// a listener serves, but they are not profiles. Listing them as such put
+// "listener-hosts" and "listener-sites" in the profile picker the moment any
+// listener was started, and the operator had to open each one to find out it
+// was not a profile at all.
+func consoleOwnedConfigFile(name string) bool {
+	return name == listenerSitesFile || name == listenerHostsFile
+}
+
 // listenerMaps returns the two persisted maps, creating them on first use.
 //
 // Lazy creation keeps a zero-value Client usable in tests and in any code path

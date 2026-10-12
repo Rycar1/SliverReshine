@@ -210,6 +210,9 @@ func ListProfiles() []string {
 			if filepath.Ext(name) != ".json" {
 				continue
 			}
+			if consoleOwnedConfigFile(name) {
+				continue
+			}
 			name = name[:len(name)-len(".json")]
 			if !seen[name] {
 				seen[name] = true

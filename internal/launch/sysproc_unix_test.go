@@ -32,6 +32,24 @@ func TestTerminateProcessKillsTheWholeProcessGroup(t *testing.T) {
 	}
 	terminateProcess(cmd)
 
+	// Reap the leader while the group is polled below.
+	//
+	// The leader is this test's own child, so after SIGKILL it stays in the
+	// process table as a zombie until Wait collects it -- and a zombie still
+	// answers signal 0. Waiting until after the poll (as this test used to)
+	// therefore never observes an empty group on Linux: the group looks alive
+	// for the full deadline even though the kill worked perfectly, and the test
+	// fails against the very code it is meant to verify.
+	//
+	// The launcher already does this: Start() reaps the daemon in a goroutine
+	// (s.publishExit(cmd.Wait())), so shutdown leaves no zombie behind. The test
+	// only has to mirror it.
+	reaped := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(reaped)
+	}()
+
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		if err := syscall.Kill(-pid, 0); err != nil {
@@ -43,5 +61,5 @@ func TestTerminateProcessKillsTheWholeProcessGroup(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	_ = cmd.Wait()
+	<-reaped
 }

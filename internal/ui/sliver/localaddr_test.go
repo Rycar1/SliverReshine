@@ -2,6 +2,7 @@ package sliver
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -9,9 +10,34 @@ import (
 // sources they set up rather than whatever interfaces the test runner happens to
 // have. Tests that exercise the fallback override localCallbackHost themselves
 // and restore it with t.Cleanup.
+//
+// It also points the package at a scratch sliver-client config directory.
+// Starting a listener persists the listener-to-website and listener-to-address
+// maps beside the saved profiles (see listener_sites.go), and the listener tests
+// here start listeners against a stub, so without the redirect `go test` dropped
+// listener-sites.json and listener-hosts.json into the developer's own
+// ~/.sliver-client/configs -- the directory a real sliver-client reads its
+// profiles from, and the one ListProfiles scans. Tests still override these
+// per call; this only keeps the default from being somebody's real home.
 func TestMain(m *testing.M) {
 	localCallbackHost = func() string { return "" }
-	os.Exit(m.Run())
+
+	home, err := os.MkdirTemp("", "sliverreshine-sliver-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	configs := filepath.Join(home, "configs")
+	if err := os.MkdirAll(configs, 0o700); err != nil {
+		panic(err)
+	}
+	os.Setenv("HOME", home)
+	os.Setenv("USERPROFILE", home)
+	os.Setenv("SLIVER_CLIENT_CONFIGS", configs)
+
+	code := m.Run()
+
+	os.RemoveAll(home)
+	os.Exit(code)
 }
 
 // stubLocalCallbackHost pins the machine-address fallback for one test.

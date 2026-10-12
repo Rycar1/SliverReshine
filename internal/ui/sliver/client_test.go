@@ -45,6 +45,24 @@ func TestListProfiles(t *testing.T) {
 	}
 }
 
+// The console persists its own listener bookkeeping beside the profiles, and
+// those files are not profiles. Listing them put two phantom entries in the
+// picker as soon as any listener was started.
+func TestListProfilesSkipsConsoleOwnedFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeTestProfile(t, dir, "real.json", "{}")
+	writeTestProfile(t, dir, listenerSitesFile, "{\"1\":\"site\"}")
+	writeTestProfile(t, dir, listenerHostsFile, "{\"1\":\"10.0.0.1\"}")
+
+	isolateHome(t)
+	t.Setenv("SLIVER_CLIENT_CONFIGS", dir)
+
+	profiles := ListProfiles()
+	if len(profiles) != 1 || profiles[0] != "real" {
+		t.Fatalf("ListProfiles() = %v, want exactly [real]", profiles)
+	}
+}
+
 func TestListProfiles_DeduplicatesAcrossDirs(t *testing.T) {
 	dir := t.TempDir()
 	writeTestProfile(t, dir, "dup.json", `{}`)
